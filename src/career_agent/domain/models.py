@@ -24,6 +24,21 @@ class WorkArrangement(StrEnum):
     ONSITE = "onsite"
 
 
+def validate_iana_time_zone(value: str | None) -> str | None:
+    """Validate an optional IANA time zone identifier."""
+
+    if value is None:
+        return value
+
+    try:
+        ZoneInfo(value)
+    except ZoneInfoNotFoundError as exc:
+        msg = "time_zone must be a valid IANA time zone identifier."
+        raise ValueError(msg) from exc
+
+    return value
+
+
 class YearMonth(BaseModel):
     """Structured year-month value for resume-style dates without day precision."""
 
@@ -87,11 +102,6 @@ class UserPreferences(BaseModel):
         ge=0,
         description="Optional minimum desired annual salary in whole currency units.",
     )
-    desired_salary_max: int | None = Field(
-        default=None,
-        ge=0,
-        description="Optional maximum desired annual salary in whole currency units.",
-    )
     salary_currency: str = Field(
         default="USD",
         min_length=3,
@@ -119,35 +129,12 @@ class UserPreferences(BaseModel):
         description="Whether the user requires employer sponsorship to work."
     )
 
-    @model_validator(mode="after")
-    def validate_salary_range(self) -> UserPreferences:
-        """Ensure the salary range is logically ordered when both values are set."""
-
-        if (
-            self.desired_salary_min is not None
-            and self.desired_salary_max is not None
-            and self.desired_salary_min > self.desired_salary_max
-        ):
-            msg = "desired_salary_min cannot be greater than desired_salary_max."
-            raise ValueError(msg)
-
-        return self
-
     @field_validator("time_zone")
     @classmethod
     def validate_time_zone(cls, value: str | None) -> str | None:
         """Validate the optional time zone against IANA zone names."""
 
-        if value is None:
-            return value
-
-        try:
-            ZoneInfo(value)
-        except ZoneInfoNotFoundError as exc:
-            msg = "time_zone must be a valid IANA time zone identifier."
-            raise ValueError(msg) from exc
-
-        return value
+        return validate_iana_time_zone(value)
 
 
 class ExperienceEntry(BaseModel):

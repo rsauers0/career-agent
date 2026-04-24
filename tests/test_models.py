@@ -20,7 +20,6 @@ def test_user_preferences_json_round_trip() -> None:
         time_zone="America/Chicago",
         preferred_work_arrangements=[WorkArrangement.REMOTE, WorkArrangement.HYBRID],
         desired_salary_min=150000,
-        desired_salary_max=190000,
         salary_currency="USD",
         max_commute_distance=35,
         commute_distance_unit=CommuteDistanceUnit.MILES,

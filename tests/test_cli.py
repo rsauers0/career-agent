@@ -18,7 +18,6 @@ def build_user_preferences() -> UserPreferences:
         preferred_locations=["Remote", "Chicago, IL"],
         time_zone="America/Chicago",
         desired_salary_min=150000,
-        desired_salary_max=190000,
         work_authorization=True,
         requires_work_sponsorship=False,
     )
@@ -102,5 +101,124 @@ def test_profile_init_reports_existing_storage(monkeypatch, tmp_path) -> None:
 
     assert result.exit_code == 0
     assert "Profile storage is already initialized." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_preferences_show_reports_empty_state(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["preferences", "show"])
+
+    assert result.exit_code == 0
+    assert "No user preferences found." in result.output
+    assert str(tmp_path) in result.output
+
+    get_settings.cache_clear()
+
+
+def test_preferences_wizard_creates_preferences(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        ["preferences", "wizard"],
+        input=(
+            "Randy Example\n"
+            "Aurora, IL 60504\n"
+            "America/Chicago\n"
+            "Senior Data Engineer, Analytics Engineer\n"
+            "Remote, Chicago, IL\n"
+            "remote, hybrid\n"
+            "150000\n"
+            "USD\n"
+            "35\n"
+            "miles\n"
+            "50\n"
+            "y\n"
+            "n\n"
+        ),
+    )
+
+    repository = FileProfileRepository(tmp_path)
+    preferences = repository.load_user_preferences()
+
+    assert result.exit_code == 0
+    assert "Saved user preferences." in result.output
+    assert preferences is not None
+    assert preferences.full_name == "Randy Example"
+    assert preferences.target_job_titles == [
+        "Senior Data Engineer",
+        "Analytics Engineer",
+    ]
+    assert [arrangement.value for arrangement in preferences.preferred_work_arrangements] == [
+        "remote",
+        "hybrid",
+    ]
+    assert preferences.desired_salary_min == 150000
+    assert preferences.max_commute_time == 50
+
+    get_settings.cache_clear()
+
+
+def test_preferences_wizard_updates_existing_preferences(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FileProfileRepository(tmp_path)
+    repository.save_user_preferences(build_user_preferences())
+
+    result = runner.invoke(
+        app,
+        ["preferences", "wizard"],
+        input=("\n\n\nPrincipal Data Engineer\n\n\n\n\n\n\n\ny\nn\n"),
+    )
+
+    preferences = repository.load_user_preferences()
+
+    assert result.exit_code == 0
+    assert "Saved user preferences." in result.output
+    assert preferences is not None
+    assert preferences.full_name == "Randy Example"
+    assert preferences.target_job_titles == ["Principal Data Engineer"]
+    assert preferences.base_location == "Aurora, IL 60504"
+    assert preferences.time_zone == "America/Chicago"
+
+    get_settings.cache_clear()
+
+
+def test_preferences_wizard_reprompts_invalid_time_zone(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        ["preferences", "wizard"],
+        input=(
+            "Randy Example\n"
+            "Aurora, IL 60504\n"
+            "Not/A_Real_Zone\n"
+            "America/Chicago\n"
+            "Senior Data Engineer\n"
+            "Remote\n"
+            "remote\n"
+            "150000\n"
+            "USD\n"
+            "35\n"
+            "miles\n"
+            "50\n"
+            "y\n"
+            "n\n"
+        ),
+    )
+
+    repository = FileProfileRepository(tmp_path)
+    preferences = repository.load_user_preferences()
+
+    assert result.exit_code == 0
+    assert "valid IANA time zone identifier" in result.output
+    assert preferences is not None
+    assert preferences.time_zone == "America/Chicago"
 
     get_settings.cache_clear()

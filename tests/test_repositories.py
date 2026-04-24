@@ -18,7 +18,6 @@ def build_user_preferences() -> UserPreferences:
         preferred_locations=["Remote", "Chicago, IL"],
         time_zone="America/Chicago",
         desired_salary_min=150000,
-        desired_salary_max=190000,
         work_authorization=True,
         requires_work_sponsorship=False,
     )
