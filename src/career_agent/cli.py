@@ -6,6 +6,7 @@ from rich.table import Table
 
 from career_agent.application.profile_service import ProfileService
 from career_agent.config import get_settings
+from career_agent.domain.models import CareerProfile, UserPreferences
 from career_agent.infrastructure.repositories import FileProfileRepository
 
 app = typer.Typer(
@@ -88,6 +89,43 @@ def profile_show() -> None:
             str(len(profile.core_narrative_notes)),
         )
         console.print(profile_table)
+
+
+@profile_app.command("init")
+def profile_init() -> None:
+    """Initialize starter profile files without overwriting existing data."""
+
+    settings = get_settings()
+    service = ProfileService(FileProfileRepository(settings.data_dir))
+    existing_preferences = service.get_user_preferences()
+    existing_profile = service.get_career_profile()
+
+    if existing_preferences is not None or existing_profile is not None:
+        console.print(
+            "Profile data already exists. Initialization will not overwrite existing files."
+        )
+        return
+
+    full_name = typer.prompt("Full name").strip()
+    base_location = typer.prompt("Base location (City, State ZIP)").strip()
+    work_authorization = typer.confirm("Are you legally authorized to work?", default=True)
+    requires_work_sponsorship = typer.confirm(
+        "Do you require employer sponsorship to work?",
+        default=False,
+    )
+
+    preferences = UserPreferences(
+        full_name=full_name,
+        base_location=base_location,
+        work_authorization=work_authorization,
+        requires_work_sponsorship=requires_work_sponsorship,
+    )
+    profile = CareerProfile()
+
+    service.save_user_preferences(preferences)
+    service.save_career_profile(profile)
+
+    console.print(f"Initialized profile data under [bold]{settings.data_dir}[/bold].")
 
 
 app.add_typer(profile_app, name="profile")
