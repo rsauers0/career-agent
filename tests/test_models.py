@@ -118,8 +118,7 @@ def test_career_profile_json_round_trip() -> None:
         domains=["retail analytics", "data platforms"],
         notable_achievements=["Led modernization of reporting pipelines used across finance."],
         additional_notes=(
-            "Open to emphasizing architecture or delivery leadership depending on "
-            "target role."
+            "Open to emphasizing architecture or delivery leadership depending on target role."
         ),
     )
 

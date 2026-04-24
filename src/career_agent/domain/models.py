@@ -254,8 +254,7 @@ class CareerProfile(BaseModel):
     education_entries: list[str] = Field(
         default_factory=list,
         description=(
-            "Education history entries as normalized strings until a richer model "
-            "is added."
+            "Education history entries as normalized strings until a richer model is added."
         ),
     )
     certification_entries: list[str] = Field(
