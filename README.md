@@ -1,28 +1,109 @@
 # Career Agent
 
-`Career Agent` is a local-first Python CLI for managing a structured career profile, ingesting job postings, and generating tailored resumes and cover letters.
+Career Agent is a local-first Python application for managing structured career data, analyzing jobs, and generating tailored application materials.
 
-The repo is intentionally starting small. The current scaffold gives you:
+A core design goal is to use local LLMs through OpenAI-compatible APIs wherever practical. Instead of assuming a single large hosted model, the project is being built around structured workflows, intermediate validation, and evaluation-driven iteration so smaller/local models can produce high-quality results with lower cost and better privacy.
 
-- a `src/`-based package layout
-- a `Typer` CLI entrypoint
-- a small `doctor` command to verify the app wiring
-- a written implementation plan in `docs/implementation-plan.md`
+## Current Status
 
-## Quick Start
+Implemented:
+- Typer/Rich CLI scaffold
+- Pydantic domain models
+- local file-based persistence with snapshot-on-overwrite
+- profile service layer
+- `profile init` (storage scaffolding only)
+- `profile show`
+- `preferences show`
+- `preferences wizard`
+
+Planned next:
+- `profile wizard` for high-level `CareerProfile` fields
+- separate experience-entry workflows
+- AI-assisted job normalization and fit matching
+- tailored document generation
+- future Textual TUI
+
+## Design Direction
+
+Career Agent is being built around:
+- local-first structured data
+- modular domain / application / infrastructure separation
+- AI workflows grounded in canonical data
+- reusable workflows that can move from CLI to TUI cleanly
+
+## Storage Model
+
+Canonical data is stored locally as structured JSON for transparency, portability, and privacy-focused use.
+
+Profile writes use snapshot-on-overwrite behavior so earlier states can be preserved during iterative editing.
+
+Current storage shape:
+
+```text
+<data_dir>/
+  profile/
+    user_preferences.json
+    career_profile.json
+  snapshots/
+    profile/
+```
+
+## Development
+
+Install dependencies:
 
 ```bash
 uv sync
-uv run career-agent doctor
 ```
 
-## Current Goal
+Run the CLI:
 
-Build this in guided steps so the architecture stays understandable:
+```bash
+uv run career-agent --help
+```
 
-1. Define the Pydantic domain models
-2. Add local file repositories
-3. Add application services
-4. Add job ingestion and model adapters
-5. Add resume and cover-letter generation flows
-6. Keep the CLI thin so a future Textual UI can reuse the same core
+Initialize storage scaffolding:
+
+```bash
+uv run career-agent profile init
+```
+
+Create or update user preferences:
+
+```bash
+uv run career-agent preferences wizard
+```
+
+Show current stored data:
+
+```bash
+uv run career-agent preferences show
+uv run career-agent profile show
+```
+
+## Configuration
+
+Configuration is loaded from environment variables or a local `.env` file via `pydantic-settings`.
+
+Create a local config file if needed:
+
+```bash
+cp .env.example .env
+```
+
+Currently supported:
+- `CAREER_AGENT_DATA_DIR`
+  Overrides the default local data directory. If unset, the app uses `~/.career-agent`.
+
+Run tests:
+
+```bash
+uv run pytest -q
+```
+
+Run linting:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+```

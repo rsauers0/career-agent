@@ -1,344 +1,225 @@
 # Career Agent Implementation Plan
 
-## Goal
+## Project Goal
 
-Build `Career Agent` as a local-first Python CLI that helps a user:
+Build `Career Agent` as a local-first Python CLI/TUI application that helps a user:
 
 - manage career preferences
-- maintain a structured "digital resume"
-- ingest job postings
-- analyze job fit
+- maintain a structured digital resume
+- refine experience entries
+- ingest and normalize job postings
+- perform AI-assisted job analysis and fit matching
 - generate tailored resumes and cover letters
 
-The project should be understandable as it grows. The code should teach application structure, not just produce output.
+The project is designed to work with local LLMs through OpenAI-compatible APIs wherever practical. A core goal is to reduce API cost and preserve privacy by breaking larger tasks into smaller, evaluable workflow steps that local models can handle reliably.
 
-## Architectural Direction
+This document is a living plan. It tracks completed work, current focus, and upcoming milestones.
 
-Use four layers from the start:
+## Architecture
+
+Use four layers:
 
 1. `domain`
-   Holds Pydantic models only. No file I/O, no HTTP calls, no CLI logic.
+   Pydantic models only. No file I/O, HTTP, or CLI logic.
 2. `application`
-   Holds use cases and orchestration. This is where "what the app does" lives.
+   Use cases, normalization helpers, and orchestration.
 3. `infrastructure`
-   Holds adapters for files, HTTP, model providers, and template rendering.
+   File repositories, HTTP/model adapters, and rendering adapters.
 4. `interfaces`
-   Holds the user-facing CLI. Later, a `Textual` UI can sit here too.
+   CLI now, with a future `Textual` TUI reusing the same application layer.
 
-The design rule is simple:
+Design rule:
 
-`CLI -> application services -> repository/model interfaces -> infrastructure adapters`
+`CLI/TUI -> application services/helpers -> repository/model interfaces -> infrastructure adapters`
 
-That rule prevents reengineering later. If we add `Textual`, it should call the same application services the CLI already uses.
+## AI Strategy
 
-## Recommended Stack
+The AI layer is intended to be:
 
-- `pydantic`: domain models and validation
-- `pydantic-settings`: config from environment variables
-- `typer`: command-oriented CLI
-- `rich`: better terminal output and prompts
-- `httpx`: HTTP for model endpoints and job page fetching
-- `jinja2`: document templating
-- `trafilatura`: pull useful text from job posting pages
-- `pytest`: tests
+- local-first where practical
+- compatible with OpenAI-style APIs for portability across local and hosted providers
+- grounded in canonical structured data
+- organized into smaller workflow steps so local models can be used reliably
 
-## Step-By-Step Build Order
+Quality should come from workflow design, structured intermediate outputs, and eval-driven iteration rather than assuming a single large commercial model is always required.
 
-### Step 1: Package and CLI scaffold
+## Completed
 
-Files:
+### Foundation
+- `src/` package layout established
+- `uv` project setup with lockfile and local `.venv`
+- CLI scaffold built with `Typer` and `Rich`
+- Ruff and pytest configured
+- basic repo hygiene and ignore rules added
 
-- `src/career_agent/cli.py`
-- `main.py`
-- `pyproject.toml`
-
-Why:
-
-- establishes the `src/` layout early
-- gives you a real executable app surface
-- keeps the first checkpoint very small
-
-Checkpoint:
-
-```bash
-uv run career-agent doctor
-```
-
-### Step 2: Define the domain model
-
-Create:
-
-- `src/career_agent/domain/models.py`
-
-Add Pydantic models for:
-
+### Domain Models
 - `UserPreferences`
-- `CareerProfile`
+- `YearMonth`
 - `ExperienceEntry`
-- `EducationEntry`
-- `CertificationEntry`
-- `JobPosting`
-- `JobAnalysis`
-- `GeneratedDocument`
-
-Why this step comes early:
-
-- every later service depends on the data shape
-- Pydantic gives validation and JSON serialization immediately
-- your app logic becomes easier to reason about because it works with typed objects instead of loose dictionaries
-
-Checkpoint:
-
-- create a model instance in a small test
-- serialize it to JSON
-- load it back and confirm round-trip stability
-
-### Step 3: Add configuration and filesystem layout
-
-Create:
-
-- `src/career_agent/config.py`
-- `src/career_agent/infrastructure/filesystem.py`
-
-Responsibilities:
-
-- define the app data directory
-- define expected folders such as `profile/`, `jobs/`, and `applications/`
-- provide helpers to create directories safely
-
-Recommended default:
-
-- store data under `~/.career-agent`
-- allow override with `CAREER_AGENT_DATA_DIR`
-
-Checkpoint:
-
-- run a command that prints the resolved data directory
-- verify the folders are created correctly
-
-### Step 4: Add repositories
-
-Create:
-
-- `src/career_agent/application/ports.py`
-- `src/career_agent/infrastructure/repositories.py`
-
-Repository interfaces should describe what the app needs:
-
-- initialize profile storage scaffolding
-- load and save preferences
-- load and save the career profile
-- load and save jobs
-- load and save analyses
-- list generated documents
-
-The file-based implementation should:
-
-- use JSON for canonical data
-- create timestamped snapshots before overwriting profile data
-
-Why this matters:
-
-- your application layer should depend on interfaces, not file paths
-- later you can switch some persistence to SQLite without rewriting the CLI or service layer
-
-Checkpoint:
-
-- write repository tests with a temporary directory
-
-### Step 5: Add application services
-
-Create:
-
-- `src/career_agent/application/profile_service.py`
-- `src/career_agent/application/job_service.py`
-- `src/career_agent/application/document_service.py`
-
-Responsibilities:
-
-- `ProfileService`
-  - initialize profile storage scaffolding
-  - update preferences
-  - update high-level profile data
-  - validate weak/missing sections
-- `JobService`
-  - ingest job text or a URL
-  - normalize and store postings
-  - request AI-based analysis
-- `DocumentService`
-  - generate tailored resume and cover-letter variants
-  - persist outputs and metadata
-
-Rule:
-
-- services accept and return domain models
-- services do not print to the terminal
-
-Checkpoint:
-
-- unit test each service with fake repositories and a fake model client
-
-### Step 6: Add AI provider abstraction
-
-Create:
-
-- `src/career_agent/infrastructure/model_client.py`
-- `src/career_agent/prompts/`
-
-Use an OpenAI-compatible API shape so local inference servers can work with the same adapter.
-
-Configuration should include:
-
-- base URL
-- API key
-- model name
-- timeout
-
-Split the AI work into two categories:
-
-1. structured analysis
-   Expect JSON back and validate it into `JobAnalysis`
-2. document generation
-   Expect Markdown back for resumes and cover letters
-
-Why this split is useful:
-
-- analysis should be machine-readable
-- generated documents should stay human-editable
-
-Checkpoint:
-
-- mock the HTTP client in tests
-- validate that malformed JSON fails loudly and clearly
-
-### Step 7: Add job ingestion adapter
-
-Create:
-
-- `src/career_agent/infrastructure/job_fetcher.py`
-
-Responsibilities:
-
-- fetch HTML from a URL
-- extract readable text with `trafilatura`
-- normalize whitespace
-- preserve raw source content when useful
-
-The first version should support:
-
-- `job add --url <url>`
-- `job add --text-file <path>`
-
-Do not add scraping orchestration or job-board automation yet.
-
-Checkpoint:
-
-- test text-file ingestion locally
-- mock network calls for URL ingestion tests
-
-### Step 8: Add document rendering
-
-Create:
-
-- `src/career_agent/infrastructure/document_renderer.py`
-- `src/career_agent/templates/`
-
-Outputs:
-
-- Markdown for editing and inspection
-- HTML for nicer presentation
-
-Keep PDF generation out of the first pass. Once the Markdown and HTML pipeline is stable, PDF becomes a rendering concern rather than a core architecture concern.
-
-Checkpoint:
-
-- verify file output paths and metadata
-- open generated HTML in a browser to inspect formatting
-
-### Step 9: Expand the CLI
-
-Add Typer command groups for:
-
+- `CareerProfile`
+
+Completed validation includes:
+- timezone validation
+- commute unit validation
+- experience date consistency
+- unique `experience_id` values inside `CareerProfile`
+
+### Configuration
+- `config.py` implemented with `pydantic-settings`
+- configurable `CAREER_AGENT_DATA_DIR`
+- cached settings access via `get_settings()`
+
+### Persistence
+- repository protocol added
+- file-backed profile repository implemented
+- JSON persistence for `UserPreferences` and `CareerProfile`
+- snapshot-on-overwrite behavior implemented
+- storage scaffolding initialization implemented
+
+### Application Layer
+- `ProfileService` implemented
+- reusable preferences normalization/builder logic added
+
+### CLI Flows
+- `doctor`
 - `profile init`
+  Creates storage scaffolding only
+- `profile show`
 - `preferences show`
 - `preferences wizard`
-- `profile show`
+
+### Tests
+- model round-trip and validation tests
+- config tests
+- repository tests
+- profile service tests
+- CLI tests for current commands
+
+## In Progress
+
+### Preferences Authoring
+Current focus is making the preferences workflow solid and reusable.
+
+Goals:
+- keep the wizard as a thin interface adapter
+- preserve reusable normalization/validation for future TUI use
+- keep save behavior as one logical write at the end of the flow
+- re-prompt invalid field values instead of forcing a full wizard restart
+
+Open refinement opportunities:
+- clearer user-facing validation messaging
+- richer display formatting for `preferences show`
+
+## Next
+
+### Career Profile Authoring
+Add a separate `profile` authoring flow for high-level `CareerProfile` data, distinct from preferences and experience entries.
+
+Planned commands:
 - `profile wizard`
+
+Initial scope:
+- `core_narrative_notes`
+- `skills`
+- `tools_and_technologies`
+- `domains`
+- `notable_achievements`
+- `additional_notes`
+
+### Experience Management
+Treat experience entries as a separate workflow, not part of the general profile wizard.
+
+Planned commands:
 - `experience list`
 - `experience add`
 - `experience show`
-- `job add`
-- `job show`
-- `job analyze`
-- `doc resume generate`
-- `doc cover-letter generate`
-- `doc list`
+- `experience edit`
 
-Use `Rich` for:
+Initial scope:
+- deterministic create/edit flows for canonical `ExperienceEntry`
+- no LLM dependency yet
 
-- interactive prompts
-- tables and panels
-- validation feedback
+## Later
 
-Rule:
+### Experience Intake And Refinement
+Introduce a draft/intake workflow for messy pasted experience input before canonicalization.
 
-- the CLI collects input and renders output
-- the CLI should not contain persistence or model logic
+Likely additions:
+- `ExperienceIntake` model
+- separate repository/service flow
+- optional AI-assisted extraction and follow-up questions
 
-Workflow note:
+### AI-Assisted Job Normalization
+Planned additions:
+- ingest raw job postings from URL or pasted text
+- extract structured fields into `JobPosting`
+- normalize title, company, location, compensation, requirements, and constraints
 
-- `profile init` only creates storage scaffolding
-- preferences, high-level profile data, and experience entries are authored in separate flows
-- experience-entry intake and LLM-assisted refinement come after the deterministic profile authoring flows are in place
+### AI-Assisted Fit Matching
+Planned additions:
+- compare normalized job postings against `UserPreferences` and `CareerProfile`
+- identify strengths, gaps, missing signals, and likely alignment
+- produce structured fit-analysis output
 
-Checkpoint:
+### AI-Assisted Document Generation
+Planned additions:
+- generate tailored resume variants
+- generate tailored cover letters
+- support collaborative revision loops where the user can request changes and refinements
+- use canonical structured profile data as the grounding layer
+- output Markdown and HTML first
+- add PDF later as a rendering concern
 
-- smoke-test the commands with `typer.testing.CliRunner`
+### AI Quality And Iteration
+Planned additions may include:
+- evaluator or "LLM judge" style checks for output quality and grounding
+- future feedback-driven optimization based on user corrections and interaction history
+- possible experimentation with frameworks such as DSPy if they fit the workflow
 
-### Step 10: Add tests as you go
+### Observability And Logging
+Planned additions:
+- structured application logging
+- consistent context fields for tracing workflow steps
+- file/function/line visibility for debugging
+- correlation or operation IDs for end-to-end traceability
+- logging design that can later integrate with log aggregation or SIEM tooling
 
-Create:
+### TUI
+Add a `Textual` interface after the application workflows are stable enough to reuse.
 
-- `tests/test_models.py`
-- `tests/test_repositories.py`
-- `tests/test_services.py`
-- `tests/test_cli.py`
+The TUI should reuse:
+- services
+- builders and normalizers
+- repositories
+- domain validation
 
-Test for:
+## Storage Model
 
-- model validation
-- JSON round-trips
-- repository save/load behavior
-- snapshot creation
-- job analysis flow
-- document generation flow
-- CLI command wiring
-- bad config / bad endpoint failures
+The application currently uses a local file-backed persistence model for canonical data.
 
-## Suggested First Coding Session
+Design intent:
+- single-user, local-first operation
+- structured JSON for transparency and portability
+- snapshot-on-overwrite for safety and iterative editing
 
-For the next coding step, do only this:
+SQLite may be considered later only if query complexity or workflow state justifies it.
 
-1. create `src/career_agent/domain/models.py`
-2. define `UserPreferences`
-3. define `ExperienceEntry`
-4. define `CareerProfile`
-5. write one test that round-trips a profile through JSON
+Current shape:
 
-That is the smallest useful slice. It will teach:
+```text
+<data_dir>/
+  profile/
+    user_preferences.json
+    career_profile.json
+  snapshots/
+    profile/
+```
 
-- Pydantic model design
-- typed nested models
-- serialization
-- test setup
+## Current Principles
 
-## What I Will Optimize For While Helping
-
-When we code this together, I will prefer:
-
-- small vertical slices
-- explicit interfaces
-- tests close to each new concept
-- explaining why each file exists before adding it
-
-That should help you shift from "Python scripting" to "application design" without losing momentum.
+- `profile init` only bootstraps storage
+- preferences, profile, and experience are separate workflows
+- canonical structured data comes before AI-assisted refinement
+- AI features should operate on normalized canonical data whenever possible
+- save once per wizard run; do not snapshot every section
+- use `.env` or environment variables for local configuration, with `.env.example` as the committed template
