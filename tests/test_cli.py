@@ -74,42 +74,33 @@ def test_profile_show_displays_stored_preferences_and_profile(monkeypatch, tmp_p
     get_settings.cache_clear()
 
 
-def test_profile_init_creates_starter_profile_files(monkeypatch, tmp_path) -> None:
+def test_profile_init_creates_storage_scaffolding(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
 
-    result = runner.invoke(
-        app,
-        ["profile", "init"],
-        input="Randy Example\nAurora, IL 60504\ny\nn\n",
-    )
+    result = runner.invoke(app, ["profile", "init"])
 
     repository = FileProfileRepository(tmp_path)
-    preferences = repository.load_user_preferences()
-    profile = repository.load_career_profile()
 
     assert result.exit_code == 0
-    assert "Initialized profile data under" in result.output
-    assert preferences is not None
-    assert preferences.full_name == "Randy Example"
-    assert preferences.base_location == "Aurora, IL 60504"
-    assert preferences.work_authorization is True
-    assert preferences.requires_work_sponsorship is False
-    assert profile is not None
-    assert profile.experience_entries == []
+    assert "Initialized profile storage under" in result.output
+    assert repository.profile_dir.exists()
+    assert repository.profile_snapshot_dir.exists()
+    assert repository.load_user_preferences() is None
+    assert repository.load_career_profile() is None
 
     get_settings.cache_clear()
 
 
-def test_profile_init_refuses_to_overwrite_existing_data(monkeypatch, tmp_path) -> None:
+def test_profile_init_reports_existing_storage(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
     repository = FileProfileRepository(tmp_path)
-    repository.save_user_preferences(build_user_preferences())
+    repository.initialize_profile_storage()
 
     result = runner.invoke(app, ["profile", "init"])
 
     assert result.exit_code == 0
-    assert "Profile data already exists." in result.output
+    assert "Profile storage is already initialized." in result.output
 
     get_settings.cache_clear()

@@ -6,8 +6,15 @@ from career_agent.domain.models import CareerProfile, ExperienceEntry, UserPrefe
 
 class FakeProfileRepository:
     def __init__(self) -> None:
+        self.storage_initialized = False
         self.user_preferences: UserPreferences | None = None
         self.career_profile: CareerProfile | None = None
+
+    def profile_storage_initialized(self) -> bool:
+        return self.storage_initialized
+
+    def initialize_profile_storage(self) -> None:
+        self.storage_initialized = True
 
     def load_user_preferences(self) -> UserPreferences | None:
         return self.user_preferences
@@ -58,6 +65,15 @@ def test_get_user_preferences_returns_repository_value() -> None:
     service = ProfileService(repository)
 
     assert service.get_user_preferences() == preferences
+
+
+def test_initialize_profile_storage_delegates_to_repository() -> None:
+    repository = FakeProfileRepository()
+    service = ProfileService(repository)
+
+    service.initialize_profile_storage()
+
+    assert repository.storage_initialized is True
 
 
 def test_save_user_preferences_persists_to_repository() -> None:

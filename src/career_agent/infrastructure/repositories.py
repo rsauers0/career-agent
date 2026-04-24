@@ -22,6 +22,17 @@ class FileProfileRepository:
         self.user_preferences_path = self.profile_dir / "user_preferences.json"
         self.career_profile_path = self.profile_dir / "career_profile.json"
 
+    def profile_storage_initialized(self) -> bool:
+        """Return whether the profile storage directories already exist."""
+
+        return self.profile_dir.exists() or self.profile_snapshot_dir.exists()
+
+    def initialize_profile_storage(self) -> None:
+        """Create the directory scaffolding used for profile storage."""
+
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
+        self.profile_snapshot_dir.mkdir(parents=True, exist_ok=True)
+
     def load_user_preferences(self) -> UserPreferences | None:
         """Load canonical user preferences from disk."""
 
@@ -49,7 +60,7 @@ class FileProfileRepository:
         return model_type.model_validate_json(path.read_text(encoding="utf-8"))
 
     def _save_model(self, model: BaseModel, path: Path) -> None:
-        self.profile_dir.mkdir(parents=True, exist_ok=True)
+        self.initialize_profile_storage()
 
         if path.exists():
             self._create_snapshot(path)

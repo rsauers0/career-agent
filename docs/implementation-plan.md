@@ -125,6 +125,7 @@ Create:
 
 Repository interfaces should describe what the app needs:
 
+- initialize profile storage scaffolding
 - load and save preferences
 - load and save the career profile
 - load and save jobs
@@ -156,8 +157,9 @@ Create:
 Responsibilities:
 
 - `ProfileService`
+  - initialize profile storage scaffolding
   - update preferences
-  - update profile data
+  - update high-level profile data
   - validate weak/missing sections
 - `JobService`
   - ingest job text or a URL
@@ -257,9 +259,14 @@ Checkpoint:
 
 Add Typer command groups for:
 
-- `profile wizard`
+- `profile init`
+- `preferences show`
+- `preferences wizard`
 - `profile show`
-- `profile validate`
+- `profile wizard`
+- `experience list`
+- `experience add`
+- `experience show`
 - `job add`
 - `job show`
 - `job analyze`
@@ -277,6 +284,12 @@ Rule:
 
 - the CLI collects input and renders output
 - the CLI should not contain persistence or model logic
+
+Workflow note:
+
+- `profile init` only creates storage scaffolding
+- preferences, high-level profile data, and experience entries are authored in separate flows
+- experience-entry intake and LLM-assisted refinement come after the deterministic profile authoring flows are in place
 
 Checkpoint:
 

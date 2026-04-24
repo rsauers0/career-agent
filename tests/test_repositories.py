@@ -46,6 +46,15 @@ def test_load_missing_profile_data_returns_none(tmp_path: Path) -> None:
     assert repository.load_career_profile() is None
 
 
+def test_initialize_profile_storage_creates_expected_directories(tmp_path: Path) -> None:
+    repository = FileProfileRepository(tmp_path)
+
+    repository.initialize_profile_storage()
+
+    assert repository.profile_dir.exists()
+    assert repository.profile_snapshot_dir.exists()
+
+
 def test_save_and_load_user_preferences_round_trip(tmp_path: Path) -> None:
     repository = FileProfileRepository(tmp_path)
     preferences = build_user_preferences()

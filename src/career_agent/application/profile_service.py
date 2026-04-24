@@ -10,6 +10,16 @@ class ProfileService:
     def __init__(self, repository: ProfileRepository) -> None:
         self.repository = repository
 
+    def profile_storage_initialized(self) -> bool:
+        """Return whether profile storage scaffolding already exists."""
+
+        return self.repository.profile_storage_initialized()
+
+    def initialize_profile_storage(self) -> None:
+        """Create the directory scaffolding used for profile persistence."""
+
+        self.repository.initialize_profile_storage()
+
     def get_user_preferences(self) -> UserPreferences | None:
         """Return the stored user preferences, if present."""
 
