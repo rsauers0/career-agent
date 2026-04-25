@@ -17,11 +17,13 @@ Implemented:
 - `preferences wizard`
 
 Planned next:
-- `profile wizard` for high-level `CareerProfile` fields
+- component status evaluation for workflow completeness
+- Textual landing/dashboard screen
+- Textual preferences authoring screen
+- `profile wizard` or profile authoring screen for high-level `CareerProfile` fields
 - separate experience-entry workflows
 - AI-assisted job normalization and fit matching
 - tailored document generation
-- future Textual TUI
 
 ## Design Direction
 
@@ -30,6 +32,9 @@ Career Agent is being built around:
 - modular domain / application / infrastructure separation
 - AI workflows grounded in canonical data
 - reusable workflows that can move from CLI to TUI cleanly
+- component-first development: implement behavior, validate/status it, then expose it in the interface
+- Textual as the planned primary local interface, with Typer remaining useful for scripting and development
+- LLM assistance only where it adds value, not as a requirement for simple data entry
 
 ## Storage Model
 

@@ -26,7 +26,7 @@ Use four layers:
 3. `infrastructure`
    File repositories, HTTP/model adapters, and rendering adapters.
 4. `interfaces`
-   CLI now, with a future `Textual` TUI reusing the same application layer.
+   CLI plus a near-term `Textual` TUI, both reusing the same application layer.
 
 Design rule:
 
@@ -97,20 +97,56 @@ Completed validation includes:
 
 ## In Progress
 
-### Preferences Authoring
-Current focus is making the preferences workflow solid and reusable.
+### Component Workflow Pattern
+Current focus is establishing a repeatable pattern for each major workflow before expanding the application surface area.
 
 Goals:
-- keep the wizard as a thin interface adapter
-- preserve reusable normalization/validation for future TUI use
-- keep save behavior as one logical write at the end of the flow
-- re-prompt invalid field values instead of forcing a full wizard restart
+- implement deterministic application behavior first
+- add validation and status evaluation that can be reused by any interface
+- expose the workflow through CLI commands and then through the Textual TUI
+- keep interface code thin so it does not own business rules
+- keep save behavior as one logical write at the end of an authoring flow
 
 Open refinement opportunities:
-- clearer user-facing validation messaging
-- richer display formatting for `preferences show`
+- define component status contracts such as `not_started`, `incomplete`, `partial`, and `complete`
+- separate Pydantic data validity from product-level workflow completeness
+- add clearer user-facing validation messaging
+- add richer display formatting for existing show commands
 
 ## Next
+
+### Component Status And Textual Foundation
+Add reusable status evaluation and a local `Textual` foundation before expanding into more profile data.
+
+Planned sequence:
+- define application-layer status evaluators for workflow components
+- start with `UserPreferences` as the first complete status evaluation target
+- add `Textual` as the primary local application interface
+- create a landing/dashboard screen that reads component status from the application layer
+- reserve space for an assistant panel with a clear "LLM assistant not configured yet" state
+- keep Typer commands as development, scripting, and utility entry points
+
+Initial scope:
+- show configured data directory and storage status
+- show component cards for preferences, career profile, experience, jobs, and documents
+- show required and recommended missing fields for components that have status evaluators
+- provide navigation into the first implemented component workflow
+- avoid mixing preferences, career profile, and experience into one monolithic wizard
+
+Design intent:
+- prove the UI architecture with a small but reusable dashboard and one complete workflow
+- keep the app local-first without introducing a web service
+- make future TUI screens reuse the same service and validation patterns
+- keep LLM assistance optional and workflow-specific instead of forcing it into simple data entry
+
+### Preferences Authoring
+Complete `UserPreferences` as the first full component using the new pattern.
+
+Planned scope:
+- status evaluator for required and recommended preference fields
+- Textual preferences form or screen
+- field-level validation feedback using the same parsing/model logic as the CLI
+- save valid preferences to the existing file-backed repository
 
 ### Career Profile Authoring
 Add a separate `profile` authoring flow for high-level `CareerProfile` data, distinct from preferences and experience entries.
@@ -185,13 +221,21 @@ Planned additions:
 - logging design that can later integrate with log aggregation or SIEM tooling
 
 ### TUI
-Add a `Textual` interface after the application workflows are stable enough to reuse.
+Expand the `Textual` interface after the dashboard and first component workflow prove the pattern.
 
 The TUI should reuse:
 - services
 - builders and normalizers
 - repositories
 - domain validation
+- status evaluators
+
+Planned expansion order:
+- landing/dashboard screen
+- preferences status and authoring screen
+- high-level career profile screen
+- experience management screens
+- job and document workflows
 
 ## Storage Model
 
@@ -219,7 +263,11 @@ Current shape:
 
 - `profile init` only bootstraps storage
 - preferences, profile, and experience are separate workflows
+- each workflow should follow the pattern: implement component behavior, validate/status it, then expose it in the TUI
+- status evaluation belongs in the application layer, not inside CLI or TUI rendering code
+- Pydantic validation answers "is this data structurally valid"; status evaluation answers "is this workflow useful or complete enough"
 - canonical structured data comes before AI-assisted refinement
 - AI features should operate on normalized canonical data whenever possible
 - save once per wizard run; do not snapshot every section
 - use `.env` or environment variables for local configuration, with `.env.example` as the committed template
+- prefer local Textual UI expansion over introducing a service-based web or Slack interface until core workflows require it

@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from career_agent.domain.models import CareerProfile, ExperienceEntry, UserPreferences
+from career_agent.domain.models import (
+    CareerProfile,
+    ExperienceEntry,
+    UserPreferences,
+    WorkArrangement,
+)
 from career_agent.infrastructure.repositories import FileProfileRepository
 
 
@@ -15,8 +20,9 @@ def build_user_preferences() -> UserPreferences:
         full_name="Randy Example",
         base_location="Aurora, IL 60504",
         target_job_titles=["Senior Data Engineer"],
-        preferred_locations=["Remote", "Chicago, IL"],
+        preferred_locations=["Chicago, IL"],
         time_zone="America/Chicago",
+        preferred_work_arrangements=[WorkArrangement.REMOTE],
         desired_salary_min=150000,
         work_authorization=True,
         requires_work_sponsorship=False,

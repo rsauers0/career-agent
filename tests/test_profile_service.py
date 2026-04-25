@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from career_agent.application.profile_service import ProfileService
-from career_agent.domain.models import CareerProfile, ExperienceEntry, UserPreferences
+from career_agent.application.status import ComponentStatusState
+from career_agent.domain.models import (
+    CareerProfile,
+    ExperienceEntry,
+    UserPreferences,
+    WorkArrangement,
+)
 
 
 class FakeProfileRepository:
@@ -34,8 +40,9 @@ def build_user_preferences() -> UserPreferences:
         full_name="Randy Example",
         base_location="Aurora, IL 60504",
         target_job_titles=["Senior Data Engineer"],
-        preferred_locations=["Remote", "Chicago, IL"],
+        preferred_locations=["Chicago, IL"],
         time_zone="America/Chicago",
+        preferred_work_arrangements=[WorkArrangement.REMOTE],
         desired_salary_min=150000,
         work_authorization=True,
         requires_work_sponsorship=False,
@@ -64,6 +71,16 @@ def test_get_user_preferences_returns_repository_value() -> None:
     service = ProfileService(repository)
 
     assert service.get_user_preferences() == preferences
+
+
+def test_get_user_preferences_status_returns_repository_value_status() -> None:
+    repository = FakeProfileRepository()
+    repository.user_preferences = build_user_preferences()
+    service = ProfileService(repository)
+
+    status = service.get_user_preferences_status()
+
+    assert status.state == ComponentStatusState.COMPLETE
 
 
 def test_initialize_profile_storage_delegates_to_repository() -> None:

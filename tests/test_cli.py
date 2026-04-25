@@ -4,7 +4,12 @@ from typer.testing import CliRunner
 
 from career_agent.cli import app
 from career_agent.config import get_settings
-from career_agent.domain.models import CareerProfile, ExperienceEntry, UserPreferences
+from career_agent.domain.models import (
+    CareerProfile,
+    ExperienceEntry,
+    UserPreferences,
+    WorkArrangement,
+)
 from career_agent.infrastructure.repositories import FileProfileRepository
 
 runner = CliRunner()
@@ -15,8 +20,9 @@ def build_user_preferences() -> UserPreferences:
         full_name="Randy Example",
         base_location="Aurora, IL 60504",
         target_job_titles=["Senior Data Engineer"],
-        preferred_locations=["Remote", "Chicago, IL"],
+        preferred_locations=["Chicago, IL"],
         time_zone="America/Chicago",
+        preferred_work_arrangements=[WorkArrangement.REMOTE],
         desired_salary_min=150000,
         work_authorization=True,
         requires_work_sponsorship=False,
@@ -118,6 +124,35 @@ def test_preferences_show_reports_empty_state(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
+def test_preferences_status_reports_not_started(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["preferences", "status"])
+
+    assert result.exit_code == 0
+    assert "Component Status" in result.output
+    assert "not_started" in result.output
+    assert "preferred_work_arrangements" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_preferences_status_reports_complete(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FileProfileRepository(tmp_path)
+    repository.save_user_preferences(build_user_preferences())
+
+    result = runner.invoke(app, ["preferences", "status"])
+
+    assert result.exit_code == 0
+    assert "Component Status" in result.output
+    assert "complete" in result.output
+
+    get_settings.cache_clear()
+
+
 def test_preferences_wizard_creates_preferences(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
@@ -130,7 +165,7 @@ def test_preferences_wizard_creates_preferences(monkeypatch, tmp_path) -> None:
             "Aurora, IL 60504\n"
             "America/Chicago\n"
             "Senior Data Engineer, Analytics Engineer\n"
-            "Remote, Chicago, IL\n"
+            "Chicago, IL\n"
             "remote, hybrid\n"
             "150000\n"
             "USD\n"
@@ -201,7 +236,7 @@ def test_preferences_wizard_reprompts_invalid_time_zone(monkeypatch, tmp_path) -
             "Not/A_Real_Zone\n"
             "America/Chicago\n"
             "Senior Data Engineer\n"
-            "Remote\n"
+            "Chicago, IL\n"
             "remote\n"
             "150000\n"
             "USD\n"

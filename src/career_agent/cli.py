@@ -13,6 +13,7 @@ from career_agent.application.preferences_builder import (
     parse_work_arrangements,
 )
 from career_agent.application.profile_service import ProfileService
+from career_agent.application.status import ComponentStatus
 from career_agent.config import get_settings
 from career_agent.infrastructure.repositories import FileProfileRepository
 
@@ -102,6 +103,23 @@ def _render_user_preferences(preferences) -> None:
     console.print(preference_table)
 
 
+def _render_component_status(status: ComponentStatus) -> None:
+    status_table = Table(title="Component Status")
+    status_table.add_column("Field")
+    status_table.add_column("Value")
+    status_table.add_row("Component", status.component)
+    status_table.add_row("State", status.state.value)
+    status_table.add_row(
+        "Missing Required",
+        ", ".join(status.missing_required) or "-",
+    )
+    status_table.add_row(
+        "Missing Recommended",
+        ", ".join(status.missing_recommended) or "-",
+    )
+    console.print(status_table)
+
+
 @preferences_app.command("show")
 def preferences_show() -> None:
     """Display the stored user preferences."""
@@ -117,6 +135,16 @@ def preferences_show() -> None:
         return
 
     _render_user_preferences(preferences)
+
+
+@preferences_app.command("status")
+def preferences_status() -> None:
+    """Display workflow completeness status for user preferences."""
+
+    service = _build_profile_service()
+    status = service.get_user_preferences_status()
+
+    _render_component_status(status)
 
 
 @preferences_app.command("wizard")

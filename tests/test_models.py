@@ -16,7 +16,7 @@ def test_user_preferences_json_round_trip() -> None:
         full_name="Randy Example",
         base_location="Aurora, IL 60504",
         target_job_titles=["Senior Data Engineer", "Machine Learning Engineer"],
-        preferred_locations=["Remote", "Chicago, IL"],
+        preferred_locations=["Chicago, IL"],
         time_zone="America/Chicago",
         preferred_work_arrangements=[WorkArrangement.REMOTE, WorkArrangement.HYBRID],
         desired_salary_min=150000,

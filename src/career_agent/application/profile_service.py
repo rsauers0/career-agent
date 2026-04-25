@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from career_agent.application.ports import ProfileRepository
+from career_agent.application.status import ComponentStatus, evaluate_user_preferences_status
 from career_agent.domain.models import CareerProfile, UserPreferences
 
 
@@ -24,6 +25,11 @@ class ProfileService:
         """Return the stored user preferences, if present."""
 
         return self.repository.load_user_preferences()
+
+    def get_user_preferences_status(self) -> ComponentStatus:
+        """Return workflow completeness status for the stored user preferences."""
+
+        return evaluate_user_preferences_status(self.get_user_preferences())
 
     def save_user_preferences(self, preferences: UserPreferences) -> None:
         """Persist the provided user preferences."""
