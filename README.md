@@ -9,6 +9,7 @@ A core design goal is to use local LLMs through OpenAI-compatible APIs wherever 
 Implemented:
 - Typer/Rich CLI scaffold
 - initial Textual TUI dashboard
+- read-only Textual user preferences screen
 - Pydantic domain models
 - local file-based persistence with snapshot-on-overwrite
 - profile service layer
@@ -76,6 +77,8 @@ Launch the local TUI:
 ```bash
 uv run career-agent tui
 ```
+
+From the TUI dashboard, press `p` to open User Preferences and `b` or `Esc` to return.
 
 Initialize storage scaffolding:
 

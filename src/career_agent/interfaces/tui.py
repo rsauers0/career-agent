@@ -4,17 +4,20 @@ from typing import ClassVar
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
 from career_agent.application.dashboard import (
+    DashboardCard,
     DashboardSection,
+    DashboardStatus,
     JobWorkflowState,
-    JobWorkflowStatus,
     build_dashboard_sections,
 )
 from career_agent.application.profile_service import ProfileService
 from career_agent.application.status import ComponentStatus, ComponentStatusState
 from career_agent.config import Settings, get_settings
+from career_agent.domain.models import UserPreferences
 from career_agent.infrastructure.repositories import FileProfileRepository
 
 STATUS_LABELS = {
@@ -32,13 +35,55 @@ JOB_STATUS_LABELS = {
     JobWorkflowState.FAILED: "Failed",
 }
 
-DashboardStatus = ComponentStatus | JobWorkflowStatus
-
 
 def format_component_name(component: str) -> str:
     """Convert an internal component key into a display label."""
 
     return component.replace("_", " ").title()
+
+
+def format_optional_text(value: object | None) -> str:
+    """Format an optional value for display."""
+
+    if value is None:
+        return "-"
+    if isinstance(value, str):
+        return value.strip() or "-"
+    return str(value)
+
+
+def format_list(values: list[object]) -> str:
+    """Format a list value for display."""
+
+    return ", ".join(str(value) for value in values) or "-"
+
+
+def build_user_preferences_rows(preferences: UserPreferences) -> list[tuple[str, str]]:
+    """Return read-only display rows for user preferences."""
+
+    return [
+        ("Full Name", preferences.full_name),
+        ("Base Location", preferences.base_location),
+        ("Time Zone", format_optional_text(preferences.time_zone)),
+        ("Target Job Titles", format_list(preferences.target_job_titles)),
+        ("Preferred Locations", format_list(preferences.preferred_locations)),
+        (
+            "Preferred Work Arrangements",
+            format_list(
+                [arrangement.value for arrangement in preferences.preferred_work_arrangements]
+            ),
+        ),
+        ("Desired Salary Minimum", format_optional_text(preferences.desired_salary_min)),
+        ("Salary Currency", preferences.salary_currency),
+        ("Maximum Commute Distance", format_optional_text(preferences.max_commute_distance)),
+        ("Commute Distance Unit", preferences.commute_distance_unit.value),
+        ("Maximum Commute Time", format_optional_text(preferences.max_commute_time)),
+        ("Work Authorization", "Yes" if preferences.work_authorization else "No"),
+        (
+            "Requires Work Sponsorship",
+            "Yes" if preferences.requires_work_sponsorship else "No",
+        ),
+    ]
 
 
 def get_status_label(status: DashboardStatus) -> str:
@@ -55,11 +100,8 @@ def get_status_class(status: DashboardStatus) -> str:
     return status.state.value
 
 
-def get_status_detail(status: DashboardStatus) -> tuple[str, str]:
+def get_status_detail(status: ComponentStatus) -> tuple[str, str]:
     """Return detail text and CSS class for a dashboard card."""
-
-    if isinstance(status, JobWorkflowStatus):
-        return status.detail, "status-detail"
 
     if status.missing_required:
         return (
@@ -79,19 +121,34 @@ def get_status_detail(status: DashboardStatus) -> tuple[str, str]:
 class StatusCard(Static):
     """Dashboard card for one workflow component."""
 
-    def __init__(self, status: DashboardStatus) -> None:
+    def __init__(self, card: DashboardCard) -> None:
         super().__init__()
-        self.status = status
+        self.card = card
 
     def compose(self) -> ComposeResult:
-        detail, detail_classes = get_status_detail(self.status)
+        detail_classes = get_dashboard_card_detail_class(self.card.status)
 
-        yield Static(format_component_name(self.status.component), classes="card-title")
+        yield Static(self.card.title, classes="card-title")
         yield Static(
-            get_status_label(self.status),
-            classes=f"status-pill status-{get_status_class(self.status)}",
+            get_status_label(self.card.status),
+            classes=f"status-pill status-{get_status_class(self.card.status)}",
         )
-        yield Static(detail, classes=detail_classes)
+        yield Static(self.card.detail, classes=detail_classes)
+
+        if self.card.shortcut:
+            yield Static(f"Shortcut: {self.card.shortcut}", classes="shortcut-hint")
+
+
+def get_dashboard_card_detail_class(status: DashboardStatus) -> str:
+    """Return the CSS class for dashboard card detail text."""
+
+    if isinstance(status, ComponentStatus) and status.missing_required:
+        return "status-detail required-detail"
+
+    if isinstance(status, ComponentStatus) and status.missing_recommended:
+        return "status-detail recommended-detail"
+
+    return "status-detail"
 
 
 class DashboardSectionView(Static):
@@ -103,12 +160,64 @@ class DashboardSectionView(Static):
 
     def compose(self) -> ComposeResult:
         yield Static(self.section.title, classes="section-title")
-        for status in self.section.items:
-            yield StatusCard(status)
+        for card in self.section.cards:
+            yield StatusCard(card)
+
+
+class PreferencesScreen(Screen[None]):
+    """Read-only user preferences screen."""
+
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
+        ("b", "back", "Back"),
+        ("escape", "back", "Back"),
+    ]
+
+    def __init__(self, profile_service: ProfileService) -> None:
+        super().__init__()
+        self.profile_service = profile_service
+
+    def compose(self) -> ComposeResult:
+        preferences = self.profile_service.get_user_preferences()
+        status = self.profile_service.get_user_preferences_status()
+
+        yield Header(show_clock=True)
+        with Container(id="preferences-screen"):
+            yield Static("User Preferences", id="screen-title")
+            yield Static(
+                "Read-only view. Editing will be added in the next workflow slice.",
+                classes="help-text",
+            )
+            yield StatusCard(
+                DashboardCard(
+                    title="User Preferences",
+                    status=status,
+                    detail=get_status_detail(status)[0],
+                )
+            )
+
+            if preferences is None:
+                yield Static(
+                    "No user preferences have been saved yet.",
+                    classes="empty-state",
+                )
+            else:
+                with VerticalScroll(id="preferences-details"):
+                    for label, value in build_user_preferences_rows(preferences):
+                        with Horizontal(classes="preference-row"):
+                            yield Static(label, classes="preference-label")
+                            yield Static(value, classes="preference-value")
+        yield Footer()
+
+    def action_back(self) -> None:
+        """Return to the dashboard."""
+
+        self.app.pop_screen()
 
 
 class CareerAgentTUI(App[None]):
     """Textual application shell for Career Agent."""
+
+    TITLE: ClassVar[str] = "Career Agent"
 
     CSS: ClassVar[str] = """
     Screen {
@@ -127,6 +236,10 @@ class CareerAgentTUI(App[None]):
     }
 
     #dashboard {
+        padding: 1 2;
+    }
+
+    #preferences-screen {
         padding: 1 2;
     }
 
@@ -153,6 +266,17 @@ class CareerAgentTUI(App[None]):
         text-align: center;
     }
 
+    #screen-title {
+        text-style: bold;
+        color: #f5c16c;
+        margin-bottom: 1;
+    }
+
+    .help-text {
+        color: #c9d1c8;
+        margin-bottom: 1;
+    }
+
     #main-content {
         height: 1fr;
     }
@@ -168,6 +292,36 @@ class CareerAgentTUI(App[None]):
         border: round #5d7b6f;
         padding: 1 2;
         margin-left: 1;
+        background: #172429;
+    }
+
+    #preferences-details {
+        height: 1fr;
+        border: round #5d7b6f;
+        padding: 1 2;
+        background: #172429;
+    }
+
+    .preference-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    .preference-label {
+        width: 32;
+        color: #f5c16c;
+        text-style: bold;
+    }
+
+    .preference-value {
+        width: 1fr;
+        color: #f4efe6;
+    }
+
+    .empty-state {
+        border: round #5d7b6f;
+        padding: 1 2;
+        color: #c9d1c8;
         background: #172429;
     }
 
@@ -247,6 +401,10 @@ class CareerAgentTUI(App[None]):
         color: #c9d1c8;
     }
 
+    .shortcut-hint {
+        color: #9fb8ad;
+    }
+
     .required-detail {
         color: #f0a79b;
     }
@@ -257,6 +415,7 @@ class CareerAgentTUI(App[None]):
     """
 
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
+        ("p", "open_preferences", "Preferences"),
         ("q", "quit", "Quit"),
     ]
 
@@ -288,6 +447,11 @@ class CareerAgentTUI(App[None]):
                     yield Static("Assistant", classes="section-title")
                     yield Static("LLM assistant not configured yet.", classes="status-detail")
         yield Footer()
+
+    def action_open_preferences(self) -> None:
+        """Open the read-only user preferences screen."""
+
+        self.push_screen(PreferencesScreen(self.profile_service))
 
 
 def build_tui() -> CareerAgentTUI:

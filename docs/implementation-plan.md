@@ -96,6 +96,7 @@ Completed validation includes:
 - Textual added as the local TUI framework
 - initial landing/dashboard screen added
 - dashboard shows data directory, profile readiness, job workflow state, and assistant placeholder
+- read-only User Preferences screen added
 - User Preferences status is backed by application-layer status evaluation
 - Career Profile is shown as a profile readiness placeholder until its status evaluator exists
 - Jobs is shown as an idle runtime workflow placeholder until job queueing exists
@@ -111,8 +112,8 @@ Completed validation includes:
 
 ## In Progress
 
-### Preferences Authoring In The TUI
-Current focus is using the established component pattern to make `UserPreferences` editable from the Textual interface.
+### Preferences Editing In The TUI
+Current focus is using the established component pattern to make the read-only `UserPreferences` screen editable.
 
 Goals:
 - reuse the existing preferences builder and domain validation
@@ -128,11 +129,11 @@ Open refinement opportunities:
 
 ## Next
 
-### Textual Preferences Authoring
+### Textual Preferences Editing
 Complete `UserPreferences` as the first full component using the new pattern.
 
 Planned scope:
-- Textual preferences form or screen
+- editable Textual preferences form
 - field-level validation feedback using the same parsing/model logic as the CLI
 - save valid preferences to the existing file-backed repository
 - return to or refresh the dashboard after saving
@@ -226,6 +227,7 @@ Long-term dashboard model:
 - `Jobs` should focus on URL/text submission, queueing, processing, analysis, and saved job results
 - job workflow state should use runtime concepts such as `idle`, `queued`, `processing`, `completed`, and `failed`
 - generated resumes and cover letters should belong to a specific job workflow rather than a standalone dashboard component
+- dashboard cards should carry display/action metadata, such as title, detail text, shortcut key, and target screen, instead of forcing the TUI to derive all copy from raw status objects
 
 Planned expansion order:
 - preferences status and authoring screen

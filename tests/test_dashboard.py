@@ -42,18 +42,21 @@ def test_build_dashboard_sections_groups_profile_readiness_and_job_workflow() ->
         "Profile Readiness",
         "Job Workflow",
     ]
-    assert [item.component for item in sections[0].items] == [
-        "user_preferences",
-        "career_profile",
+    assert [card.title for card in sections[0].cards] == [
+        "User Preferences",
+        "Career Profile",
     ]
-    assert isinstance(sections[0].items[0], ComponentStatus)
-    assert isinstance(sections[0].items[1], ComponentStatus)
-    assert sections[0].items[0].state == ComponentStatusState.NOT_STARTED
-    assert sections[0].items[1].state == ComponentStatusState.NOT_STARTED
+    assert isinstance(sections[0].cards[0].status, ComponentStatus)
+    assert isinstance(sections[0].cards[1].status, ComponentStatus)
+    assert sections[0].cards[0].status.state == ComponentStatusState.NOT_STARTED
+    assert sections[0].cards[1].status.state == ComponentStatusState.NOT_STARTED
+    assert sections[0].cards[0].detail == "Press p to complete preferences setup."
+    assert sections[0].cards[0].shortcut == "p"
 
-    assert [item.component for item in sections[1].items] == ["jobs"]
-    assert isinstance(sections[1].items[0], JobWorkflowStatus)
-    assert sections[1].items[0].state == JobWorkflowState.IDLE
+    assert [card.title for card in sections[1].cards] == ["Jobs"]
+    assert isinstance(sections[1].cards[0].status, JobWorkflowStatus)
+    assert sections[1].cards[0].status.state == JobWorkflowState.IDLE
+    assert sections[1].cards[0].detail == "No job URLs queued for analysis."
 
 
 def test_build_dashboard_sections_uses_real_user_preferences_status() -> None:
@@ -68,7 +71,8 @@ def test_build_dashboard_sections_uses_real_user_preferences_status() -> None:
     service = ProfileService(repository)
 
     sections = build_dashboard_sections(service)
-    user_preferences_status = sections[0].items[0]
+    user_preferences_card = sections[0].cards[0]
 
-    assert user_preferences_status.component == "user_preferences"
-    assert user_preferences_status.state == ComponentStatusState.PARTIAL
+    assert user_preferences_card.status.component == "user_preferences"
+    assert user_preferences_card.status.state == ComponentStatusState.PARTIAL
+    assert user_preferences_card.detail == "Press p to complete preferences setup."
