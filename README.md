@@ -9,7 +9,7 @@ A core design goal is to use local LLMs through OpenAI-compatible APIs wherever 
 Implemented:
 - Typer/Rich CLI scaffold
 - initial Textual TUI dashboard
-- read-only Textual user preferences screen
+- editable Textual user preferences screen
 - Pydantic domain models
 - local file-based persistence with snapshot-on-overwrite
 - profile service layer
@@ -22,7 +22,7 @@ Implemented:
 - `tui`
 
 Planned next:
-- Textual preferences authoring screen
+- refine Textual preferences validation and keyboard navigation
 - `profile wizard` or profile authoring screen for high-level `CareerProfile` fields
 - separate experience-entry workflows
 - AI-assisted job normalization and fit matching
@@ -40,6 +40,52 @@ Career Agent is being built around:
 - LLM assistance only where it adds value, not as a requirement for simple data entry
 
 See [docs/architecture.md](docs/architecture.md) for the current layer map and file responsibilities.
+See [docs/security.md](docs/security.md) for the current security and privacy posture.
+
+## Install And Run The TUI
+
+The primary local interface is the Textual TUI.
+
+Prerequisites:
+- Git
+- uv
+
+Install Git:
+- Linux: use your distribution package manager, such as `sudo apt install git` on Debian/Ubuntu.
+- Windows: install Git for Windows from <https://git-scm.com/install/windows>, or use `winget install --id Git.Git -e --source winget`.
+
+Install uv:
+- Linux/macOS:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+- Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Clone and run on Linux/macOS:
+
+```bash
+git clone https://github.com/rsauers0/career-agent.git
+cd career-agent
+uv sync
+uv run career-agent tui
+```
+
+Clone and run on Windows PowerShell:
+
+```powershell
+git clone https://github.com/rsauers0/career-agent.git
+Set-Location career-agent
+uv sync
+uv run career-agent tui
+```
+
+The first `uv sync` creates the local virtual environment and installs dependencies from `uv.lock`. The `uv run career-agent tui` command launches the TUI.
 
 ## Storage Model
 
@@ -78,7 +124,7 @@ Launch the local TUI:
 uv run career-agent tui
 ```
 
-From the TUI dashboard, press `p` to open User Preferences and `b` or `Esc` to return.
+From the TUI dashboard, press `p` to open User Preferences, save edits from the form, and press `b` or `Esc` to return.
 
 Initialize storage scaffolding:
 
@@ -110,9 +156,31 @@ Create a local config file if needed:
 cp .env.example .env
 ```
 
+On Windows PowerShell, use:
+
+```powershell
+Copy-Item .env.example .env
+```
+
 Currently supported:
 - `CAREER_AGENT_DATA_DIR`
-  Overrides the default local data directory. If unset, the app uses `~/.career-agent`.
+  Overrides the default local data directory.
+
+If `CAREER_AGENT_DATA_DIR` is unset, the app creates a `.career-agent` directory under the current user's home directory using Python's `Path.home()`. This keeps the default portable across Linux, macOS, and Windows.
+
+Example `.env` values:
+
+```dotenv
+# Portable user-home path
+CAREER_AGENT_DATA_DIR=~/.career-agent
+
+# Windows absolute path
+CAREER_AGENT_DATA_DIR=C:/Users/ExampleUser/.career-agent
+```
+
+The `~/.career-agent` value is the recommended cross-platform option because the app expands `~` through Python's `Path.expanduser()`. Forward slashes are recommended in `.env` paths because Python handles them correctly on Windows and they avoid backslash escaping confusion.
+
+The project is currently developed and tested on Linux. The storage and configuration code is written with `pathlib` for cross-platform path handling, but Windows should be validated before claiming full Windows support.
 
 Run tests:
 
@@ -126,3 +194,9 @@ Run linting:
 uv run ruff check .
 uv run ruff format --check .
 ```
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
+
+Career Agent depends on third-party packages that are distributed under their own licenses. Before publishing packaged releases, Docker images, or binaries, generate a dependency license report and preserve any required third-party notices.

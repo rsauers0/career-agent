@@ -94,6 +94,24 @@ def test_saving_over_existing_profile_creates_snapshot(tmp_path: Path) -> None:
     assert snapshot_profile == first
 
 
+def test_saving_over_existing_user_preferences_creates_snapshot(tmp_path: Path) -> None:
+    repository = FileProfileRepository(tmp_path)
+    first = build_user_preferences()
+    second = build_user_preferences()
+    second.target_job_titles = ["Systems Analyst"]
+
+    repository.save_user_preferences(first)
+    repository.save_user_preferences(second)
+
+    snapshots = sorted((tmp_path / "snapshots" / "profile").glob("user_preferences-*.json"))
+
+    assert len(snapshots) == 1
+    snapshot_preferences = UserPreferences.model_validate_json(
+        snapshots[0].read_text(encoding="utf-8")
+    )
+    assert snapshot_preferences == first
+
+
 def test_load_invalid_profile_json_raises_validation_error(tmp_path: Path) -> None:
     repository = FileProfileRepository(tmp_path)
     repository.profile_dir.mkdir(parents=True, exist_ok=True)

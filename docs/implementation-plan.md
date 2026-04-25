@@ -96,7 +96,8 @@ Completed validation includes:
 - Textual added as the local TUI framework
 - initial landing/dashboard screen added
 - dashboard shows data directory, profile readiness, job workflow state, and assistant placeholder
-- read-only User Preferences screen added
+- editable User Preferences screen added
+- User Preferences form includes required-field markers, dropdown/select inputs, checkbox work arrangements, and add/clear controls for list-style fields
 - User Preferences status is backed by application-layer status evaluation
 - Career Profile is shown as a profile readiness placeholder until its status evaluator exists
 - Jobs is shown as an idle runtime workflow placeholder until job queueing exists
@@ -113,7 +114,7 @@ Completed validation includes:
 ## In Progress
 
 ### Preferences Editing In The TUI
-Current focus is using the established component pattern to make the read-only `UserPreferences` screen editable.
+Current focus is validating and refining the editable `UserPreferences` screen before moving to `CareerProfile`.
 
 Goals:
 - reuse the existing preferences builder and domain validation
@@ -129,14 +130,14 @@ Open refinement opportunities:
 
 ## Next
 
-### Textual Preferences Editing
-Complete `UserPreferences` as the first full component using the new pattern.
+### Textual Preferences Refinement
+Polish `UserPreferences` as the first full component using the new pattern.
 
 Planned scope:
-- editable Textual preferences form
-- field-level validation feedback using the same parsing/model logic as the CLI
-- save valid preferences to the existing file-backed repository
-- return to or refresh the dashboard after saving
+- improve field-level validation feedback
+- improve keyboard navigation through the form
+- confirm dashboard refresh behavior after saving
+- consider moving larger TUI screen classes into dedicated interface modules
 
 ### Career Profile Authoring
 Add a separate `profile` authoring flow for high-level `CareerProfile` data, distinct from preferences and experience entries.
@@ -271,4 +272,4 @@ Current shape:
 - AI features should operate on normalized canonical data whenever possible
 - save once per wizard run; do not snapshot every section
 - use `.env` or environment variables for local configuration, with `.env.example` as the committed template
-- prefer local Textual UI expansion over introducing a service-based web or Slack interface until core workflows require it
+- prefer local Textual UI expansion over introducing a service-based web interface until core workflows require it
