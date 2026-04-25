@@ -39,6 +39,15 @@ def doctor() -> None:
     )
 
 
+@app.command()
+def tui() -> None:
+    """Launch the local Textual interface."""
+
+    from career_agent.interfaces.tui import run_tui
+
+    run_tui()
+
+
 @profile_app.callback()
 def profile_cli() -> None:
     """Commands for working with the career profile."""

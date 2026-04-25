@@ -8,17 +8,19 @@ A core design goal is to use local LLMs through OpenAI-compatible APIs wherever 
 
 Implemented:
 - Typer/Rich CLI scaffold
+- initial Textual TUI dashboard
 - Pydantic domain models
 - local file-based persistence with snapshot-on-overwrite
 - profile service layer
+- component status evaluation
 - `profile init` (storage scaffolding only)
 - `profile show`
 - `preferences show`
+- `preferences status`
 - `preferences wizard`
+- `tui`
 
 Planned next:
-- component status evaluation for workflow completeness
-- Textual landing/dashboard screen
 - Textual preferences authoring screen
 - `profile wizard` or profile authoring screen for high-level `CareerProfile` fields
 - separate experience-entry workflows
@@ -35,6 +37,8 @@ Career Agent is being built around:
 - component-first development: implement behavior, validate/status it, then expose it in the interface
 - Textual as the planned primary local interface, with Typer remaining useful for scripting and development
 - LLM assistance only where it adds value, not as a requirement for simple data entry
+
+See [docs/architecture.md](docs/architecture.md) for the current layer map and file responsibilities.
 
 ## Storage Model
 
@@ -67,6 +71,12 @@ Run the CLI:
 uv run career-agent --help
 ```
 
+Launch the local TUI:
+
+```bash
+uv run career-agent tui
+```
+
 Initialize storage scaffolding:
 
 ```bash
@@ -83,6 +93,7 @@ Show current stored data:
 
 ```bash
 uv run career-agent preferences show
+uv run career-agent preferences status
 uv run career-agent profile show
 ```
 

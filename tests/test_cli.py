@@ -59,6 +59,23 @@ def test_profile_show_reports_empty_state(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
+def test_tui_command_launches_textual_interface(monkeypatch) -> None:
+    import career_agent.interfaces.tui as tui_module
+
+    launched = False
+
+    def fake_run_tui() -> None:
+        nonlocal launched
+        launched = True
+
+    monkeypatch.setattr(tui_module, "run_tui", fake_run_tui)
+
+    result = runner.invoke(app, ["tui"])
+
+    assert result.exit_code == 0
+    assert launched is True
+
+
 def test_profile_show_displays_stored_preferences_and_profile(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))

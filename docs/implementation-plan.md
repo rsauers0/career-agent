@@ -79,6 +79,8 @@ Completed validation includes:
 ### Application Layer
 - `ProfileService` implemented
 - reusable preferences normalization/builder logic added
+- reusable component status model and user preferences status evaluation added
+- dashboard status aggregation added
 
 ### CLI Flows
 - `doctor`
@@ -86,7 +88,16 @@ Completed validation includes:
   Creates storage scaffolding only
 - `profile show`
 - `preferences show`
+- `preferences status`
 - `preferences wizard`
+- `tui`
+
+### TUI Foundation
+- Textual added as the local TUI framework
+- initial landing/dashboard screen added
+- dashboard shows data directory, workflow status cards, and assistant placeholder
+- User Preferences status is backed by application-layer status evaluation
+- Career Profile, Experience, Jobs, and Documents are shown as initial placeholder components
 
 ### Tests
 - model round-trip and validation tests
@@ -94,59 +105,36 @@ Completed validation includes:
 - repository tests
 - profile service tests
 - CLI tests for current commands
+- dashboard status tests
+- TUI factory and formatting tests
 
 ## In Progress
 
-### Component Workflow Pattern
-Current focus is establishing a repeatable pattern for each major workflow before expanding the application surface area.
+### Preferences Authoring In The TUI
+Current focus is using the established component pattern to make `UserPreferences` editable from the Textual interface.
 
 Goals:
-- implement deterministic application behavior first
-- add validation and status evaluation that can be reused by any interface
-- expose the workflow through CLI commands and then through the Textual TUI
-- keep interface code thin so it does not own business rules
-- keep save behavior as one logical write at the end of an authoring flow
+- reuse the existing preferences builder and domain validation
+- keep Textual form code thin so it does not own business rules
+- provide field-level validation feedback
+- preserve save behavior as one logical write when the user submits the form
+- update the dashboard status after preferences are saved
 
 Open refinement opportunities:
-- define component status contracts such as `not_started`, `incomplete`, `partial`, and `complete`
 - separate Pydantic data validity from product-level workflow completeness
 - add clearer user-facing validation messaging
 - add richer display formatting for existing show commands
 
 ## Next
 
-### Component Status And Textual Foundation
-Add reusable status evaluation and a local `Textual` foundation before expanding into more profile data.
-
-Planned sequence:
-- define application-layer status evaluators for workflow components
-- start with `UserPreferences` as the first complete status evaluation target
-- add `Textual` as the primary local application interface
-- create a landing/dashboard screen that reads component status from the application layer
-- reserve space for an assistant panel with a clear "LLM assistant not configured yet" state
-- keep Typer commands as development, scripting, and utility entry points
-
-Initial scope:
-- show configured data directory and storage status
-- show component cards for preferences, career profile, experience, jobs, and documents
-- show required and recommended missing fields for components that have status evaluators
-- provide navigation into the first implemented component workflow
-- avoid mixing preferences, career profile, and experience into one monolithic wizard
-
-Design intent:
-- prove the UI architecture with a small but reusable dashboard and one complete workflow
-- keep the app local-first without introducing a web service
-- make future TUI screens reuse the same service and validation patterns
-- keep LLM assistance optional and workflow-specific instead of forcing it into simple data entry
-
-### Preferences Authoring
+### Textual Preferences Authoring
 Complete `UserPreferences` as the first full component using the new pattern.
 
 Planned scope:
-- status evaluator for required and recommended preference fields
 - Textual preferences form or screen
 - field-level validation feedback using the same parsing/model logic as the CLI
 - save valid preferences to the existing file-backed repository
+- return to or refresh the dashboard after saving
 
 ### Career Profile Authoring
 Add a separate `profile` authoring flow for high-level `CareerProfile` data, distinct from preferences and experience entries.
@@ -221,7 +209,7 @@ Planned additions:
 - logging design that can later integrate with log aggregation or SIEM tooling
 
 ### TUI
-Expand the `Textual` interface after the dashboard and first component workflow prove the pattern.
+Expand the `Textual` interface after the preferences authoring screen proves the full view/edit/save pattern.
 
 The TUI should reuse:
 - services
@@ -231,7 +219,6 @@ The TUI should reuse:
 - status evaluators
 
 Planned expansion order:
-- landing/dashboard screen
 - preferences status and authoring screen
 - high-level career profile screen
 - experience management screens
