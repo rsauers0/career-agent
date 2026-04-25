@@ -27,7 +27,7 @@ This map reflects the files currently tracked in Git.
 
     application/
       __init__.py                      # application package marker
-      dashboard.py                     # dashboard component status aggregation
+      dashboard.py                     # dashboard section and status aggregation
       ports.py                         # repository protocols used by application services
       preferences_builder.py           # converts raw preference input into validated models
       profile_service.py               # application service for profile-related workflows

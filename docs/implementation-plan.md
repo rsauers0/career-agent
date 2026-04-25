@@ -95,9 +95,10 @@ Completed validation includes:
 ### TUI Foundation
 - Textual added as the local TUI framework
 - initial landing/dashboard screen added
-- dashboard shows data directory, workflow status cards, and assistant placeholder
+- dashboard shows data directory, profile readiness, job workflow state, and assistant placeholder
 - User Preferences status is backed by application-layer status evaluation
-- Career Profile, Experience, Jobs, and Documents are shown as initial placeholder components
+- Career Profile is shown as a profile readiness placeholder until its status evaluator exists
+- Jobs is shown as an idle runtime workflow placeholder until job queueing exists
 
 ### Tests
 - model round-trip and validation tests
@@ -218,6 +219,14 @@ The TUI should reuse:
 - domain validation
 - status evaluators
 
+Long-term dashboard model:
+- profile readiness and job processing should use different status concepts
+- `UserPreferences` and `CareerProfile` should use completeness states such as `not_started`, `incomplete`, `partial`, and `complete`
+- `Experience` should be part of `CareerProfile` completeness, not a separate top-level dashboard workflow
+- `Jobs` should focus on URL/text submission, queueing, processing, analysis, and saved job results
+- job workflow state should use runtime concepts such as `idle`, `queued`, `processing`, `completed`, and `failed`
+- generated resumes and cover letters should belong to a specific job workflow rather than a standalone dashboard component
+
 Planned expansion order:
 - preferences status and authoring screen
 - high-level career profile screen
@@ -250,8 +259,11 @@ Current shape:
 
 - `profile init` only bootstraps storage
 - preferences, profile, and experience are separate workflows
+- experience entries are part of `CareerProfile` completeness even if they have their own authoring workflow
+- generated documents are outputs of job workflows, not standalone canonical profile data
 - each workflow should follow the pattern: implement component behavior, validate/status it, then expose it in the TUI
 - status evaluation belongs in the application layer, not inside CLI or TUI rendering code
+- profile completeness statuses and job processing statuses should remain separate concepts
 - Pydantic validation answers "is this data structurally valid"; status evaluation answers "is this workflow useful or complete enough"
 - canonical structured data comes before AI-assisted refinement
 - AI features should operate on normalized canonical data whenever possible

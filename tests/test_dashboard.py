@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from career_agent.application.dashboard import build_dashboard_statuses
+from career_agent.application.dashboard import (
+    JobWorkflowState,
+    JobWorkflowStatus,
+    build_dashboard_sections,
+)
 from career_agent.application.profile_service import ProfileService
-from career_agent.application.status import ComponentStatusState
+from career_agent.application.status import ComponentStatus, ComponentStatusState
 from career_agent.domain.models import CareerProfile, UserPreferences, WorkArrangement
 
 
@@ -29,28 +33,30 @@ class FakeProfileRepository:
         pass
 
 
-def test_build_dashboard_statuses_includes_all_initial_components() -> None:
+def test_build_dashboard_sections_groups_profile_readiness_and_job_workflow() -> None:
     service = ProfileService(FakeProfileRepository())
 
-    statuses = build_dashboard_statuses(service)
+    sections = build_dashboard_sections(service)
 
-    assert [status.component for status in statuses] == [
+    assert [section.title for section in sections] == [
+        "Profile Readiness",
+        "Job Workflow",
+    ]
+    assert [item.component for item in sections[0].items] == [
         "user_preferences",
         "career_profile",
-        "experience",
-        "jobs",
-        "documents",
     ]
-    assert [status.state for status in statuses] == [
-        ComponentStatusState.NOT_STARTED,
-        ComponentStatusState.NOT_STARTED,
-        ComponentStatusState.NOT_STARTED,
-        ComponentStatusState.NOT_STARTED,
-        ComponentStatusState.NOT_STARTED,
-    ]
+    assert isinstance(sections[0].items[0], ComponentStatus)
+    assert isinstance(sections[0].items[1], ComponentStatus)
+    assert sections[0].items[0].state == ComponentStatusState.NOT_STARTED
+    assert sections[0].items[1].state == ComponentStatusState.NOT_STARTED
+
+    assert [item.component for item in sections[1].items] == ["jobs"]
+    assert isinstance(sections[1].items[0], JobWorkflowStatus)
+    assert sections[1].items[0].state == JobWorkflowState.IDLE
 
 
-def test_build_dashboard_statuses_uses_real_user_preferences_status() -> None:
+def test_build_dashboard_sections_uses_real_user_preferences_status() -> None:
     repository = FakeProfileRepository()
     repository.user_preferences = UserPreferences(
         full_name="Randy Example",
@@ -61,7 +67,8 @@ def test_build_dashboard_statuses_uses_real_user_preferences_status() -> None:
     )
     service = ProfileService(repository)
 
-    statuses = build_dashboard_statuses(service)
+    sections = build_dashboard_sections(service)
+    user_preferences_status = sections[0].items[0]
 
-    assert statuses[0].component == "user_preferences"
-    assert statuses[0].state == ComponentStatusState.PARTIAL
+    assert user_preferences_status.component == "user_preferences"
+    assert user_preferences_status.state == ComponentStatusState.PARTIAL
