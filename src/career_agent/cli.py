@@ -13,7 +13,7 @@ from career_agent.application.preferences_builder import (
     parse_work_arrangements,
 )
 from career_agent.application.profile_service import ProfileService
-from career_agent.application.status import ComponentStatus
+from career_agent.application.status import ComponentStatus, format_status_field_names
 from career_agent.config import get_settings
 from career_agent.infrastructure.repositories import FileProfileRepository
 
@@ -120,11 +120,11 @@ def _render_component_status(status: ComponentStatus) -> None:
     status_table.add_row("State", status.state.value)
     status_table.add_row(
         "Missing Required",
-        ", ".join(status.missing_required) or "-",
+        ", ".join(format_status_field_names(status.missing_required)) or "-",
     )
     status_table.add_row(
         "Missing Recommended",
-        ", ".join(status.missing_recommended) or "-",
+        ", ".join(format_status_field_names(status.missing_recommended)) or "-",
     )
     console.print(status_table)
 

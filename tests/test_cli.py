@@ -150,7 +150,7 @@ def test_preferences_status_reports_not_started(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "Component Status" in result.output
     assert "not_started" in result.output
-    assert "preferred_work_arrangements" in result.output
+    assert "Preferred Work Arrangements" in result.output
 
     get_settings.cache_clear()
 

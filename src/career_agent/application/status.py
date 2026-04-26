@@ -36,7 +36,6 @@ USER_PREFERENCES_RECOMMENDED_FIELDS = (
     "target_job_titles",
     "work_authorization",
     "requires_work_sponsorship",
-    "preferred_locations",
     "time_zone",
     "desired_salary_min",
 )
@@ -45,6 +44,19 @@ USER_PREFERENCES_COMMUTE_RECOMMENDED_FIELDS = (
     "max_commute_distance",
     "max_commute_time",
 )
+
+USER_PREFERENCES_FIELD_LABELS = {
+    "full_name": "Full Name",
+    "base_location": "Base Location",
+    "preferred_work_arrangements": "Preferred Work Arrangements",
+    "target_job_titles": "Target Job Titles",
+    "work_authorization": "Work Authorization",
+    "requires_work_sponsorship": "Requires Work Sponsorship",
+    "time_zone": "Time Zone",
+    "desired_salary_min": "Minimum Salary Desired",
+    "max_commute_distance": "Max Commute Distance",
+    "max_commute_time": "Max Commute Time",
+}
 
 
 def evaluate_user_preferences_status(
@@ -87,6 +99,12 @@ def evaluate_user_preferences_status(
 
 def _missing_fields(model: UserPreferences, field_names: list[str] | tuple[str, ...]) -> list[str]:
     return [field_name for field_name in field_names if not _has_value(getattr(model, field_name))]
+
+
+def format_status_field_names(field_names: list[str]) -> list[str]:
+    """Return user-facing labels for status field identifiers."""
+
+    return [USER_PREFERENCES_FIELD_LABELS.get(field_name, field_name) for field_name in field_names]
 
 
 def _has_value(value: Any) -> bool:

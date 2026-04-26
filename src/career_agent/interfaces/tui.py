@@ -5,6 +5,7 @@ from zoneinfo import available_timezones
 
 from pydantic import ValidationError
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Checkbox, Footer, Header, Input, Select, Static
@@ -21,7 +22,11 @@ from career_agent.application.preferences_builder import (
     build_user_preferences_from_answers,
 )
 from career_agent.application.profile_service import ProfileService
-from career_agent.application.status import ComponentStatus, ComponentStatusState
+from career_agent.application.status import (
+    ComponentStatus,
+    ComponentStatusState,
+    format_status_field_names,
+)
 from career_agent.config import Settings, get_settings
 from career_agent.domain.models import CommuteDistanceUnit, UserPreferences, WorkArrangement
 from career_agent.infrastructure.repositories import FileProfileRepository
@@ -39,6 +44,14 @@ CURRENCY_OPTIONS = [
     ("AUD", "AUD"),
 ]
 REQUIRED_MARKER = "[#f05f5f]*[/]"
+PREFERENCE_FIELD_LABELS = {
+    "full_name": "Full Name",
+    "base_location": "Base Location",
+    "preferred_work_arrangements": "Preferred Work Arrangements",
+    "desired_salary_min": "Minimum Salary Desired",
+    "max_commute_distance": "Max Commute Distance",
+    "max_commute_time": "Max Commute Time",
+}
 
 STATUS_LABELS = {
     ComponentStatusState.NOT_STARTED: "Not Started",
@@ -96,6 +109,44 @@ def required_label(label: str) -> str:
     """Return a form label with a red required marker."""
 
     return f"{label} {REQUIRED_MARKER}"
+
+
+def format_validation_messages(messages: list[str]) -> str:
+    """Format validation feedback for the preferences form."""
+
+    return "Could not save preferences:\n" + "\n".join(f"- {message}" for message in messages)
+
+
+def format_preferences_error(error: ValueError | ValidationError) -> str:
+    """Convert low-level validation errors into user-facing form feedback."""
+
+    if isinstance(error, ValidationError):
+        return format_validation_messages(
+            [_format_pydantic_error(error_detail) for error_detail in error.errors()]
+        )
+
+    message = str(error)
+    if "invalid literal for int()" in message:
+        return format_validation_messages(
+            ["Salary and commute preference values must be whole numbers."]
+        )
+
+    return format_validation_messages([message])
+
+
+def _format_pydantic_error(error_detail: dict[str, object]) -> str:
+    location = error_detail.get("loc", ())
+    field_name = str(location[0]) if isinstance(location, tuple) and location else ""
+    field_label = PREFERENCE_FIELD_LABELS.get(field_name, field_name or "Field")
+    error_type = str(error_detail.get("type", ""))
+
+    if error_type in {"string_too_short", "missing"}:
+        return f"{field_label} is required."
+
+    if error_type == "greater_than_equal":
+        return f"{field_label} must be 0 or greater."
+
+    return f"{field_label}: {error_detail.get('msg', 'Invalid value.')}"
 
 
 def build_user_preferences_rows(preferences: UserPreferences) -> list[tuple[str, str]]:
@@ -190,13 +241,13 @@ def get_status_detail(status: ComponentStatus) -> tuple[str, str]:
 
     if status.missing_required:
         return (
-            f"Missing required: {', '.join(status.missing_required)}",
+            f"Missing required: {', '.join(format_status_field_names(status.missing_required))}",
             "status-detail required-detail",
         )
 
     if status.missing_recommended:
         return (
-            f"Recommended: {', '.join(status.missing_recommended)}",
+            f"Recommended: {', '.join(format_status_field_names(status.missing_recommended))}",
             "status-detail recommended-detail",
         )
 
@@ -255,6 +306,7 @@ class PreferencesScreen(Screen[None]):
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("b", "back", "Back"),
         ("escape", "back", "Back"),
+        Binding("ctrl+s", "save_preferences", "Save", key_display="Ctrl+S"),
     ]
 
     def __init__(self, profile_service: ProfileService) -> None:
@@ -288,7 +340,7 @@ class PreferencesScreen(Screen[None]):
                 )
             )
 
-            yield Static("", id="preference-message", classes="form-message")
+            yield Static("", id="preference-message", classes="form-message", markup=False)
             yield Static(
                 f"{REQUIRED_MARKER} = required field",
                 classes="required-legend",
@@ -463,21 +515,67 @@ class PreferencesScreen(Screen[None]):
                 empty_message="No locations added.",
             )
 
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Add list items when Enter is pressed in list inputs."""
+
+        if event.input.id == "pref-target-job-title-input":
+            event.stop()
+            await self._add_list_item(
+                input_id="pref-target-job-title-input",
+                values=self.target_job_titles,
+                panel_id="pref-target-job-titles-panel",
+                empty_message="No titles added.",
+            )
+        elif event.input.id == "pref-preferred-location-input":
+            event.stop()
+            await self._add_list_item(
+                input_id="pref-preferred-location-input",
+                values=self.preferred_locations,
+                panel_id="pref-preferred-locations-panel",
+                empty_message="No locations added.",
+            )
+
     def action_back(self) -> None:
         """Return to the dashboard."""
 
         self.app.pop_screen()
         self.app.refresh(recompose=True)
 
+    def action_save_preferences(self) -> None:
+        """Save preferences from the keyboard shortcut."""
+
+        self._save_preferences()
+
     def _save_preferences(self) -> None:
+        answers = self._collect_answers()
+        required_errors = self._required_preferences_errors(answers)
+        if required_errors:
+            self._set_message(format_validation_messages(required_errors), kind="error")
+            return
+
         try:
-            preferences = build_user_preferences_from_answers(self._collect_answers())
+            preferences = build_user_preferences_from_answers(answers)
         except (ValueError, ValidationError) as exc:
-            self._set_message(f"Could not save preferences: {exc}")
+            self._set_message(format_preferences_error(exc), kind="error")
             return
 
         self.profile_service.save_user_preferences(preferences)
-        self._set_message("Saved user preferences. Press b or Esc to return to the dashboard.")
+        self._set_message(
+            "Saved user preferences. Press b or Esc to return to the dashboard.",
+            kind="success",
+        )
+
+    def _required_preferences_errors(self, answers: PreferenceWizardAnswers) -> list[str]:
+        errors: list[str] = []
+
+        if not answers.full_name.strip():
+            errors.append("Full Name is required.")
+        if not answers.base_location.strip():
+            errors.append("Base Location is required.")
+        if not answers.preferred_work_arrangements.strip():
+            errors.append("At least one Preferred Work Arrangement is required.")
+
+        return errors
 
     def _collect_answers(self) -> PreferenceWizardAnswers:
         return PreferenceWizardAnswers(
@@ -559,8 +657,14 @@ class PreferencesScreen(Screen[None]):
     ) -> None:
         self.query_one(f"#{panel_id}", Static).update(format_form_list(values, empty_message))
 
-    def _set_message(self, message: str) -> None:
-        self.query_one("#preference-message", Static).update(message)
+    def _set_message(self, message: str, *, kind: str = "info") -> None:
+        message_widget = self.query_one("#preference-message", Static)
+        message_widget.remove_class("message-error", "message-success")
+        if kind == "error":
+            message_widget.add_class("message-error")
+        elif kind == "success":
+            message_widget.add_class("message-success")
+        message_widget.update(message)
 
 
 class CareerAgentTUI(App[None]):
@@ -791,6 +895,20 @@ class CareerAgentTUI(App[None]):
         margin-bottom: 1;
     }
 
+    .message-error {
+        color: #f0a79b;
+        background: #2a1717;
+        border-left: thick #9c4f42;
+        padding: 1 2;
+    }
+
+    .message-success {
+        color: #b8d8c0;
+        background: #14241b;
+        border-left: thick #5d7b6f;
+        padding: 1 2;
+    }
+
     .preference-row {
         height: auto;
         margin-bottom: 1;
@@ -938,7 +1056,7 @@ class CareerAgentTUI(App[None]):
         yield Footer()
 
     def action_open_preferences(self) -> None:
-        """Open the read-only user preferences screen."""
+        """Open the editable user preferences screen."""
 
         self.push_screen(PreferencesScreen(self.profile_service))
 

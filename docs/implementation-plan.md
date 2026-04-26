@@ -226,9 +226,21 @@ Long-term dashboard model:
 - `UserPreferences` and `CareerProfile` should use completeness states such as `not_started`, `incomplete`, `partial`, and `complete`
 - `Experience` should be part of `CareerProfile` completeness, not a separate top-level dashboard workflow
 - `Jobs` should focus on URL/text submission, queueing, processing, analysis, and saved job results
+- `Jobs` should remain visible but inaccessible until required profile setup is complete
 - job workflow state should use runtime concepts such as `idle`, `queued`, `processing`, `completed`, and `failed`
 - generated resumes and cover letters should belong to a specific job workflow rather than a standalone dashboard component
 - dashboard cards should carry display/action metadata, such as title, detail text, shortcut key, and target screen, instead of forcing the TUI to derive all copy from raw status objects
+
+Job workflow access rules should be implemented after `CareerProfile` has a real status evaluator:
+- `UserPreferences` must have all required fields complete
+- `CareerProfile` must have all required fields complete
+- `partial` status should be allowed because recommended fields improve quality but should not block workflow access
+- inaccessible job actions should explain what setup is still required rather than hiding the workflow entirely
+
+Career Profile access rules should be implemented before the Career Profile authoring screen:
+- `UserPreferences` must have all required fields complete before `CareerProfile` authoring is enabled
+- `partial` or `complete` `UserPreferences` status should allow access
+- if blocked, the dashboard should keep Career Profile visible and explain that required User Preferences must be completed first
 
 Planned expansion order:
 - preferences status and authoring screen

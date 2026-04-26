@@ -3,6 +3,7 @@ from __future__ import annotations
 from career_agent.application.status import (
     ComponentStatusState,
     evaluate_user_preferences_status,
+    format_status_field_names,
 )
 from career_agent.domain.models import CommuteDistanceUnit, UserPreferences, WorkArrangement
 
@@ -67,7 +68,6 @@ def test_user_preferences_status_partial_when_recommended_fields_missing() -> No
     assert status.missing_required == []
     assert status.missing_recommended == [
         "target_job_titles",
-        "preferred_locations",
         "time_zone",
         "desired_salary_min",
     ]
@@ -102,3 +102,10 @@ def test_user_preferences_status_complete_when_required_and_recommended_fields_e
     assert status.state == ComponentStatusState.COMPLETE
     assert status.missing_required == []
     assert status.missing_recommended == []
+
+
+def test_format_status_field_names_returns_user_facing_labels() -> None:
+    assert format_status_field_names(["target_job_titles", "max_commute_time"]) == [
+        "Target Job Titles",
+        "Max Commute Time",
+    ]
