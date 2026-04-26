@@ -12,18 +12,19 @@ from career_agent.application.status import ComponentStatus, ComponentStatusStat
 from career_agent.config import Settings, get_settings
 from career_agent.domain.models import UserPreferences, WorkArrangement
 from career_agent.infrastructure.repositories import FileProfileRepository
-from career_agent.interfaces.tui import (
-    CareerAgentTUI,
+from career_agent.interfaces.tui import CareerAgentTUI, build_tui
+from career_agent.interfaces.tui_dashboard import (
     StatusCard,
-    build_tui,
+    format_component_name,
+    get_status_detail,
+    get_status_label,
+)
+from career_agent.interfaces.tui_preferences import (
     build_user_preferences_form_defaults,
     build_user_preferences_rows,
-    format_component_name,
     format_form_list,
     format_list,
     format_optional_text,
-    get_status_detail,
-    get_status_label,
     parse_form_list,
     required_label,
 )
