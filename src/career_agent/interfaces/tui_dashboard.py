@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.widgets import Static
+from textual.widgets import Button, Static
 
 from career_agent.application.dashboard import (
     DashboardCard,
@@ -88,6 +88,14 @@ class StatusCard(Static):
 
         if self.card.shortcut:
             yield Static(f"Shortcut: {self.card.shortcut}", classes="shortcut-hint")
+
+        if self.card.action_label:
+            yield Button(
+                self.card.action_label,
+                id=(f"dashboard-action-{self.card.action_id}" if self.card.action_id else None),
+                disabled=not self.card.action_enabled,
+                classes="dashboard-card-button",
+            )
 
 
 def get_dashboard_card_detail_class(status: DashboardStatus) -> str:

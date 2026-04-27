@@ -52,11 +52,15 @@ def test_build_dashboard_sections_groups_profile_readiness_and_job_workflow() ->
     assert sections[0].cards[1].status.state == ComponentStatusState.NOT_STARTED
     assert sections[0].cards[0].detail == "Press p to complete preferences setup."
     assert sections[0].cards[0].shortcut == "p"
+    assert sections[0].cards[0].action_id == "preferences"
+    assert sections[0].cards[1].shortcut == "c"
+    assert sections[0].cards[1].action_id == "career-profile"
 
     assert [card.title for card in sections[1].cards] == ["Jobs"]
     assert isinstance(sections[1].cards[0].status, JobWorkflowStatus)
     assert sections[1].cards[0].status.state == JobWorkflowState.IDLE
-    assert sections[1].cards[0].detail == "No job URLs queued for analysis."
+    assert sections[1].cards[0].detail == "Jobs unlock after required profile data is ready."
+    assert sections[1].cards[0].action_enabled is False
 
 
 def test_build_dashboard_sections_uses_real_user_preferences_status() -> None:

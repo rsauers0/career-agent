@@ -10,6 +10,8 @@ Implemented:
 - Typer/Rich CLI scaffold
 - initial Textual TUI dashboard
 - editable Textual user preferences screen
+- Textual Career Profile overview screen
+- read-only Textual experience intake session screen
 - Pydantic domain models
 - local file-based persistence with snapshot-on-overwrite
 - profile service layer
@@ -138,7 +140,9 @@ Launch the local TUI:
 uv run career-agent tui
 ```
 
-From the TUI dashboard, press `p` to open User Preferences, save edits from the form, and press `b` or `Esc` to return.
+From the TUI dashboard:
+- press `p` to open User Preferences, save edits from the form, and press `b` or `Esc` to return
+- press `c` to open Career Profile, then choose Manage Experience to review saved experience intake sessions
 
 Initialize storage scaffolding:
 

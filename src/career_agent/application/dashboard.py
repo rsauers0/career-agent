@@ -36,6 +36,9 @@ class DashboardCard:
     status: DashboardStatus
     detail: str
     shortcut: str | None = None
+    action_id: str | None = None
+    action_label: str | None = None
+    action_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,8 @@ def build_dashboard_sections(profile_service: ProfileService) -> list[DashboardS
                     status=user_preferences_status,
                     detail=_user_preferences_detail(user_preferences_status),
                     shortcut="p",
+                    action_id="preferences",
+                    action_label="Open Preferences",
                 ),
                 DashboardCard(
                     title="Career Profile",
@@ -67,7 +72,13 @@ def build_dashboard_sections(profile_service: ProfileService) -> list[DashboardS
                         component="career_profile",
                         state=ComponentStatusState.NOT_STARTED,
                     ),
-                    detail="Career profile setup is not available yet.",
+                    detail=(
+                        "Open the profile overview to manage experience, "
+                        "education, and certifications."
+                    ),
+                    shortcut="c",
+                    action_id="career-profile",
+                    action_label="Open Career Profile",
                 ),
             ],
         ),
@@ -80,7 +91,9 @@ def build_dashboard_sections(profile_service: ProfileService) -> list[DashboardS
                         component="jobs",
                         state=JobWorkflowState.IDLE,
                     ),
-                    detail="No job URLs queued for analysis.",
+                    detail="Jobs unlock after required profile data is ready.",
+                    action_label="Jobs Locked",
+                    action_enabled=False,
                 ),
             ],
         ),

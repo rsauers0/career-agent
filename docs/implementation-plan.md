@@ -129,10 +129,14 @@ Completed validation includes:
 - Textual added as the local TUI framework
 - initial landing/dashboard screen added
 - dashboard shows data directory, profile readiness, job workflow state, and assistant placeholder
+- dashboard cards include visible action buttons in addition to keyboard shortcuts
 - editable User Preferences screen added
 - User Preferences form includes required-field markers, dropdown/select inputs, checkbox work arrangements, and add/clear controls for list-style fields
 - User Preferences status is backed by application-layer status evaluation
-- Career Profile is shown as a profile readiness placeholder until its status evaluator exists
+- Career Profile overview screen added with profile counts and workflow actions
+- read-only Experience Intake screen added for listing saved intake sessions and opening session details
+- Experience Intake is reachable from the Career Profile overview
+- Career Profile status remains a readiness placeholder until its status evaluator exists
 - Jobs is shown as an idle runtime workflow placeholder until job queueing exists
 
 ### Tests
@@ -192,12 +196,13 @@ Completed scope:
 - draft generation added for answered intake sessions, storing a draft `ExperienceEntry`
 - accept flow added to copy draft entries into canonical `CareerProfile`
 - experience intake prompts moved to versioned Markdown templates
+- application service method added for safely updating generated drafts before acceptance
+- initial read-only TUI session list/detail screen added under the Career Profile overview
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
 - keep accepted sessions archived for development traceability and future eval/prompt improvement
-- add review/edit flow before or after accepting draft entries
-- compose experience intake into the TUI after the CLI path is validated
+- add editable TUI review flow for generated drafts before accepting entries
 
 ### Career Profile Authoring
 Treat `CareerProfile` as the accepted, structured result of guided workflows rather than a large manual data-entry form.

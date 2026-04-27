@@ -7,17 +7,33 @@ from pathlib import Path
 from textual.widgets import Checkbox, Input, Static
 
 from career_agent.application.dashboard import JobWorkflowState, JobWorkflowStatus
+from career_agent.application.experience_intake_service import ExperienceIntakeService
 from career_agent.application.profile_service import ProfileService
 from career_agent.application.status import ComponentStatus, ComponentStatusState
 from career_agent.config import Settings, get_settings
-from career_agent.domain.models import UserPreferences, WorkArrangement
-from career_agent.infrastructure.repositories import FileProfileRepository
+from career_agent.domain.models import (
+    CareerProfile,
+    ExperienceEntry,
+    ExperienceIntakeSession,
+    ExperienceIntakeStatus,
+    UserPreferences,
+    WorkArrangement,
+)
+from career_agent.infrastructure.repositories import (
+    FileExperienceIntakeRepository,
+    FileProfileRepository,
+)
 from career_agent.interfaces.tui import CareerAgentTUI, build_tui
 from career_agent.interfaces.tui_dashboard import (
     StatusCard,
     format_component_name,
     get_status_detail,
     get_status_label,
+)
+from career_agent.interfaces.tui_experience import (
+    build_experience_entry_sections,
+    format_intake_session_title,
+    format_intake_status,
 )
 from career_agent.interfaces.tui_preferences import (
     build_user_preferences_form_defaults,
@@ -28,6 +44,7 @@ from career_agent.interfaces.tui_preferences import (
     parse_form_list,
     required_label,
 )
+from career_agent.interfaces.tui_profile import build_career_profile_summary
 
 
 def test_format_component_name_converts_internal_key_to_label() -> None:
@@ -62,6 +79,66 @@ def test_parse_form_list_handles_comma_separated_values() -> None:
 
 def test_required_label_adds_red_required_marker() -> None:
     assert required_label("Full Name") == "Full Name [#f05f5f]*[/]"
+
+
+def test_format_intake_status_formats_status_values() -> None:
+    assert format_intake_status(ExperienceIntakeStatus.DRAFT_GENERATED) == "Draft Generated"
+
+
+def test_format_intake_session_title_uses_best_available_role_context() -> None:
+    assert (
+        format_intake_session_title(
+            ExperienceIntakeSession(
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+            )
+        )
+        == "Senior Data Engineer at Acme Analytics"
+    )
+    assert (
+        format_intake_session_title(ExperienceIntakeSession(employer_name="Acme Analytics"))
+        == "Acme Analytics"
+    )
+    assert format_intake_session_title(ExperienceIntakeSession()) == "Untitled Experience Intake"
+
+
+def test_build_experience_entry_sections_formats_draft_values() -> None:
+    entry = ExperienceEntry(
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        accomplishments=["Reduced reporting time by 10 hours per week."],
+        systems_and_tools=["Python"],
+    )
+
+    sections = dict(build_experience_entry_sections(entry))
+
+    assert sections["Employer"] == "Acme Analytics"
+    assert sections["Accomplishments"] == "- Reduced reporting time by 10 hours per week."
+    assert sections["Systems and Tools"] == "- Python"
+    assert sections["Metrics"] == "-"
+
+
+def test_build_career_profile_summary_counts_profile_entries() -> None:
+    profile = CareerProfile(
+        experience_entries=[
+            ExperienceEntry(
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+            )
+        ],
+        education_entries=["BS Information Systems"],
+        certification_entries=["Security+"],
+        skills=["automation", "analysis"],
+        tools_and_technologies=["Python"],
+    )
+
+    summary = build_career_profile_summary(profile)
+
+    assert summary.experience_count == 1
+    assert summary.education_count == 1
+    assert summary.certification_count == 1
+    assert summary.skills_count == 2
+    assert summary.tools_count == 1
 
 
 def test_build_user_preferences_rows_formats_read_only_values() -> None:
@@ -371,3 +448,69 @@ def test_preferences_dashboard_refreshes_after_save_and_back() -> None:
     assert "User Preferences" in card_text
     assert "Complete" in card_text
     assert "Press p to review or update preferences." in card_text
+
+
+def test_dashboard_career_profile_button_opens_profile_screen() -> None:
+    async def run_test() -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+            )
+
+            async with app.run_test(size=(160, 80)) as pilot:
+                await pilot.click("#dashboard-action-career-profile")
+                await pilot.pause()
+
+                title = app.screen.query_one("#screen-title", Static)
+                return str(title.render())
+
+    assert asyncio.run(run_test()) == "Career Profile"
+
+
+def test_career_profile_screen_opens_experience_sessions_and_detail() -> None:
+    async def run_test() -> tuple[str, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            draft = ExperienceEntry(
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                accomplishments=["Reduced reporting time by 10 hours per week."],
+            )
+            session = ExperienceIntakeSession(
+                id="session-123",
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                status=ExperienceIntakeStatus.DRAFT_GENERATED,
+                source_text="- Built reporting automation",
+                draft_experience_entry=draft,
+            )
+            experience_repository.save_session(session)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 80)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+
+                card_title = app.screen.query_one(".card-title", Static)
+                await pilot.click("#view-experience-session-session-123")
+                await pilot.pause()
+
+                detail_title = app.screen.query_one("#screen-title", Static)
+                return str(card_title.render()), str(detail_title.render())
+
+    card_title, detail_title = asyncio.run(run_test())
+
+    assert card_title == "Senior Data Engineer at Acme Analytics"
+    assert detail_title == "Senior Data Engineer at Acme Analytics"
