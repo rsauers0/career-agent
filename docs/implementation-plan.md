@@ -43,6 +43,25 @@ The AI layer is intended to be:
 
 Quality should come from workflow design, structured intermediate outputs, and eval-driven iteration rather than assuming a single large commercial model is always required.
 
+Career Agent should use small, explicit LLM-assisted workflow steps rather than large one-shot generation.
+
+Design goals:
+- support local-first and lower-cost model usage
+- keep prompts small enough for limited context windows
+- reduce drift and hallucination through structured intermediate outputs
+- allow user review before data becomes canonical
+- preserve inputs, outputs, prompt versions, model metadata, transcripts, and evaluation results for debugging and improvement
+- support future DSPy-style prompt optimization from retained workflow and evaluation data
+
+Experience intake should be built as a sequence of narrow transitions:
+- source text for one role -> follow-up questions
+- source text + answers -> structured facts
+- structured facts -> draft `ExperienceEntry`
+- draft `ExperienceEntry` -> quality/completeness evaluation
+- accepted draft -> canonical `CareerProfile`
+
+The experience workflow should specifically help users reframe duty-list resume bullets into accomplishment-focused entries. Strong outputs should emphasize business impact, measurable outcomes where available, and defensible subjective accomplishments when hard metrics are unavailable. The guided process should teach better resume and cover-letter writing rather than simply accepting vague or noisy source text.
+
 ## Completed
 
 ### Foundation
@@ -134,47 +153,56 @@ Open refinement opportunities:
 Polish `UserPreferences` as the first full component using the new pattern.
 
 Planned scope:
-- improve field-level validation feedback
-- improve keyboard navigation through the form
-- confirm dashboard refresh behavior after saving
-- consider moving larger TUI screen classes into dedicated interface modules
+- continue refining validation, keyboard flow, and dashboard refresh behavior as issues are found
+- keep the preferences screen as the reference implementation for later TUI forms
+- keep larger TUI screen classes split into dedicated interface modules
 
-### Career Profile Authoring
-Add a separate `profile` authoring flow for high-level `CareerProfile` data, distinct from preferences and experience entries.
-
-Planned commands:
-- `profile wizard`
+### Experience Intake Foundation
+Build the first role-specific, resumable intake workflow before building a broad Career Profile form.
 
 Initial scope:
-- `core_narrative_notes`
-- `skills`
-- `tools_and_technologies`
-- `domains`
-- `notable_achievements`
-- `additional_notes`
+- add stable IDs to `ExperienceEntry`
+- define an `ExperienceIntakeSession` model scoped to one future `ExperienceEntry`
+- define intake statuses such as `draft`, `source_captured`, `questions_generated`, `answers_captured`, `draft_generated`, `accepted`, and `abandoned`
+- store source text, structured questions, answers, transcript messages, draft output, prompt/model metadata, and timestamps locally
+- keep accepted sessions archived for development traceability and future eval/prompt improvement
+- introduce an assistant protocol for the first narrow LLM step: source text -> follow-up questions
+- test the workflow with a fake assistant before wiring a real model provider
+
+### Career Profile Authoring
+Treat `CareerProfile` as the accepted, structured result of guided workflows rather than a large manual data-entry form.
+
+Initial direction:
+- accepted `ExperienceEntry` records become the foundation of `CareerProfile`
+- skills, tools, technologies, achievements, and career themes should be derived or refined from accepted experience data where possible
+- users should review and accept derived profile components before they become canonical
+- high-level profile screens should focus on review, correction, and narrative direction rather than asking the user to manually brain-dump everything
 
 ### Experience Management
-Treat experience entries as a separate workflow, not part of the general profile wizard.
+Treat experience entries as a role-specific workflow, not part of a general profile wizard.
 
 Planned commands:
 - `experience list`
-- `experience add`
+- `experience intake`
 - `experience show`
 - `experience edit`
 
 Initial scope:
-- deterministic create/edit flows for canonical `ExperienceEntry`
-- no LLM dependency yet
+- create and resume intake sessions for one role at a time
+- capture raw bullets or notes for a specific job/role, not an entire resume dump
+- use guided LLM-assisted steps to clarify missing details and frame work as accomplishments
+- accept reviewed draft entries into canonical `CareerProfile`
 
 ## Later
 
-### Experience Intake And Refinement
-Introduce a draft/intake workflow for messy pasted experience input before canonicalization.
+### Experience Intake Refinement
+Expand the first intake workflow into a full collaborative authoring loop.
 
 Likely additions:
-- `ExperienceIntake` model
-- separate repository/service flow
-- optional AI-assisted extraction and follow-up questions
+- transcript summarization or cleanup to reduce local storage footprint
+- retained eval datasets from accepted/rejected drafts
+- prompt version tracking and evaluation history
+- optional DSPy experiments once enough workflow examples exist
 
 ### AI-Assisted Job Normalization
 Planned additions:
