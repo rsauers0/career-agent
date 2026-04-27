@@ -165,6 +165,24 @@ Copy-Item .env.example .env
 Currently supported:
 - `CAREER_AGENT_DATA_DIR`
   Overrides the default local data directory.
+- `CAREER_AGENT_LLM_BASE_URL`
+  Optional OpenAI-compatible LLM API base URL for future LLM-assisted workflows.
+- `CAREER_AGENT_LLM_API_KEY`
+  Optional API key for the configured LLM endpoint.
+- `CAREER_AGENT_LLM_MODEL`
+  Optional default model name for LLM-assisted workflows.
+- `CAREER_AGENT_LLM_EXTRACTION_BASE_URL`
+  Optional OpenAI-compatible LLM API base URL for extraction workflows. Defaults to `CAREER_AGENT_LLM_BASE_URL` if unset.
+- `CAREER_AGENT_LLM_EXTRACTION_API_KEY`
+  Optional API key for the extraction endpoint. Defaults to `CAREER_AGENT_LLM_API_KEY` if unset.
+- `CAREER_AGENT_LLM_EXTRACTION_MODEL`
+  Optional model name for extraction workflows. Defaults to `CAREER_AGENT_LLM_MODEL` if unset.
+- `CAREER_AGENT_LLM_EVAL_BASE_URL`
+  Optional OpenAI-compatible LLM API base URL for evaluation workflows. Defaults to `CAREER_AGENT_LLM_BASE_URL` if unset.
+- `CAREER_AGENT_LLM_EVAL_API_KEY`
+  Optional API key for the evaluation endpoint. Defaults to `CAREER_AGENT_LLM_API_KEY` if unset.
+- `CAREER_AGENT_LLM_EVAL_MODEL`
+  Optional model name for evaluation workflows. Defaults to `CAREER_AGENT_LLM_MODEL` if unset.
 
 If `CAREER_AGENT_DATA_DIR` is unset, the app creates a `.career-agent` directory under the current user's home directory using Python's `Path.home()`. This keeps the default portable across Linux, macOS, and Windows.
 
@@ -179,6 +197,28 @@ CAREER_AGENT_DATA_DIR=C:/Users/ExampleUser/.career-agent
 ```
 
 The `~/.career-agent` value is the recommended cross-platform option because the app expands `~` through Python's `Path.expanduser()`. Forward slashes are recommended in `.env` paths because Python handles them correctly on Windows and they avoid backslash escaping confusion.
+
+Example LLM `.env` values:
+
+```dotenv
+# Local OpenAI-compatible endpoint
+CAREER_AGENT_LLM_BASE_URL=http://localhost:1234/v1
+CAREER_AGENT_LLM_API_KEY=not-needed-for-local
+CAREER_AGENT_LLM_MODEL=qwen36
+
+# Optional role-specific model/endpoint overrides
+CAREER_AGENT_LLM_EXTRACTION_MODEL=gemma4-doc
+CAREER_AGENT_LLM_EVAL_MODEL=mistral-small-4-review
+
+# Hosted OpenAI-compatible endpoint
+CAREER_AGENT_LLM_BASE_URL=https://api.openai.com/v1
+CAREER_AGENT_LLM_API_KEY=replace-with-your-api-key
+CAREER_AGENT_LLM_MODEL=gpt-4.1-mini
+```
+
+Role-specific extraction and evaluation settings can point to different OpenAI-compatible endpoints if your local or hosted model router separates those workloads.
+
+LLM configuration is optional. Current profile and preference workflows do not require an LLM connection.
 
 The project is currently developed and tested on Linux. The storage and configuration code is written with `pathlib` for cross-platform path handling, but Windows should be validated before claiming full Windows support.
 

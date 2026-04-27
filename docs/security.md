@@ -15,6 +15,7 @@ expectations. It is not a formal third-party security audit.
 - No account system is implemented.
 - No hosted application service is required to use the current CLI or TUI workflows.
 - No LLM integration is currently active.
+- Optional LLM endpoint settings may be configured for future workflows, but they are not used by current profile or preference workflows.
 - No outbound application network calls are currently implemented in `src/`.
 
 ## Future Networked Features
