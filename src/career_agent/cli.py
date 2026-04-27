@@ -20,9 +20,11 @@ from career_agent.application.profile_service import ProfileService
 from career_agent.application.status import ComponentStatus, format_status_field_names
 from career_agent.config import get_settings
 from career_agent.domain.models import (
+    EmploymentType,
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    YearMonth,
 )
 from career_agent.infrastructure.llm import OpenAICompatibleExperienceIntakeAssistant
 from career_agent.infrastructure.repositories import (
@@ -171,6 +173,13 @@ def _render_intake_session(session: ExperienceIntakeSession) -> None:
     session_table.add_row("Status", session.status.value)
     session_table.add_row("Employer", session.employer_name or "-")
     session_table.add_row("Job Title", session.job_title or "-")
+    session_table.add_row("Location", session.location or "-")
+    session_table.add_row("Employment Type", session.employment_type or "-")
+    session_table.add_row("Start Date", _format_year_month(session.start_date))
+    session_table.add_row(
+        "End Date",
+        "Present" if session.is_current_role else _format_year_month(session.end_date),
+    )
     session_table.add_row("Source Text", session.source_text or "-")
     session_table.add_row("Follow-Up Questions", str(len(session.follow_up_questions)))
     session_table.add_row("User Answers", str(len(session.user_answers)))
@@ -232,6 +241,13 @@ def _render_experience_entry(entry: ExperienceEntry) -> None:
     entry_table.add_row("Entry ID", entry.id)
     entry_table.add_row("Employer", entry.employer_name)
     entry_table.add_row("Job Title", entry.job_title)
+    entry_table.add_row("Location", entry.location or "-")
+    entry_table.add_row("Employment Type", entry.employment_type or "-")
+    entry_table.add_row("Start Date", _format_year_month(entry.start_date))
+    entry_table.add_row(
+        "End Date",
+        "Present" if entry.is_current_role else _format_year_month(entry.end_date),
+    )
     entry_table.add_row("Role Summary", entry.role_summary or "-")
     entry_table.add_row("Responsibilities", "\n".join(entry.responsibilities) or "-")
     entry_table.add_row("Accomplishments", "\n".join(entry.accomplishments) or "-")
@@ -242,6 +258,13 @@ def _render_experience_entry(entry: ExperienceEntry) -> None:
     entry_table.add_row("Team Context", entry.team_context or "-")
     entry_table.add_row("Scope Notes", entry.scope_notes or "-")
     console.print(entry_table)
+
+
+def _format_year_month(value: YearMonth | None) -> str:
+    if value is None:
+        return "-"
+
+    return f"{value.month:02d}/{value.year}"
 
 
 def _handle_experience_error(error: Exception) -> None:
@@ -431,11 +454,46 @@ def experience_create(
         "--job-title",
         help="Role title for the future experience entry.",
     ),
+    location: str | None = typer.Option(
+        None,
+        "--location",
+        help="Optional role location.",
+    ),
+    employment_type: EmploymentType | None = typer.Option(
+        None,
+        "--employment-type",
+        help="Optional employment type.",
+    ),
+    start_date: str | None = typer.Option(
+        None,
+        "--start-date",
+        help="Optional role start date as MM/YYYY, Month YYYY, Mon YYYY, or YYYY-MM.",
+    ),
+    end_date: str | None = typer.Option(
+        None,
+        "--end-date",
+        help="Optional role end date as MM/YYYY, Month YYYY, Mon YYYY, or YYYY-MM.",
+    ),
+    current_role: bool = typer.Option(
+        False,
+        "--current-role",
+        help="Mark this as a current/present role.",
+    ),
 ) -> None:
     """Create a draft experience intake session."""
 
-    if (employer_name is None) != (job_title is None):
-        console.print("[red]Both --employer-name and --job-title are required together.[/red]")
+    role_details_requested = (
+        any(
+            value is not None
+            for value in (employer_name, job_title, location, employment_type, start_date, end_date)
+        )
+        or current_role
+    )
+    if role_details_requested and (employer_name is None or job_title is None):
+        console.print(
+            "[red]Both --employer-name and --job-title are required when role details "
+            "are provided.[/red]"
+        )
         raise typer.Exit(1)
 
     service = _build_experience_intake_service()
@@ -446,6 +504,11 @@ def experience_create(
                 session.id,
                 employer_name=employer_name,
                 job_title=job_title,
+                location=location,
+                employment_type=employment_type.value if employment_type else None,
+                start_date=start_date,
+                end_date=end_date,
+                is_current_role=current_role,
             )
         except ValueError as error:
             _handle_experience_error(error)
@@ -467,6 +530,31 @@ def experience_details(
         "--job-title",
         help="Role title for the future experience entry.",
     ),
+    location: str | None = typer.Option(
+        None,
+        "--location",
+        help="Optional role location.",
+    ),
+    employment_type: EmploymentType | None = typer.Option(
+        None,
+        "--employment-type",
+        help="Optional employment type.",
+    ),
+    start_date: str | None = typer.Option(
+        None,
+        "--start-date",
+        help="Optional role start date as MM/YYYY, Month YYYY, Mon YYYY, or YYYY-MM.",
+    ),
+    end_date: str | None = typer.Option(
+        None,
+        "--end-date",
+        help="Optional role end date as MM/YYYY, Month YYYY, Mon YYYY, or YYYY-MM.",
+    ),
+    current_role: bool = typer.Option(
+        False,
+        "--current-role",
+        help="Mark this as a current/present role.",
+    ),
 ) -> None:
     """Capture role metadata needed for the future experience entry."""
 
@@ -481,6 +569,11 @@ def experience_details(
             session_id,
             employer_name=employer_name,
             job_title=job_title,
+            location=location,
+            employment_type=employment_type.value if employment_type else None,
+            start_date=start_date,
+            end_date=end_date,
+            is_current_role=current_role,
         )
     except ValueError as error:
         _handle_experience_error(error)

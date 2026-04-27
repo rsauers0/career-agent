@@ -51,7 +51,7 @@ This map reflects the files currently tracked in Git.
       __init__.py                      # interfaces package marker
       tui.py                           # Textual TUI application shell and runtime factory
       tui_dashboard.py                 # Textual dashboard widgets and status display helpers
-      tui_experience.py                # Textual experience intake list/detail screens
+      tui_experience.py                # Textual Experience list/detail and add form
       tui_preferences.py               # Textual User Preferences form and form helpers
       tui_profile.py                   # Textual Career Profile overview screen
 
@@ -121,7 +121,7 @@ Current files:
 - `src/career_agent/interfaces/tui_preferences.py`
 - `src/career_agent/interfaces/tui_profile.py`
 
-The CLI uses Typer and Rich to collect input and display output. The Textual TUI provides a local dashboard, preferences form, Career Profile overview, and read-only experience intake views split into focused interface modules. Interface code should continue to reuse the same application services rather than duplicating workflow logic.
+The CLI uses Typer and Rich to collect input and display output. The Textual TUI provides a local dashboard, preferences form, Career Profile overview, and Experience list/add/detail views split into focused interface modules. Interface code should continue to reuse the same application services rather than duplicating workflow logic.
 
 ### Configuration
 

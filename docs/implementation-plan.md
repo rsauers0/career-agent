@@ -134,8 +134,9 @@ Completed validation includes:
 - User Preferences form includes required-field markers, dropdown/select inputs, checkbox work arrangements, and add/clear controls for list-style fields
 - User Preferences status is backed by application-layer status evaluation
 - Career Profile overview screen added with profile counts and workflow actions
-- read-only Experience Intake screen added for listing saved intake sessions and opening session details
-- Experience Intake is reachable from the Career Profile overview
+- Experience screen added for listing saved intake sessions and opening session details
+- Add Experience form added with company, title, location, employment type, month/year dates, current-role checkbox, and source bullets
+- Experience is reachable from the Career Profile overview
 - Career Profile status remains a readiness placeholder until its status evaluator exists
 - Jobs is shown as an idle runtime workflow placeholder until job queueing exists
 
@@ -192,12 +193,12 @@ Completed scope:
 - OpenAI-compatible experience intake assistant adapter added behind the assistant protocol
 - CLI commands added for creating sessions, capturing source text, showing/listing sessions, and generating follow-up questions
 - CLI command added for capturing user answers to generated follow-up questions
-- role metadata capture added for intake sessions so employer and title are not invented during drafting
+- role metadata capture added for intake sessions so employer, title, location, employment type, and role dates are not invented during drafting
 - draft generation added for answered intake sessions, storing a draft `ExperienceEntry`
 - accept flow added to copy draft entries into canonical `CareerProfile`
 - experience intake prompts moved to versioned Markdown templates
 - application service method added for safely updating generated drafts before acceptance
-- initial read-only TUI session list/detail screen added under the Career Profile overview
+- initial TUI experience list/detail and Add Experience form added under the Career Profile overview
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
@@ -232,6 +233,7 @@ Planned commands:
 
 Initial scope:
 - create and resume intake sessions for one role at a time
+- capture role facts directly: company, job title, optional location, employment type, start date, end date or current role
 - capture raw bullets or notes for a specific job/role, not an entire resume dump
 - support multiline source capture from files and intentional source-text appends
 - use guided LLM-assisted steps to clarify missing details and frame work as accomplishments
@@ -338,8 +340,13 @@ Current shape:
   profile/
     user_preferences.json
     career_profile.json
+  intake/
+    experience/
+      <session_id>.json
   snapshots/
     profile/
+    intake/
+      experience/
 ```
 
 ## Current Principles

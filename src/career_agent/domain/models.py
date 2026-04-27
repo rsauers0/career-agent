@@ -24,6 +24,17 @@ class WorkArrangement(StrEnum):
     ONSITE = "onsite"
 
 
+class EmploymentType(StrEnum):
+    """Common employment type values for experience entries."""
+
+    FULL_TIME = "full-time"
+    PART_TIME = "part-time"
+    CONTRACT = "contract"
+    CONSULTING = "consulting"
+    INTERNSHIP = "internship"
+    OTHER = "other"
+
+
 class ExperienceIntakeStatus(StrEnum):
     """Workflow states for one role-specific experience intake session."""
 
@@ -334,6 +345,26 @@ class ExperienceIntakeSession(BaseModel):
         default=None,
         description="Role title for the future experience entry.",
     )
+    location: str | None = Field(
+        default=None,
+        description="Optional role location for the future experience entry.",
+    )
+    employment_type: str | None = Field(
+        default=None,
+        description="Optional employment type for the future experience entry.",
+    )
+    start_date: YearMonth | None = Field(
+        default=None,
+        description="Role start month and year for the future experience entry.",
+    )
+    end_date: YearMonth | None = Field(
+        default=None,
+        description="Role end month and year for the future experience entry.",
+    )
+    is_current_role: bool = Field(
+        default=False,
+        description="Whether this intake represents the user's current role.",
+    )
     transcript: list[IntakeMessage] = Field(
         default_factory=list,
         description="Retained local transcript for development traceability.",
@@ -384,6 +415,24 @@ class ExperienceIntakeSession(BaseModel):
             ):
                 msg = "accepted_experience_entry_id must match draft_experience_entry.id."
                 raise ValueError(msg)
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_role_dates(self) -> ExperienceIntakeSession:
+        """Ensure intake role dates are logically consistent."""
+
+        if (
+            self.start_date is not None
+            and self.end_date is not None
+            and self.end_date.sort_key() < self.start_date.sort_key()
+        ):
+            msg = "end_date cannot be earlier than start_date."
+            raise ValueError(msg)
+
+        if self.is_current_role and self.end_date is not None:
+            msg = "end_date must be None when is_current_role is True."
+            raise ValueError(msg)
 
         return self
 

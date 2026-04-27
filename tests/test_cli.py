@@ -112,6 +112,14 @@ def test_experience_create_can_store_role_details(monkeypatch, tmp_path) -> None
             "Acme Analytics",
             "--job-title",
             "Senior Data Engineer",
+            "--location",
+            "Chicago, IL",
+            "--employment-type",
+            "full-time",
+            "--start-date",
+            "05/2021",
+            "--end-date",
+            "06/2024",
         ],
     )
 
@@ -121,6 +129,14 @@ def test_experience_create_can_store_role_details(monkeypatch, tmp_path) -> None
     assert result.exit_code == 0
     assert session.employer_name == "Acme Analytics"
     assert session.job_title == "Senior Data Engineer"
+    assert session.location == "Chicago, IL"
+    assert session.employment_type == "full-time"
+    assert session.start_date is not None
+    assert session.start_date.year == 2021
+    assert session.start_date.month == 5
+    assert session.end_date is not None
+    assert session.end_date.year == 2024
+    assert session.end_date.month == 6
 
     get_settings.cache_clear()
 
@@ -137,7 +153,7 @@ def test_experience_create_rejects_partial_role_details(monkeypatch, tmp_path) -
     repository = FileExperienceIntakeRepository(tmp_path)
 
     assert result.exit_code == 1
-    assert "Both --employer-name and --job-title are required together." in result.output
+    assert "Both --employer-name and --job-title are required" in result.output
     assert repository.list_sessions() == []
 
     get_settings.cache_clear()
@@ -160,6 +176,13 @@ def test_experience_details_updates_role_details(monkeypatch, tmp_path) -> None:
             "Acme Analytics",
             "--job-title",
             "Senior Data Engineer",
+            "--location",
+            "Chicago, IL",
+            "--employment-type",
+            "contract",
+            "--start-date",
+            "January 2022",
+            "--current-role",
         ],
     )
 
@@ -170,6 +193,13 @@ def test_experience_details_updates_role_details(monkeypatch, tmp_path) -> None:
     assert updated is not None
     assert updated.employer_name == "Acme Analytics"
     assert updated.job_title == "Senior Data Engineer"
+    assert updated.location == "Chicago, IL"
+    assert updated.employment_type == "contract"
+    assert updated.start_date is not None
+    assert updated.start_date.year == 2022
+    assert updated.start_date.month == 1
+    assert updated.end_date is None
+    assert updated.is_current_role is True
 
     get_settings.cache_clear()
 
@@ -456,6 +486,10 @@ def test_experience_draft_uses_configured_assistant(
             "Acme Analytics",
             "--job-title",
             "Senior Data Engineer",
+            "--start-date",
+            "05/2021",
+            "--end-date",
+            "06/2024",
         ],
     )
     session_id = repository.list_sessions()[0].id
@@ -521,6 +555,10 @@ def test_experience_accept_saves_draft_to_career_profile(
             "Acme Analytics",
             "--job-title",
             "Senior Data Engineer",
+            "--start-date",
+            "05/2021",
+            "--end-date",
+            "06/2024",
         ],
     )
     session_id = intake_repository.list_sessions()[0].id

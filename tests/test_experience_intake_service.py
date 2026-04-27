@@ -9,6 +9,7 @@ from career_agent.domain.models import (
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
     IntakeQuestion,
+    YearMonth,
 )
 
 
@@ -82,6 +83,10 @@ class FakeExperienceIntakeAssistant:
         return ExperienceEntry(
             employer_name=session.employer_name or "Wrong Employer",
             job_title=session.job_title or "Wrong Job",
+            location="Wrong Location",
+            employment_type="Wrong Type",
+            start_date="01/2000",
+            end_date="01/2001",
             role_summary="Built and improved reporting workflows.",
             accomplishments=["Reduced manual reporting time by 10 hours per week."],
             systems_and_tools=["Python"],
@@ -207,12 +212,59 @@ def test_capture_role_details_updates_existing_session() -> None:
         "session-123",
         employer_name="  Acme Analytics  ",
         job_title="  Senior Data Engineer  ",
+        location="  Chicago, IL  ",
+        employment_type="full-time",
+        start_date="05/2021",
+        end_date="06/2024",
     )
 
     assert updated.employer_name == "Acme Analytics"
     assert updated.job_title == "Senior Data Engineer"
+    assert updated.location == "Chicago, IL"
+    assert updated.employment_type == "full-time"
+    assert updated.start_date == YearMonth(year=2021, month=5)
+    assert updated.end_date == YearMonth(year=2024, month=6)
+    assert updated.is_current_role is False
     assert updated.updated_at > session.updated_at
     assert repository.load_session("session-123") == updated
+
+
+def test_capture_role_details_current_role_clears_end_date() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    updated = service.capture_role_details(
+        "session-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        start_date="05/2021",
+        end_date="06/2024",
+        is_current_role=True,
+    )
+
+    assert updated.start_date == YearMonth(year=2021, month=5)
+    assert updated.end_date is None
+    assert updated.is_current_role is True
+
+
+def test_capture_role_details_rejects_end_date_before_start_date() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="end_date cannot be earlier"):
+        service.capture_role_details(
+            "session-123",
+            employer_name="Acme Analytics",
+            job_title="Senior Data Engineer",
+            start_date="06/2024",
+            end_date="05/2021",
+        )
+
+    assert repository.load_session("session-123") == session
 
 
 def test_capture_role_details_rejects_missing_session() -> None:
@@ -223,6 +275,7 @@ def test_capture_role_details_rejects_missing_session() -> None:
             "missing",
             employer_name="Acme Analytics",
             job_title="Senior Data Engineer",
+            start_date="05/2021",
         )
 
 
@@ -237,6 +290,7 @@ def test_capture_role_details_rejects_blank_values() -> None:
             "session-123",
             employer_name=" ",
             job_title="Senior Data Engineer",
+            start_date="05/2021",
         )
 
     with pytest.raises(ValueError, match="job title is required"):
@@ -244,6 +298,7 @@ def test_capture_role_details_rejects_blank_values() -> None:
             "session-123",
             employer_name="Acme Analytics",
             job_title=" ",
+            start_date="05/2021",
         )
 
     assert repository.load_session("session-123") == session
@@ -463,6 +518,8 @@ def test_generate_draft_entry_updates_existing_session() -> None:
             id="session-123",
             employer_name="Acme Analytics",
             job_title="Senior Data Engineer",
+            start_date="05/2021",
+            end_date="06/2024",
             source_text="- Built reporting pipeline",
             follow_up_questions=[question],
             user_answers=[
@@ -482,6 +539,8 @@ def test_generate_draft_entry_updates_existing_session() -> None:
     assert updated.draft_experience_entry is not None
     assert updated.draft_experience_entry.employer_name == "Acme Analytics"
     assert updated.draft_experience_entry.job_title == "Senior Data Engineer"
+    assert updated.draft_experience_entry.start_date == YearMonth(year=2021, month=5)
+    assert updated.draft_experience_entry.end_date == YearMonth(year=2024, month=6)
     assert updated.draft_experience_entry.accomplishments == [
         "Reduced manual reporting time by 10 hours per week."
     ]
@@ -542,6 +601,29 @@ def test_generate_draft_entry_requires_role_metadata() -> None:
     with pytest.raises(ValueError, match="job title is required"):
         service.generate_draft_entry("session-123")
 
+    repository.save_session(
+        session.model_copy(
+            update={
+                "employer_name": "Acme Analytics",
+                "job_title": "Senior Data Engineer",
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="start date is required"):
+        service.generate_draft_entry("session-123")
+
+    repository.save_session(
+        session.model_copy(
+            update={
+                "employer_name": "Acme Analytics",
+                "job_title": "Senior Data Engineer",
+                "start_date": YearMonth(year=2021, month=5),
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="end date is required"):
+        service.generate_draft_entry("session-123")
+
 
 def test_update_draft_entry_updates_generated_draft() -> None:
     repository = FakeExperienceIntakeRepository()
@@ -563,6 +645,10 @@ def test_update_draft_entry_updates_generated_draft() -> None:
         id="session-123",
         employer_name="Acme Analytics",
         job_title="Senior Data Engineer",
+        location="Chicago, IL",
+        employment_type="full-time",
+        start_date="05/2021",
+        end_date="06/2024",
         status=ExperienceIntakeStatus.DRAFT_GENERATED,
         draft_experience_entry=original_draft,
     )
@@ -576,6 +662,10 @@ def test_update_draft_entry_updates_generated_draft() -> None:
     assert updated.draft_experience_entry.id == "entry-123"
     assert updated.draft_experience_entry.employer_name == "Acme Analytics"
     assert updated.draft_experience_entry.job_title == "Senior Data Engineer"
+    assert updated.draft_experience_entry.location == "Chicago, IL"
+    assert updated.draft_experience_entry.employment_type == "full-time"
+    assert updated.draft_experience_entry.start_date == YearMonth(year=2021, month=5)
+    assert updated.draft_experience_entry.end_date == YearMonth(year=2024, month=6)
     assert updated.draft_experience_entry.role_summary == (
         "Built reporting automation for finance operations."
     )

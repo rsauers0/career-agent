@@ -11,7 +11,7 @@ Implemented:
 - initial Textual TUI dashboard
 - editable Textual user preferences screen
 - Textual Career Profile overview screen
-- read-only Textual experience intake session screen
+- Textual Experience list/detail screens and Add Experience form
 - Pydantic domain models
 - local file-based persistence with snapshot-on-overwrite
 - profile service layer
@@ -142,7 +142,7 @@ uv run career-agent tui
 
 From the TUI dashboard:
 - press `p` to open User Preferences, save edits from the form, and press `b` or `Esc` to return
-- press `c` to open Career Profile, then choose Manage Experience to review saved experience intake sessions
+- press `c` to open Career Profile, then choose Manage Experience to add or review experience intake sessions
 
 Initialize storage scaffolding:
 
@@ -167,8 +167,18 @@ uv run career-agent profile show
 Create an experience intake session, capture source text, and generate follow-up questions:
 
 ```bash
-uv run career-agent experience create
-uv run career-agent experience details <session-id> --employer-name "Acme Analytics" --job-title "Senior Data Engineer"
+uv run career-agent experience create \
+  --employer-name "Acme Analytics" \
+  --job-title "Senior Data Engineer" \
+  --location "Chicago, IL" \
+  --employment-type full-time \
+  --start-date "05/2021" \
+  --end-date "06/2024"
+uv run career-agent experience details <session-id> \
+  --employer-name "Acme Analytics" \
+  --job-title "Senior Data Engineer" \
+  --start-date "05/2021" \
+  --current-role
 uv run career-agent experience source <session-id> --text "- Built reporting pipeline"
 uv run career-agent experience source <session-id> --from-file bullets.md
 uv run career-agent experience source <session-id> --text "- Added alerting" --append

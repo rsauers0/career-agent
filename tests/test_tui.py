@@ -4,7 +4,7 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from textual.widgets import Checkbox, Input, Static
+from textual.widgets import Checkbox, Input, Static, TextArea
 
 from career_agent.application.dashboard import JobWorkflowState, JobWorkflowStatus
 from career_agent.application.experience_intake_service import ExperienceIntakeService
@@ -16,6 +16,8 @@ from career_agent.domain.models import (
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    IntakeAnswer,
+    IntakeQuestion,
     UserPreferences,
     WorkArrangement,
 )
@@ -32,8 +34,10 @@ from career_agent.interfaces.tui_dashboard import (
 )
 from career_agent.interfaces.tui_experience import (
     build_experience_entry_sections,
+    build_question_answer_blocks,
     format_intake_session_title,
     format_intake_status,
+    sort_experience_sessions,
 )
 from career_agent.interfaces.tui_preferences import (
     build_user_preferences_form_defaults,
@@ -116,6 +120,51 @@ def test_build_experience_entry_sections_formats_draft_values() -> None:
     assert sections["Accomplishments"] == "- Reduced reporting time by 10 hours per week."
     assert sections["Systems and Tools"] == "- Python"
     assert sections["Metrics"] == "-"
+
+
+def test_sort_experience_sessions_uses_current_and_recent_dates() -> None:
+    current = ExperienceIntakeSession(
+        id="current",
+        employer_name="Current Co",
+        job_title="Engineer",
+        start_date="01/2024",
+        is_current_role=True,
+    )
+    recent_past = ExperienceIntakeSession(
+        id="recent",
+        employer_name="Recent Co",
+        job_title="Engineer",
+        start_date="01/2021",
+        end_date="12/2023",
+    )
+    older_past = ExperienceIntakeSession(
+        id="older",
+        employer_name="Older Co",
+        job_title="Engineer",
+        start_date="01/2018",
+        end_date="12/2020",
+    )
+
+    sorted_sessions = sort_experience_sessions([older_past, current, recent_past])
+
+    assert [session.id for session in sorted_sessions] == ["current", "recent", "older"]
+
+
+def test_build_question_answer_blocks_pairs_answers_under_questions() -> None:
+    question = IntakeQuestion(id="question-1", question="What changed?")
+    session = ExperienceIntakeSession(
+        follow_up_questions=[question],
+        user_answers=[
+            IntakeAnswer(
+                question_id="question-1",
+                answer="Reduced reporting time by 10 hours per week.",
+            )
+        ],
+    )
+
+    assert build_question_answer_blocks(session) == [
+        ("Question 1: What changed?\n\nAnswer: Reduced reporting time by 10 hours per week.")
+    ]
 
 
 def test_build_career_profile_summary_counts_profile_entries() -> None:
@@ -468,6 +517,59 @@ def test_dashboard_career_profile_button_opens_profile_screen() -> None:
                 return str(title.render())
 
     assert asyncio.run(run_test()) == "Career Profile"
+
+
+def test_add_experience_screen_saves_metadata_and_source_text() -> None:
+    async def run_test() -> tuple[str, int, str | None, str | None, bool]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click("#add-experience")
+                await pilot.pause()
+
+                app.screen.query_one("#experience-employer-name", Input).value = "Acme Analytics"
+                app.screen.query_one("#experience-job-title", Input).value = "Senior Data Engineer"
+                app.screen.query_one("#experience-location", Input).value = "Chicago, IL"
+                app.screen.query_one("#experience-employment-type").value = "full-time"
+                app.screen.query_one("#experience-start-month").value = "5"
+                app.screen.query_one("#experience-start-year").value = "2021"
+                app.screen.query_one("#experience-current-role", Checkbox).value = True
+                app.screen.query_one(
+                    "#experience-source-text", TextArea
+                ).text = "- Built reporting automation"
+                await pilot.click("#save-experience")
+                await pilot.pause()
+
+                message = app.screen.query_one("#experience-form-message", Static)
+                sessions = experience_repository.list_sessions()
+                session = sessions[0]
+                return (
+                    str(message.render()),
+                    len(sessions),
+                    session.employment_type,
+                    session.source_text,
+                    session.is_current_role,
+                )
+
+    message, session_count, employment_type, source_text, is_current_role = asyncio.run(run_test())
+
+    assert "Saved experience intake session" in message
+    assert session_count == 1
+    assert employment_type == "full-time"
+    assert source_text == "- Built reporting automation"
+    assert is_current_role is True
 
 
 def test_career_profile_screen_opens_experience_sessions_and_detail() -> None:

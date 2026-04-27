@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from career_agent.domain.models import (
     CareerProfile,
     CommuteDistanceUnit,
+    EmploymentType,
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
@@ -81,6 +82,17 @@ def test_experience_entry_json_round_trip() -> None:
     assert restored == experience
     assert experience.id
     assert experience.start_date == YearMonth(year=2021, month=5)
+
+
+def test_employment_type_values_are_stable() -> None:
+    assert [value.value for value in EmploymentType] == [
+        "full-time",
+        "part-time",
+        "contract",
+        "consulting",
+        "internship",
+        "other",
+    ]
 
 
 def test_experience_entry_accepts_legacy_experience_id_input() -> None:
@@ -184,6 +196,12 @@ def test_experience_intake_session_json_round_trip() -> None:
         id="session-123",
         status=ExperienceIntakeStatus.ACCEPTED,
         source_text="- Built reporting pipeline",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        location="Chicago, IL",
+        employment_type="full-time",
+        start_date="05/2021",
+        is_current_role=True,
         transcript=[
             IntakeMessage(
                 role=IntakeMessageRole.USER,
@@ -207,6 +225,9 @@ def test_experience_intake_session_json_round_trip() -> None:
     assert restored.status == ExperienceIntakeStatus.ACCEPTED
     assert restored.draft_experience_entry is not None
     assert restored.accepted_experience_entry_id == restored.draft_experience_entry.id
+    assert restored.start_date == YearMonth(year=2021, month=5)
+    assert restored.end_date is None
+    assert restored.is_current_role is True
 
 
 def test_experience_intake_session_defaults_to_draft_with_timestamps() -> None:
@@ -232,6 +253,18 @@ def test_experience_intake_session_rejects_mismatched_acceptance_id() -> None:
                 job_title="Senior Data Engineer",
             ),
             accepted_experience_entry_id="different-id",
+        )
+
+
+def test_experience_intake_session_rejects_invalid_role_dates() -> None:
+    with pytest.raises(ValidationError):
+        ExperienceIntakeSession(start_date="06/2024", end_date="05/2021")
+
+    with pytest.raises(ValidationError):
+        ExperienceIntakeSession(
+            start_date="05/2021",
+            end_date="06/2024",
+            is_current_role=True,
         )
 
 

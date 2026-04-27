@@ -56,6 +56,10 @@ class CareerAgentTUI(App[None]):
         padding: 1 2;
     }
 
+    #add-experience-screen {
+        padding: 1 2;
+    }
+
     #career-profile-screen {
         padding: 1 2;
     }
@@ -132,12 +136,34 @@ class CareerAgentTUI(App[None]):
         width: auto;
     }
 
+    Button.-primary {
+        color: #f4efe6;
+        background: #0f8ec7;
+        text-style: bold;
+    }
+
+    Button.-primary:hover {
+        color: #f4efe6;
+        background: #18a8e6;
+    }
+
+    Button.-primary:focus {
+        color: #f4efe6;
+        background: #18a8e6;
+        border: tall #f5c16c;
+    }
+
     Button:disabled {
         color: #9fb8ad;
         background: #2d393d;
     }
 
     Select {
+        margin-bottom: 1;
+    }
+
+    TextArea {
+        height: 10;
         margin-bottom: 1;
     }
 
@@ -391,6 +417,20 @@ class CareerAgentTUI(App[None]):
 
     .dashboard-card-button {
         margin-top: 1;
+        color: #f4efe6;
+        background: #0f8ec7;
+        text-style: bold;
+    }
+
+    .dashboard-card-button:hover {
+        color: #f4efe6;
+        background: #18a8e6;
+    }
+
+    .dashboard-card-button:focus {
+        color: #f4efe6;
+        background: #18a8e6;
+        border: tall #f5c16c;
     }
 
     #profile-metrics {
@@ -465,6 +505,20 @@ class CareerAgentTUI(App[None]):
 
     .session-open-button {
         margin-top: 1;
+        color: #f4efe6;
+        background: #0f8ec7;
+        text-style: bold;
+    }
+
+    .session-open-button:hover {
+        color: #f4efe6;
+        background: #18a8e6;
+    }
+
+    .session-open-button:focus {
+        color: #f4efe6;
+        background: #18a8e6;
+        border: tall #f5c16c;
     }
 
     .read-only-panel {
@@ -481,6 +535,37 @@ class CareerAgentTUI(App[None]):
         padding: 1 2;
         margin-bottom: 1;
         background: #111c20;
+    }
+
+    #add-experience-form {
+        height: 1fr;
+        border: round #5d7b6f;
+        padding: 1 2;
+        background: #172429;
+    }
+
+    .experience-date-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    .experience-date-row Select {
+        width: 18;
+        margin-right: 1;
+    }
+
+    .experience-date-row Checkbox {
+        width: 24;
+        margin-left: 1;
+    }
+
+    .experience-action-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    .experience-action-row Button {
+        margin-right: 1;
     }
 
     .status-draft {

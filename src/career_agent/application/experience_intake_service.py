@@ -11,6 +11,7 @@ from career_agent.domain.models import (
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
     IntakeAnswer,
+    YearMonth,
     utc_now,
 )
 
@@ -91,6 +92,11 @@ class ExperienceIntakeService:
         *,
         employer_name: str,
         job_title: str,
+        location: str | None = None,
+        employment_type: str | None = None,
+        start_date: YearMonth | str | dict[str, int] | None = None,
+        end_date: YearMonth | str | dict[str, int] | None = None,
+        is_current_role: bool = False,
     ) -> ExperienceIntakeSession:
         """Store role metadata needed for the future canonical experience entry."""
 
@@ -108,13 +114,26 @@ class ExperienceIntakeService:
             msg = "Experience intake job title is required."
             raise ValueError(msg)
 
+        normalized_location = self._normalize_optional_text(location)
+        normalized_employment_type = self._normalize_optional_text(employment_type)
+        normalized_start_date = self._normalize_year_month(start_date, "start_date")
+        normalized_end_date = self._normalize_year_month(end_date, "end_date")
+        if is_current_role:
+            normalized_end_date = None
+
         updated = session.model_copy(
             update={
                 "employer_name": normalized_employer_name,
                 "job_title": normalized_job_title,
+                "location": normalized_location,
+                "employment_type": normalized_employment_type,
+                "start_date": normalized_start_date,
+                "end_date": normalized_end_date,
+                "is_current_role": is_current_role,
                 "updated_at": utc_now(),
             }
         )
+        updated = ExperienceIntakeSession.model_validate(updated.model_dump())
         self.repository.save_session(updated)
         return updated
 
@@ -237,6 +256,11 @@ class ExperienceIntakeService:
                 "id": session.draft_experience_entry.id,
                 "employer_name": session.employer_name or draft.employer_name,
                 "job_title": session.job_title or draft.job_title,
+                "location": session.location or draft.location,
+                "employment_type": session.employment_type or draft.employment_type,
+                "start_date": session.start_date or draft.start_date,
+                "end_date": None if session.is_current_role else session.end_date or draft.end_date,
+                "is_current_role": session.is_current_role,
             }
         )
 
@@ -328,6 +352,12 @@ class ExperienceIntakeService:
         if not session.job_title:
             msg = "Experience intake job title is required before generating a draft."
             raise ValueError(msg)
+        if not session.start_date:
+            msg = "Experience intake start date is required before generating a draft."
+            raise ValueError(msg)
+        if not session.is_current_role and not session.end_date:
+            msg = "Experience intake end date is required before generating a draft."
+            raise ValueError(msg)
         if not session.source_text:
             msg = "Experience intake source text is required before generating a draft."
             raise ValueError(msg)
@@ -347,6 +377,11 @@ class ExperienceIntakeService:
             update={
                 "employer_name": session.employer_name,
                 "job_title": session.job_title,
+                "location": session.location,
+                "employment_type": session.employment_type,
+                "start_date": session.start_date,
+                "end_date": session.end_date,
+                "is_current_role": session.is_current_role,
             }
         )
 
@@ -358,3 +393,24 @@ class ExperienceIntakeService:
         entries = [existing for existing in profile.experience_entries if existing.id != entry.id]
         entries.append(entry)
         return profile.model_copy(update={"experience_entries": entries})
+
+    def _normalize_optional_text(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        return normalized or None
+
+    def _normalize_year_month(
+        self,
+        value: YearMonth | str | dict[str, int] | None,
+        field_name: str,
+    ) -> YearMonth | None:
+        if value is None:
+            return None
+
+        try:
+            return YearMonth.model_validate(value)
+        except ValueError as exc:
+            msg = f"Experience intake {field_name} must be a valid month/year value."
+            raise ValueError(msg) from exc
