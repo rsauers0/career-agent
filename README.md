@@ -19,12 +19,17 @@ Implemented:
 - `preferences show`
 - `preferences status`
 - `preferences wizard`
+- `experience create`
+- `experience list`
+- `experience show`
+- `experience source`
+- `experience questions`
 - `tui`
 
 Planned next:
 - refine Textual preferences validation and keyboard navigation
 - `profile wizard` or profile authoring screen for high-level `CareerProfile` fields
-- separate experience-entry workflows
+- continue experience intake workflow toward answers, draft entries, and acceptance into `CareerProfile`
 - AI-assisted job normalization and fit matching
 - tailored document generation
 
@@ -100,8 +105,13 @@ Current storage shape:
   profile/
     user_preferences.json
     career_profile.json
+  intake/
+    experience/
+      <session_id>.json
   snapshots/
     profile/
+    intake/
+      experience/
 ```
 
 ## Development
@@ -146,6 +156,17 @@ uv run career-agent preferences status
 uv run career-agent profile show
 ```
 
+Create an experience intake session, capture source text, and generate follow-up questions:
+
+```bash
+uv run career-agent experience create
+uv run career-agent experience source <session-id> --text "- Built reporting pipeline"
+uv run career-agent experience questions <session-id>
+uv run career-agent experience show <session-id>
+```
+
+The `experience questions` command calls the configured OpenAI-compatible LLM endpoint. Use a local endpoint if you want this workflow to remain local-first.
+
 ## Configuration
 
 Configuration is loaded from environment variables or a local `.env` file via `pydantic-settings`.
@@ -166,7 +187,7 @@ Currently supported:
 - `CAREER_AGENT_DATA_DIR`
   Overrides the default local data directory.
 - `CAREER_AGENT_LLM_BASE_URL`
-  Optional OpenAI-compatible LLM API base URL for future LLM-assisted workflows.
+  Optional OpenAI-compatible LLM API base URL for LLM-assisted workflows.
 - `CAREER_AGENT_LLM_API_KEY`
   Optional API key for the configured LLM endpoint.
 - `CAREER_AGENT_LLM_MODEL`
@@ -218,7 +239,7 @@ CAREER_AGENT_LLM_MODEL=gpt-4.1-mini
 
 Role-specific extraction and evaluation settings can point to different OpenAI-compatible endpoints if your local or hosted model router separates those workloads.
 
-LLM configuration is optional. Current profile and preference workflows do not require an LLM connection.
+LLM configuration is optional. Profile and preference workflows do not require an LLM connection. The `experience questions` command requires a configured OpenAI-compatible endpoint because it sends captured experience source text to the configured model provider.
 
 The project is currently developed and tested on Linux. The storage and configuration code is written with `pathlib` for cross-platform path handling, but Windows should be validated before claiming full Windows support.
 

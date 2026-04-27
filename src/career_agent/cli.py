@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from career_agent.application.experience_intake_service import ExperienceIntakeService
 from career_agent.application.preferences_builder import (
     PreferenceWizardAnswers,
     build_user_preferences_from_answers,
@@ -15,7 +17,12 @@ from career_agent.application.preferences_builder import (
 from career_agent.application.profile_service import ProfileService
 from career_agent.application.status import ComponentStatus, format_status_field_names
 from career_agent.config import get_settings
-from career_agent.infrastructure.repositories import FileProfileRepository
+from career_agent.domain.models import ExperienceIntakeSession
+from career_agent.infrastructure.llm import OpenAICompatibleExperienceIntakeAssistant
+from career_agent.infrastructure.repositories import (
+    FileExperienceIntakeRepository,
+    FileProfileRepository,
+)
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -23,6 +30,7 @@ app = typer.Typer(
 )
 preferences_app = typer.Typer(help="Manage user preferences.")
 profile_app = typer.Typer(help="Manage the career profile.")
+experience_app = typer.Typer(help="Manage experience intake sessions.")
 console = Console()
 
 
@@ -58,9 +66,28 @@ def preferences_cli() -> None:
     """Commands for working with user preferences."""
 
 
+@experience_app.callback()
+def experience_cli() -> None:
+    """Commands for working with experience intake sessions."""
+
+
 def _build_profile_service() -> ProfileService:
     settings = get_settings()
     return ProfileService(FileProfileRepository(settings.data_dir))
+
+
+def _build_experience_intake_service(
+    *,
+    include_assistant: bool = False,
+) -> ExperienceIntakeService:
+    settings = get_settings()
+    repository = FileExperienceIntakeRepository(settings.data_dir)
+    assistant = (
+        OpenAICompatibleExperienceIntakeAssistant.from_settings(settings)
+        if include_assistant
+        else None
+    )
+    return ExperienceIntakeService(repository, assistant)
 
 
 def _prompt_required_text(prompt_text: str, default: str = "") -> str:
@@ -127,6 +154,43 @@ def _render_component_status(status: ComponentStatus) -> None:
         ", ".join(format_status_field_names(status.missing_recommended)) or "-",
     )
     console.print(status_table)
+
+
+def _render_intake_session(session: ExperienceIntakeSession) -> None:
+    session_table = Table(title="Experience Intake Session")
+    session_table.add_column("Field")
+    session_table.add_column("Value")
+    session_table.add_row("Session ID", session.id)
+    session_table.add_row("Status", session.status.value)
+    session_table.add_row("Source Text", session.source_text or "-")
+    session_table.add_row("Follow-Up Questions", str(len(session.follow_up_questions)))
+    session_table.add_row("Created At", session.created_at.isoformat())
+    session_table.add_row("Updated At", session.updated_at.isoformat())
+    console.print(session_table)
+
+    if session.follow_up_questions:
+        _render_intake_questions(session)
+
+
+def _render_intake_questions(session: ExperienceIntakeSession) -> None:
+    questions_table = Table(title="Follow-Up Questions")
+    questions_table.add_column("#", justify="right")
+    questions_table.add_column("Question")
+    questions_table.add_column("Rationale")
+
+    for index, question in enumerate(session.follow_up_questions, start=1):
+        questions_table.add_row(
+            str(index),
+            question.question,
+            question.rationale or "-",
+        )
+
+    console.print(questions_table)
+
+
+def _handle_experience_error(error: Exception) -> None:
+    console.print(f"[red]{error}[/red]")
+    raise typer.Exit(1) from error
 
 
 @preferences_app.command("show")
@@ -299,8 +363,101 @@ def profile_init() -> None:
     console.print(f"Initialized profile storage under [bold]{settings.data_dir}[/bold].")
 
 
+@experience_app.command("create")
+def experience_create() -> None:
+    """Create a draft experience intake session."""
+
+    service = _build_experience_intake_service()
+    session = service.create_session()
+
+    console.print(f"Created experience intake session [bold]{session.id}[/bold].")
+    console.print("Next: add source text with `career-agent experience source SESSION_ID`.")
+
+
+@experience_app.command("list")
+def experience_list() -> None:
+    """List stored experience intake sessions."""
+
+    service = _build_experience_intake_service()
+    sessions = service.list_sessions()
+
+    if not sessions:
+        console.print("No experience intake sessions found.")
+        return
+
+    sessions_table = Table(title="Experience Intake Sessions")
+    sessions_table.add_column("Session ID")
+    sessions_table.add_column("Status")
+    sessions_table.add_column("Questions", justify="right")
+    sessions_table.add_column("Updated At")
+
+    for session in sessions:
+        sessions_table.add_row(
+            session.id,
+            session.status.value,
+            str(len(session.follow_up_questions)),
+            session.updated_at.isoformat(),
+        )
+
+    console.print(sessions_table)
+
+
+@experience_app.command("show")
+def experience_show(session_id: str) -> None:
+    """Show one experience intake session."""
+
+    service = _build_experience_intake_service()
+    session = service.get_session(session_id)
+
+    if session is None:
+        console.print(f"[red]Experience intake session not found: {session_id}.[/red]")
+        raise typer.Exit(1)
+
+    _render_intake_session(session)
+
+
+@experience_app.command("source")
+def experience_source(
+    session_id: str,
+    source_text: str | None = typer.Option(
+        None,
+        "--text",
+        "-t",
+        help="Raw bullets or notes for one role. If omitted, the CLI prompts for text.",
+    ),
+) -> None:
+    """Capture raw source text for one role-specific intake session."""
+
+    if source_text is None:
+        source_text = typer.prompt("Source text")
+
+    service = _build_experience_intake_service()
+    try:
+        session = service.capture_source_text(session_id, source_text)
+    except ValueError as error:
+        _handle_experience_error(error)
+
+    console.print(f"Saved source text for session [bold]{session.id}[/bold].")
+    console.print("Next: generate questions with `career-agent experience questions SESSION_ID`.")
+
+
+@experience_app.command("questions")
+def experience_questions(session_id: str) -> None:
+    """Generate follow-up questions using the configured LLM assistant."""
+
+    try:
+        service = _build_experience_intake_service(include_assistant=True)
+        session = service.generate_follow_up_questions(session_id)
+    except (ValueError, RuntimeError, httpx.HTTPError) as error:
+        _handle_experience_error(error)
+
+    console.print(f"Generated follow-up questions for session [bold]{session.id}[/bold].")
+    _render_intake_questions(session)
+
+
 app.add_typer(preferences_app, name="preferences")
 app.add_typer(profile_app, name="profile")
+app.add_typer(experience_app, name="experience")
 
 
 def main() -> None:

@@ -7,10 +7,14 @@ from career_agent.config import get_settings
 from career_agent.domain.models import (
     CareerProfile,
     ExperienceEntry,
+    IntakeQuestion,
     UserPreferences,
     WorkArrangement,
 )
-from career_agent.infrastructure.repositories import FileProfileRepository
+from career_agent.infrastructure.repositories import (
+    FileExperienceIntakeRepository,
+    FileProfileRepository,
+)
 
 runner = CliRunner()
 
@@ -46,6 +50,16 @@ def build_career_profile() -> CareerProfile:
     )
 
 
+class FakeExperienceIntakeAssistant:
+    def generate_follow_up_questions(self, session):
+        return [
+            IntakeQuestion(
+                question="What measurable impact did this work have?",
+                rationale="Impact helps convert duties into accomplishments.",
+            )
+        ]
+
+
 def test_profile_show_reports_empty_state(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
@@ -55,6 +69,134 @@ def test_profile_show_reports_empty_state(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "No profile data found." in result.output
     assert str(tmp_path) in result.output
+
+    get_settings.cache_clear()
+
+
+def test_experience_create_creates_draft_intake_session(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["experience", "create"])
+
+    repository = FileExperienceIntakeRepository(tmp_path)
+    sessions = repository.list_sessions()
+
+    assert result.exit_code == 0
+    assert "Created experience intake session" in result.output
+    assert len(sessions) == 1
+    assert sessions[0].status.value == "draft"
+
+    get_settings.cache_clear()
+
+
+def test_experience_list_reports_empty_state(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["experience", "list"])
+
+    assert result.exit_code == 0
+    assert "No experience intake sessions found." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_experience_source_captures_source_text(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FileExperienceIntakeRepository(tmp_path)
+    session = repository.load_session("session-123")
+    assert session is None
+
+    create_result = runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+
+    result = runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--text",
+            "- Built reporting pipeline",
+        ],
+    )
+    updated = repository.load_session(session_id)
+
+    assert create_result.exit_code == 0
+    assert result.exit_code == 0
+    assert "Saved source text" in result.output
+    assert updated is not None
+    assert updated.source_text == "- Built reporting pipeline"
+    assert updated.status.value == "source_captured"
+
+    get_settings.cache_clear()
+
+
+def test_experience_show_displays_session(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FileExperienceIntakeRepository(tmp_path)
+
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+
+    result = runner.invoke(app, ["experience", "show", session_id])
+
+    assert result.exit_code == 0
+    assert "Experience Intake Session" in result.output
+    assert session_id in result.output
+    assert "draft" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_experience_questions_uses_configured_assistant(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import career_agent.cli as cli_module
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("CAREER_AGENT_LLM_MODEL", "gemma4-doc")
+
+    def fake_from_settings(settings):
+        assert settings.effective_llm_extraction_base_url == "http://localhost:1234/v1"
+        assert settings.effective_llm_extraction_model == "gemma4-doc"
+        return FakeExperienceIntakeAssistant()
+
+    monkeypatch.setattr(
+        cli_module.OpenAICompatibleExperienceIntakeAssistant,
+        "from_settings",
+        fake_from_settings,
+    )
+
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+    runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--text",
+            "- Built reporting pipeline",
+        ],
+    )
+
+    result = runner.invoke(app, ["experience", "questions", session_id])
+    updated = repository.load_session(session_id)
+
+    assert result.exit_code == 0
+    assert "Generated follow-up questions" in result.output
+    assert updated is not None
+    assert updated.status.value == "questions_generated"
+    assert len(updated.follow_up_questions) == 1
+    assert updated.follow_up_questions[0].question == "What measurable impact did this work have?"
 
     get_settings.cache_clear()
 

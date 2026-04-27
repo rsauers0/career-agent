@@ -114,6 +114,11 @@ Completed validation includes:
 - `preferences show`
 - `preferences status`
 - `preferences wizard`
+- `experience create`
+- `experience list`
+- `experience show`
+- `experience source`
+- `experience questions`
 - `tui`
 
 ### TUI Foundation
@@ -177,11 +182,12 @@ Completed scope:
 - service workflow added and tested with a fake assistant for generating follow-up questions
 - initial prompt content and structured JSON response parsing added for follow-up questions
 - OpenAI-compatible experience intake assistant adapter added behind the assistant protocol
+- CLI commands added for creating sessions, capturing source text, showing/listing sessions, and generating follow-up questions
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
 - keep accepted sessions archived for development traceability and future eval/prompt improvement
-- compose the OpenAI-compatible assistant into a CLI or TUI workflow
+- compose experience intake into the TUI after the CLI path is validated
 
 ### Career Profile Authoring
 Treat `CareerProfile` as the accepted, structured result of guided workflows rather than a large manual data-entry form.
@@ -195,10 +201,14 @@ Initial direction:
 ### Experience Management
 Treat experience entries as a role-specific workflow, not part of a general profile wizard.
 
-Planned commands:
+Current commands:
 - `experience list`
-- `experience intake`
+- `experience create`
 - `experience show`
+- `experience source`
+- `experience questions`
+
+Planned commands:
 - `experience edit`
 
 Initial scope:
