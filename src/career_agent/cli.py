@@ -17,7 +17,7 @@ from career_agent.application.preferences_builder import (
 from career_agent.application.profile_service import ProfileService
 from career_agent.application.status import ComponentStatus, format_status_field_names
 from career_agent.config import get_settings
-from career_agent.domain.models import ExperienceIntakeSession
+from career_agent.domain.models import ExperienceIntakeSession, ExperienceIntakeStatus
 from career_agent.infrastructure.llm import OpenAICompatibleExperienceIntakeAssistant
 from career_agent.infrastructure.repositories import (
     FileExperienceIntakeRepository,
@@ -164,12 +164,15 @@ def _render_intake_session(session: ExperienceIntakeSession) -> None:
     session_table.add_row("Status", session.status.value)
     session_table.add_row("Source Text", session.source_text or "-")
     session_table.add_row("Follow-Up Questions", str(len(session.follow_up_questions)))
+    session_table.add_row("User Answers", str(len(session.user_answers)))
     session_table.add_row("Created At", session.created_at.isoformat())
     session_table.add_row("Updated At", session.updated_at.isoformat())
     console.print(session_table)
 
     if session.follow_up_questions:
         _render_intake_questions(session)
+    if session.user_answers:
+        _render_intake_answers(session)
 
 
 def _render_intake_questions(session: ExperienceIntakeSession) -> None:
@@ -186,6 +189,25 @@ def _render_intake_questions(session: ExperienceIntakeSession) -> None:
         )
 
     console.print(questions_table)
+
+
+def _render_intake_answers(session: ExperienceIntakeSession) -> None:
+    question_text_by_id = {
+        question.id: question.question for question in session.follow_up_questions
+    }
+    answers_table = Table(title="Captured Answers")
+    answers_table.add_column("#", justify="right")
+    answers_table.add_column("Question")
+    answers_table.add_column("Answer")
+
+    for index, answer in enumerate(session.user_answers, start=1):
+        answers_table.add_row(
+            str(index),
+            question_text_by_id.get(answer.question_id, answer.question_id),
+            answer.answer,
+        )
+
+    console.print(answers_table)
 
 
 def _handle_experience_error(error: Exception) -> None:
@@ -389,6 +411,7 @@ def experience_list() -> None:
     sessions_table.add_column("Session ID")
     sessions_table.add_column("Status")
     sessions_table.add_column("Questions", justify="right")
+    sessions_table.add_column("Answers", justify="right")
     sessions_table.add_column("Updated At")
 
     for session in sessions:
@@ -396,6 +419,7 @@ def experience_list() -> None:
             session.id,
             session.status.value,
             str(len(session.follow_up_questions)),
+            str(len(session.user_answers)),
             session.updated_at.isoformat(),
         )
 
@@ -453,6 +477,44 @@ def experience_questions(session_id: str) -> None:
 
     console.print(f"Generated follow-up questions for session [bold]{session.id}[/bold].")
     _render_intake_questions(session)
+
+
+@experience_app.command("answer")
+def experience_answer(session_id: str) -> None:
+    """Capture answers to generated follow-up questions."""
+
+    service = _build_experience_intake_service()
+    session = service.get_session(session_id)
+    if session is None:
+        console.print(f"[red]Experience intake session not found: {session_id}.[/red]")
+        raise typer.Exit(1)
+
+    if session.status not in {
+        ExperienceIntakeStatus.QUESTIONS_GENERATED,
+        ExperienceIntakeStatus.ANSWERS_CAPTURED,
+    }:
+        console.print("[red]Generate follow-up questions before capturing answers.[/red]")
+        raise typer.Exit(1)
+
+    if not session.follow_up_questions:
+        console.print("[red]No follow-up questions found for this session.[/red]")
+        raise typer.Exit(1)
+
+    answers_by_question_id: dict[str, str] = {}
+    for index, question in enumerate(session.follow_up_questions, start=1):
+        console.print(f"\n[bold]Question {index}[/bold]: {question.question}")
+        if question.rationale:
+            console.print(f"[dim]Why this matters: {question.rationale}[/dim]")
+        answers_by_question_id[question.id] = _prompt_required_text("Answer")
+
+    try:
+        updated = service.capture_answers(session_id, answers_by_question_id)
+    except ValueError as error:
+        _handle_experience_error(error)
+
+    console.print(f"Saved answers for session [bold]{updated.id}[/bold].")
+    console.print("Next: draft an experience entry once the draft workflow is available.")
+    _render_intake_answers(updated)
 
 
 app.add_typer(preferences_app, name="preferences")

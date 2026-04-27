@@ -201,6 +201,70 @@ def test_experience_questions_uses_configured_assistant(
     get_settings.cache_clear()
 
 
+def test_experience_answer_captures_question_answers(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import career_agent.cli as cli_module
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("CAREER_AGENT_LLM_MODEL", "gemma4-doc")
+
+    monkeypatch.setattr(
+        cli_module.OpenAICompatibleExperienceIntakeAssistant,
+        "from_settings",
+        lambda settings: FakeExperienceIntakeAssistant(),
+    )
+
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+    runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--text",
+            "- Built reporting pipeline",
+        ],
+    )
+    runner.invoke(app, ["experience", "questions", session_id])
+
+    result = runner.invoke(
+        app,
+        ["experience", "answer", session_id],
+        input="Reduced manual reporting time by 10 hours per week.\n",
+    )
+    updated = repository.load_session(session_id)
+
+    assert result.exit_code == 0
+    assert "Saved answers" in result.output
+    assert updated is not None
+    assert updated.status.value == "answers_captured"
+    assert len(updated.user_answers) == 1
+    assert updated.user_answers[0].answer == "Reduced manual reporting time by 10 hours per week."
+
+    get_settings.cache_clear()
+
+
+def test_experience_answer_requires_generated_questions(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+
+    result = runner.invoke(app, ["experience", "answer", session_id])
+
+    assert result.exit_code == 1
+    assert "Generate follow-up questions before capturing answers." in result.output
+
+    get_settings.cache_clear()
+
+
 def test_tui_command_launches_textual_interface(monkeypatch) -> None:
     import career_agent.interfaces.tui as tui_module
 

@@ -119,6 +119,7 @@ Completed validation includes:
 - `experience show`
 - `experience source`
 - `experience questions`
+- `experience answer`
 - `tui`
 
 ### TUI Foundation
@@ -183,6 +184,7 @@ Completed scope:
 - initial prompt content and structured JSON response parsing added for follow-up questions
 - OpenAI-compatible experience intake assistant adapter added behind the assistant protocol
 - CLI commands added for creating sessions, capturing source text, showing/listing sessions, and generating follow-up questions
+- CLI command added for capturing user answers to generated follow-up questions
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
@@ -207,6 +209,7 @@ Current commands:
 - `experience show`
 - `experience source`
 - `experience questions`
+- `experience answer`
 
 Planned commands:
 - `experience edit`

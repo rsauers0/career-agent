@@ -7,6 +7,7 @@ from career_agent.application.ports import (
 from career_agent.domain.models import (
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    IntakeAnswer,
     utc_now,
 )
 
@@ -68,6 +69,59 @@ class ExperienceIntakeService:
             update={
                 "source_text": normalized_source_text,
                 "status": ExperienceIntakeStatus.SOURCE_CAPTURED,
+                "updated_at": utc_now(),
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
+
+    def capture_answers(
+        self,
+        session_id: str,
+        answers_by_question_id: dict[str, str],
+    ) -> ExperienceIntakeSession:
+        """Store user answers for generated follow-up questions."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status not in {
+            ExperienceIntakeStatus.QUESTIONS_GENERATED,
+            ExperienceIntakeStatus.ANSWERS_CAPTURED,
+        }:
+            msg = "Experience intake questions must be generated before capturing answers."
+            raise ValueError(msg)
+
+        if not session.follow_up_questions:
+            msg = "Experience intake follow-up questions are required before capturing answers."
+            raise ValueError(msg)
+
+        question_ids = {question.id for question in session.follow_up_questions}
+        answer_ids = set(answers_by_question_id)
+        unknown_question_ids = sorted(answer_ids - question_ids)
+        if unknown_question_ids:
+            msg = f"Unknown follow-up question IDs: {', '.join(unknown_question_ids)}."
+            raise ValueError(msg)
+
+        missing_question_ids = sorted(question_ids - answer_ids)
+        if missing_question_ids:
+            msg = f"Missing answers for follow-up question IDs: {', '.join(missing_question_ids)}."
+            raise ValueError(msg)
+
+        answers = []
+        for question in session.follow_up_questions:
+            answer = answers_by_question_id[question.id].strip()
+            if not answer:
+                msg = f"Answer cannot be blank for follow-up question ID: {question.id}."
+                raise ValueError(msg)
+            answers.append(IntakeAnswer(question_id=question.id, answer=answer))
+
+        updated = session.model_copy(
+            update={
+                "user_answers": answers,
+                "status": ExperienceIntakeStatus.ANSWERS_CAPTURED,
                 "updated_at": utc_now(),
             }
         )

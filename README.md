@@ -24,6 +24,7 @@ Implemented:
 - `experience show`
 - `experience source`
 - `experience questions`
+- `experience answer`
 - `tui`
 
 Planned next:
@@ -162,6 +163,7 @@ Create an experience intake session, capture source text, and generate follow-up
 uv run career-agent experience create
 uv run career-agent experience source <session-id> --text "- Built reporting pipeline"
 uv run career-agent experience questions <session-id>
+uv run career-agent experience answer <session-id>
 uv run career-agent experience show <session-id>
 ```
 
