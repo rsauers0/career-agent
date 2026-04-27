@@ -326,6 +326,14 @@ class ExperienceIntakeSession(BaseModel):
         default=None,
         description="Raw source bullets or notes for one role-specific experience.",
     )
+    employer_name: str | None = Field(
+        default=None,
+        description="Employer or client name for the future experience entry.",
+    )
+    job_title: str | None = Field(
+        default=None,
+        description="Role title for the future experience entry.",
+    )
     transcript: list[IntakeMessage] = Field(
         default_factory=list,
         description="Retained local transcript for development traceability.",

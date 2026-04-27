@@ -5,6 +5,7 @@ from career_agent.application.ports import (
     ExperienceIntakeRepository,
 )
 from career_agent.domain.models import (
+    ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
     IntakeAnswer,
@@ -75,6 +76,39 @@ class ExperienceIntakeService:
         self.repository.save_session(updated)
         return updated
 
+    def capture_role_details(
+        self,
+        session_id: str,
+        *,
+        employer_name: str,
+        job_title: str,
+    ) -> ExperienceIntakeSession:
+        """Store role metadata needed for the future canonical experience entry."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        normalized_employer_name = employer_name.strip()
+        normalized_job_title = job_title.strip()
+        if not normalized_employer_name:
+            msg = "Experience intake employer name is required."
+            raise ValueError(msg)
+        if not normalized_job_title:
+            msg = "Experience intake job title is required."
+            raise ValueError(msg)
+
+        updated = session.model_copy(
+            update={
+                "employer_name": normalized_employer_name,
+                "job_title": normalized_job_title,
+                "updated_at": utc_now(),
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
+
     def capture_answers(
         self,
         session_id: str,
@@ -128,6 +162,40 @@ class ExperienceIntakeService:
         self.repository.save_session(updated)
         return updated
 
+    def generate_draft_entry(self, session_id: str) -> ExperienceIntakeSession:
+        """Generate and store a draft experience entry from answered intake data."""
+
+        if self.assistant is None:
+            msg = "Experience intake assistant is not configured."
+            raise RuntimeError(msg)
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status not in {
+            ExperienceIntakeStatus.ANSWERS_CAPTURED,
+            ExperienceIntakeStatus.DRAFT_GENERATED,
+        }:
+            msg = "Experience intake answers must be captured before generating a draft."
+            raise ValueError(msg)
+
+        self._validate_ready_for_draft(session)
+
+        draft = self.assistant.draft_experience_entry(session)
+        draft = self._normalize_draft_role_details(session, draft)
+
+        updated = session.model_copy(
+            update={
+                "draft_experience_entry": draft,
+                "status": ExperienceIntakeStatus.DRAFT_GENERATED,
+                "updated_at": utc_now(),
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
+
     def generate_follow_up_questions(self, session_id: str) -> ExperienceIntakeSession:
         """Generate and store follow-up questions for captured source text."""
 
@@ -162,3 +230,32 @@ class ExperienceIntakeService:
         )
         self.repository.save_session(updated)
         return updated
+
+    def _validate_ready_for_draft(self, session: ExperienceIntakeSession) -> None:
+        if not session.employer_name:
+            msg = "Experience intake employer name is required before generating a draft."
+            raise ValueError(msg)
+        if not session.job_title:
+            msg = "Experience intake job title is required before generating a draft."
+            raise ValueError(msg)
+        if not session.source_text:
+            msg = "Experience intake source text is required before generating a draft."
+            raise ValueError(msg)
+        if not session.follow_up_questions:
+            msg = "Experience intake follow-up questions are required before generating a draft."
+            raise ValueError(msg)
+        if not session.user_answers:
+            msg = "Experience intake answers are required before generating a draft."
+            raise ValueError(msg)
+
+    def _normalize_draft_role_details(
+        self,
+        session: ExperienceIntakeSession,
+        draft: ExperienceEntry,
+    ) -> ExperienceEntry:
+        return draft.model_copy(
+            update={
+                "employer_name": session.employer_name,
+                "job_title": session.job_title,
+            }
+        )

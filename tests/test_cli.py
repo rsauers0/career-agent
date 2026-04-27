@@ -59,6 +59,15 @@ class FakeExperienceIntakeAssistant:
             )
         ]
 
+    def draft_experience_entry(self, session):
+        return ExperienceEntry(
+            employer_name=session.employer_name or "Wrong Employer",
+            job_title=session.job_title or "Wrong Job",
+            role_summary="Built reporting automation for finance.",
+            accomplishments=["Reduced manual reporting time by 10 hours per week."],
+            systems_and_tools=["Python"],
+        )
+
 
 def test_profile_show_reports_empty_state(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
@@ -86,6 +95,81 @@ def test_experience_create_creates_draft_intake_session(monkeypatch, tmp_path) -
     assert "Created experience intake session" in result.output
     assert len(sessions) == 1
     assert sessions[0].status.value == "draft"
+
+    get_settings.cache_clear()
+
+
+def test_experience_create_can_store_role_details(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        [
+            "experience",
+            "create",
+            "--employer-name",
+            "Acme Analytics",
+            "--job-title",
+            "Senior Data Engineer",
+        ],
+    )
+
+    repository = FileExperienceIntakeRepository(tmp_path)
+    session = repository.list_sessions()[0]
+
+    assert result.exit_code == 0
+    assert session.employer_name == "Acme Analytics"
+    assert session.job_title == "Senior Data Engineer"
+
+    get_settings.cache_clear()
+
+
+def test_experience_create_rejects_partial_role_details(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(
+        app,
+        ["experience", "create", "--employer-name", "Acme Analytics"],
+    )
+
+    repository = FileExperienceIntakeRepository(tmp_path)
+
+    assert result.exit_code == 1
+    assert "Both --employer-name and --job-title are required together." in result.output
+    assert repository.list_sessions() == []
+
+    get_settings.cache_clear()
+
+
+def test_experience_details_updates_role_details(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+
+    result = runner.invoke(
+        app,
+        [
+            "experience",
+            "details",
+            session_id,
+            "--employer-name",
+            "Acme Analytics",
+            "--job-title",
+            "Senior Data Engineer",
+        ],
+    )
+
+    updated = repository.load_session(session_id)
+
+    assert result.exit_code == 0
+    assert "Saved role details" in result.output
+    assert updated is not None
+    assert updated.employer_name == "Acme Analytics"
+    assert updated.job_title == "Senior Data Engineer"
 
     get_settings.cache_clear()
 
@@ -246,6 +330,70 @@ def test_experience_answer_captures_question_answers(
     assert updated.status.value == "answers_captured"
     assert len(updated.user_answers) == 1
     assert updated.user_answers[0].answer == "Reduced manual reporting time by 10 hours per week."
+
+    get_settings.cache_clear()
+
+
+def test_experience_draft_uses_configured_assistant(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import career_agent.cli as cli_module
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("CAREER_AGENT_LLM_MODEL", "gemma4-doc")
+
+    monkeypatch.setattr(
+        cli_module.OpenAICompatibleExperienceIntakeAssistant,
+        "from_settings",
+        lambda settings: FakeExperienceIntakeAssistant(),
+    )
+
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(
+        app,
+        [
+            "experience",
+            "create",
+            "--employer-name",
+            "Acme Analytics",
+            "--job-title",
+            "Senior Data Engineer",
+        ],
+    )
+    session_id = repository.list_sessions()[0].id
+    runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--text",
+            "- Built reporting pipeline",
+        ],
+    )
+    runner.invoke(app, ["experience", "questions", session_id])
+    runner.invoke(
+        app,
+        ["experience", "answer", session_id],
+        input="Reduced manual reporting time by 10 hours per week.\n",
+    )
+
+    result = runner.invoke(app, ["experience", "draft", session_id])
+    updated = repository.load_session(session_id)
+
+    assert result.exit_code == 0
+    assert "Generated draft experience entry" in result.output
+    assert updated is not None
+    assert updated.status.value == "draft_generated"
+    assert updated.draft_experience_entry is not None
+    assert updated.draft_experience_entry.employer_name == "Acme Analytics"
+    assert updated.draft_experience_entry.job_title == "Senior Data Engineer"
+    assert updated.draft_experience_entry.accomplishments == [
+        "Reduced manual reporting time by 10 hours per week."
+    ]
 
     get_settings.cache_clear()
 

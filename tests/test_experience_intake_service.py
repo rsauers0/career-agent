@@ -4,6 +4,7 @@ import pytest
 
 from career_agent.application.experience_intake_service import ExperienceIntakeService
 from career_agent.domain.models import (
+    ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
     IntakeQuestion,
@@ -41,6 +42,7 @@ class FakeExperienceIntakeAssistant:
             ]
         self.questions = questions
         self.received_session: ExperienceIntakeSession | None = None
+        self.received_draft_session: ExperienceIntakeSession | None = None
 
     def generate_follow_up_questions(
         self,
@@ -48,6 +50,16 @@ class FakeExperienceIntakeAssistant:
     ) -> list[IntakeQuestion]:
         self.received_session = session
         return self.questions
+
+    def draft_experience_entry(self, session: ExperienceIntakeSession) -> ExperienceEntry:
+        self.received_draft_session = session
+        return ExperienceEntry(
+            employer_name=session.employer_name or "Wrong Employer",
+            job_title=session.job_title or "Wrong Job",
+            role_summary="Built and improved reporting workflows.",
+            accomplishments=["Reduced manual reporting time by 10 hours per week."],
+            systems_and_tools=["Python"],
+        )
 
 
 def test_create_session_persists_draft_session() -> None:
@@ -121,6 +133,58 @@ def test_capture_source_text_rejects_blank_source_text() -> None:
 
     with pytest.raises(ValueError, match="source text is required"):
         service.capture_source_text("session-123", "   ")
+
+    assert repository.load_session("session-123") == session
+
+
+def test_capture_role_details_updates_existing_session() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    updated = service.capture_role_details(
+        "session-123",
+        employer_name="  Acme Analytics  ",
+        job_title="  Senior Data Engineer  ",
+    )
+
+    assert updated.employer_name == "Acme Analytics"
+    assert updated.job_title == "Senior Data Engineer"
+    assert updated.updated_at > session.updated_at
+    assert repository.load_session("session-123") == updated
+
+
+def test_capture_role_details_rejects_missing_session() -> None:
+    service = ExperienceIntakeService(FakeExperienceIntakeRepository())
+
+    with pytest.raises(ValueError, match="Experience intake session not found"):
+        service.capture_role_details(
+            "missing",
+            employer_name="Acme Analytics",
+            job_title="Senior Data Engineer",
+        )
+
+
+def test_capture_role_details_rejects_blank_values() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="employer name is required"):
+        service.capture_role_details(
+            "session-123",
+            employer_name=" ",
+            job_title="Senior Data Engineer",
+        )
+
+    with pytest.raises(ValueError, match="job title is required"):
+        service.capture_role_details(
+            "session-123",
+            employer_name="Acme Analytics",
+            job_title=" ",
+        )
 
     assert repository.load_session("session-123") == session
 
@@ -327,3 +391,93 @@ def test_capture_answers_rejects_blank_answers() -> None:
         service.capture_answers("session-123", {"question-1": "   "})
 
     assert repository.load_session("session-123") == session
+
+
+def test_generate_draft_entry_updates_existing_session() -> None:
+    repository = FakeExperienceIntakeRepository()
+    assistant = FakeExperienceIntakeAssistant()
+    service = ExperienceIntakeService(repository, assistant)
+    question = IntakeQuestion(id="question-1", question="What impact did this have?")
+    repository.save_session(
+        ExperienceIntakeSession(
+            id="session-123",
+            employer_name="Acme Analytics",
+            job_title="Senior Data Engineer",
+            source_text="- Built reporting pipeline",
+            follow_up_questions=[question],
+            user_answers=[
+                {
+                    "question_id": "question-1",
+                    "answer": "Reduced manual reporting time by 10 hours per week.",
+                }
+            ],
+            status=ExperienceIntakeStatus.ANSWERS_CAPTURED,
+        )
+    )
+
+    updated = service.generate_draft_entry("session-123")
+
+    assert assistant.received_draft_session is not None
+    assert updated.status == ExperienceIntakeStatus.DRAFT_GENERATED
+    assert updated.draft_experience_entry is not None
+    assert updated.draft_experience_entry.employer_name == "Acme Analytics"
+    assert updated.draft_experience_entry.job_title == "Senior Data Engineer"
+    assert updated.draft_experience_entry.accomplishments == [
+        "Reduced manual reporting time by 10 hours per week."
+    ]
+    assert repository.load_session("session-123") == updated
+
+
+def test_generate_draft_entry_rejects_unconfigured_assistant() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+
+    with pytest.raises(RuntimeError, match="assistant is not configured"):
+        service.generate_draft_entry("session-123")
+
+
+def test_generate_draft_entry_rejects_missing_session() -> None:
+    assistant = FakeExperienceIntakeAssistant()
+    service = ExperienceIntakeService(FakeExperienceIntakeRepository(), assistant)
+
+    with pytest.raises(ValueError, match="Experience intake session not found"):
+        service.generate_draft_entry("missing")
+
+
+def test_generate_draft_entry_requires_answers_captured_status() -> None:
+    repository = FakeExperienceIntakeRepository()
+    assistant = FakeExperienceIntakeAssistant()
+    service = ExperienceIntakeService(repository, assistant)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="answers must be captured"):
+        service.generate_draft_entry("session-123")
+
+    assert repository.load_session("session-123") == session
+
+
+def test_generate_draft_entry_requires_role_metadata() -> None:
+    repository = FakeExperienceIntakeRepository()
+    assistant = FakeExperienceIntakeAssistant()
+    service = ExperienceIntakeService(repository, assistant)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.ANSWERS_CAPTURED,
+        source_text="- Built reporting pipeline",
+        follow_up_questions=[IntakeQuestion(id="question-1", question="What changed?")],
+        user_answers=[
+            {
+                "question_id": "question-1",
+                "answer": "Reduced manual reporting time.",
+            }
+        ],
+    )
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="employer name is required"):
+        service.generate_draft_entry("session-123")
+
+    repository.save_session(session.model_copy(update={"employer_name": "Acme Analytics"}))
+    with pytest.raises(ValueError, match="job title is required"):
+        service.generate_draft_entry("session-123")

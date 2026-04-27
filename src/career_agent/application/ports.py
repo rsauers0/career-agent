@@ -4,6 +4,7 @@ from typing import Protocol
 
 from career_agent.domain.models import (
     CareerProfile,
+    ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
     IntakeQuestion,
@@ -60,3 +61,9 @@ class ExperienceIntakeAssistant(Protocol):
         session: ExperienceIntakeSession,
     ) -> list[IntakeQuestion]:
         """Generate structured follow-up questions for an intake session."""
+
+    def draft_experience_entry(
+        self,
+        session: ExperienceIntakeSession,
+    ) -> ExperienceEntry:
+        """Draft a structured experience entry from an answered intake session."""

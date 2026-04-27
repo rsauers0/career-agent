@@ -17,7 +17,11 @@ from career_agent.application.preferences_builder import (
 from career_agent.application.profile_service import ProfileService
 from career_agent.application.status import ComponentStatus, format_status_field_names
 from career_agent.config import get_settings
-from career_agent.domain.models import ExperienceIntakeSession, ExperienceIntakeStatus
+from career_agent.domain.models import (
+    ExperienceEntry,
+    ExperienceIntakeSession,
+    ExperienceIntakeStatus,
+)
 from career_agent.infrastructure.llm import OpenAICompatibleExperienceIntakeAssistant
 from career_agent.infrastructure.repositories import (
     FileExperienceIntakeRepository,
@@ -162,9 +166,15 @@ def _render_intake_session(session: ExperienceIntakeSession) -> None:
     session_table.add_column("Value")
     session_table.add_row("Session ID", session.id)
     session_table.add_row("Status", session.status.value)
+    session_table.add_row("Employer", session.employer_name or "-")
+    session_table.add_row("Job Title", session.job_title or "-")
     session_table.add_row("Source Text", session.source_text or "-")
     session_table.add_row("Follow-Up Questions", str(len(session.follow_up_questions)))
     session_table.add_row("User Answers", str(len(session.user_answers)))
+    session_table.add_row(
+        "Draft Entry",
+        "yes" if session.draft_experience_entry is not None else "no",
+    )
     session_table.add_row("Created At", session.created_at.isoformat())
     session_table.add_row("Updated At", session.updated_at.isoformat())
     console.print(session_table)
@@ -173,6 +183,8 @@ def _render_intake_session(session: ExperienceIntakeSession) -> None:
         _render_intake_questions(session)
     if session.user_answers:
         _render_intake_answers(session)
+    if session.draft_experience_entry is not None:
+        _render_experience_entry(session.draft_experience_entry)
 
 
 def _render_intake_questions(session: ExperienceIntakeSession) -> None:
@@ -208,6 +220,25 @@ def _render_intake_answers(session: ExperienceIntakeSession) -> None:
         )
 
     console.print(answers_table)
+
+
+def _render_experience_entry(entry: ExperienceEntry) -> None:
+    entry_table = Table(title="Draft Experience Entry")
+    entry_table.add_column("Field")
+    entry_table.add_column("Value")
+    entry_table.add_row("Entry ID", entry.id)
+    entry_table.add_row("Employer", entry.employer_name)
+    entry_table.add_row("Job Title", entry.job_title)
+    entry_table.add_row("Role Summary", entry.role_summary or "-")
+    entry_table.add_row("Responsibilities", "\n".join(entry.responsibilities) or "-")
+    entry_table.add_row("Accomplishments", "\n".join(entry.accomplishments) or "-")
+    entry_table.add_row("Metrics", "\n".join(entry.metrics) or "-")
+    entry_table.add_row("Systems & Tools", ", ".join(entry.systems_and_tools) or "-")
+    entry_table.add_row("Skills", ", ".join(entry.skills_demonstrated) or "-")
+    entry_table.add_row("Domains", ", ".join(entry.domains) or "-")
+    entry_table.add_row("Team Context", entry.team_context or "-")
+    entry_table.add_row("Scope Notes", entry.scope_notes or "-")
+    console.print(entry_table)
 
 
 def _handle_experience_error(error: Exception) -> None:
@@ -386,14 +417,72 @@ def profile_init() -> None:
 
 
 @experience_app.command("create")
-def experience_create() -> None:
+def experience_create(
+    employer_name: str | None = typer.Option(
+        None,
+        "--employer-name",
+        help="Employer or client name for the future experience entry.",
+    ),
+    job_title: str | None = typer.Option(
+        None,
+        "--job-title",
+        help="Role title for the future experience entry.",
+    ),
+) -> None:
     """Create a draft experience intake session."""
+
+    if (employer_name is None) != (job_title is None):
+        console.print("[red]Both --employer-name and --job-title are required together.[/red]")
+        raise typer.Exit(1)
 
     service = _build_experience_intake_service()
     session = service.create_session()
+    if employer_name is not None or job_title is not None:
+        try:
+            session = service.capture_role_details(
+                session.id,
+                employer_name=employer_name,
+                job_title=job_title,
+            )
+        except ValueError as error:
+            _handle_experience_error(error)
 
     console.print(f"Created experience intake session [bold]{session.id}[/bold].")
     console.print("Next: add source text with `career-agent experience source SESSION_ID`.")
+
+
+@experience_app.command("details")
+def experience_details(
+    session_id: str,
+    employer_name: str | None = typer.Option(
+        None,
+        "--employer-name",
+        help="Employer or client name for the future experience entry.",
+    ),
+    job_title: str | None = typer.Option(
+        None,
+        "--job-title",
+        help="Role title for the future experience entry.",
+    ),
+) -> None:
+    """Capture role metadata needed for the future experience entry."""
+
+    if employer_name is None:
+        employer_name = _prompt_required_text("Employer name")
+    if job_title is None:
+        job_title = _prompt_required_text("Job title")
+
+    service = _build_experience_intake_service()
+    try:
+        session = service.capture_role_details(
+            session_id,
+            employer_name=employer_name,
+            job_title=job_title,
+        )
+    except ValueError as error:
+        _handle_experience_error(error)
+
+    console.print(f"Saved role details for session [bold]{session.id}[/bold].")
 
 
 @experience_app.command("list")
@@ -412,6 +501,7 @@ def experience_list() -> None:
     sessions_table.add_column("Status")
     sessions_table.add_column("Questions", justify="right")
     sessions_table.add_column("Answers", justify="right")
+    sessions_table.add_column("Draft")
     sessions_table.add_column("Updated At")
 
     for session in sessions:
@@ -420,6 +510,7 @@ def experience_list() -> None:
             session.status.value,
             str(len(session.follow_up_questions)),
             str(len(session.user_answers)),
+            "yes" if session.draft_experience_entry is not None else "no",
             session.updated_at.isoformat(),
         )
 
@@ -513,8 +604,25 @@ def experience_answer(session_id: str) -> None:
         _handle_experience_error(error)
 
     console.print(f"Saved answers for session [bold]{updated.id}[/bold].")
-    console.print("Next: draft an experience entry once the draft workflow is available.")
+    console.print(
+        "Next: draft an experience entry with `career-agent experience draft SESSION_ID`."
+    )
     _render_intake_answers(updated)
+
+
+@experience_app.command("draft")
+def experience_draft(session_id: str) -> None:
+    """Generate a draft experience entry using the configured LLM assistant."""
+
+    try:
+        service = _build_experience_intake_service(include_assistant=True)
+        session = service.generate_draft_entry(session_id)
+    except (ValueError, RuntimeError, httpx.HTTPError) as error:
+        _handle_experience_error(error)
+
+    console.print(f"Generated draft experience entry for session [bold]{session.id}[/bold].")
+    if session.draft_experience_entry is not None:
+        _render_experience_entry(session.draft_experience_entry)
 
 
 app.add_typer(preferences_app, name="preferences")

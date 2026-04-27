@@ -22,15 +22,17 @@ Implemented:
 - `experience create`
 - `experience list`
 - `experience show`
+- `experience details`
 - `experience source`
 - `experience questions`
 - `experience answer`
+- `experience draft`
 - `tui`
 
 Planned next:
 - refine Textual preferences validation and keyboard navigation
 - `profile wizard` or profile authoring screen for high-level `CareerProfile` fields
-- continue experience intake workflow toward answers, draft entries, and acceptance into `CareerProfile`
+- continue experience intake workflow toward review and acceptance into `CareerProfile`
 - AI-assisted job normalization and fit matching
 - tailored document generation
 
@@ -161,13 +163,15 @@ Create an experience intake session, capture source text, and generate follow-up
 
 ```bash
 uv run career-agent experience create
+uv run career-agent experience details <session-id> --employer-name "Acme Analytics" --job-title "Senior Data Engineer"
 uv run career-agent experience source <session-id> --text "- Built reporting pipeline"
 uv run career-agent experience questions <session-id>
 uv run career-agent experience answer <session-id>
+uv run career-agent experience draft <session-id>
 uv run career-agent experience show <session-id>
 ```
 
-The `experience questions` command calls the configured OpenAI-compatible LLM endpoint. Use a local endpoint if you want this workflow to remain local-first.
+The `experience questions` and `experience draft` commands call the configured OpenAI-compatible LLM endpoint. Use a local endpoint if you want this workflow to remain local-first.
 
 ## Configuration
 
@@ -241,7 +245,7 @@ CAREER_AGENT_LLM_MODEL=gpt-4.1-mini
 
 Role-specific extraction and evaluation settings can point to different OpenAI-compatible endpoints if your local or hosted model router separates those workloads.
 
-LLM configuration is optional. Profile and preference workflows do not require an LLM connection. The `experience questions` command requires a configured OpenAI-compatible endpoint because it sends captured experience source text to the configured model provider.
+LLM configuration is optional. Profile and preference workflows do not require an LLM connection. The `experience questions` and `experience draft` commands require a configured OpenAI-compatible endpoint because they send captured experience intake data to the configured model provider.
 
 The project is currently developed and tested on Linux. The storage and configuration code is written with `pathlib` for cross-platform path handling, but Windows should be validated before claiming full Windows support.
 

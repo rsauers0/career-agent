@@ -7,9 +7,10 @@ import httpx
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from career_agent.config import Settings
-from career_agent.domain.models import ExperienceIntakeSession, IntakeQuestion
+from career_agent.domain.models import ExperienceEntry, ExperienceIntakeSession, IntakeQuestion
 
 FOLLOW_UP_QUESTIONS_PROMPT_VERSION = "experience_follow_up_questions.v1"
+DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION = "experience_draft_entry.v1"
 
 FOLLOW_UP_QUESTIONS_SYSTEM_PROMPT = """
 You are assisting with a career experience intake workflow.
@@ -45,11 +46,62 @@ Return only valid JSON with this exact shape:
 }
 """.strip()
 
+DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT = """
+You are assisting with a career experience intake workflow.
+
+The user has provided raw source text and answers to follow-up questions for one
+specific role. Your job is to draft a structured ExperienceEntry object that
+can be reviewed by the user before it becomes canonical career profile data.
+
+Focus on:
+- turning duty-style statements into accomplishment-focused content
+- preserving only facts supported by the source text or user answers
+- separating responsibilities, accomplishments, metrics, tools, skills, domains, and scope notes
+- using concise, resume-appropriate language
+
+Rules:
+- Do not invent facts.
+- Do not invent metrics.
+- Do not add employer or job title values beyond the role metadata provided.
+- If a detail is not supported, omit it or leave the field empty/null.
+- Prefer concrete accomplishments over generic duties when the provided facts support them.
+- Keep list items concise and useful for later resume tailoring.
+
+Return only valid JSON with this exact shape:
+{
+  "experience_entry": {
+    "employer_name": "Provided employer name",
+    "job_title": "Provided job title",
+    "location": null,
+    "employment_type": null,
+    "start_date": null,
+    "end_date": null,
+    "is_current_role": false,
+    "role_summary": "Short role summary, or null",
+    "responsibilities": [],
+    "accomplishments": [],
+    "metrics": [],
+    "systems_and_tools": [],
+    "skills_demonstrated": [],
+    "domains": [],
+    "team_context": null,
+    "scope_notes": null,
+    "keywords": []
+  }
+}
+""".strip()
+
 
 class FollowUpQuestionsResponse(BaseModel):
     """Structured response expected from the follow-up question prompt."""
 
     questions: list[IntakeQuestion] = Field(min_length=1, max_length=7)
+
+
+class DraftExperienceEntryResponse(BaseModel):
+    """Structured response expected from the draft experience entry prompt."""
+
+    experience_entry: ExperienceEntry
 
 
 class OpenAICompatibleExperienceIntakeAssistant:
@@ -114,6 +166,36 @@ class OpenAICompatibleExperienceIntakeAssistant:
         parsed = self._parse_follow_up_questions_response(content)
         return parsed.questions
 
+    def draft_experience_entry(
+        self,
+        session: ExperienceIntakeSession,
+    ) -> ExperienceEntry:
+        """Draft a structured experience entry for one answered intake session."""
+
+        if not session.source_text:
+            msg = "Experience intake source text is required."
+            raise ValueError(msg)
+        if not session.employer_name:
+            msg = "Experience intake employer name is required."
+            raise ValueError(msg)
+        if not session.job_title:
+            msg = "Experience intake job title is required."
+            raise ValueError(msg)
+        if not session.user_answers:
+            msg = "Experience intake answers are required."
+            raise ValueError(msg)
+
+        response = self.client.post(
+            f"{self.base_url}/chat/completions",
+            headers=self._headers(),
+            json=self._build_draft_experience_entry_payload(session),
+        )
+        response.raise_for_status()
+
+        content = self._extract_message_content(response.json())
+        parsed = self._parse_draft_experience_entry_response(content)
+        return parsed.experience_entry
+
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.api_key is not None:
@@ -151,6 +233,36 @@ class OpenAICompatibleExperienceIntakeAssistant:
             "response_format": {"type": "json_object"},
         }
 
+    def _build_draft_experience_entry_payload(
+        self,
+        session: ExperienceIntakeSession,
+    ) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Prompt version: {DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION}\n\n"
+                        f"Experience intake session ID: {session.id}\n\n"
+                        "Role metadata:\n"
+                        f"- Employer: {session.employer_name}\n"
+                        f"- Job title: {session.job_title}\n\n"
+                        "Source text for one role:\n"
+                        f"{session.source_text}\n\n"
+                        "Follow-up questions and user answers:\n"
+                        f"{_format_question_answer_pairs(session)}"
+                    ),
+                },
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+
     def _extract_message_content(self, response_payload: dict[str, Any]) -> str:
         try:
             content = response_payload["choices"][0]["message"]["content"]
@@ -174,6 +286,29 @@ class OpenAICompatibleExperienceIntakeAssistant:
         except (json.JSONDecodeError, ValidationError) as error:
             msg = "LLM response did not match the follow-up questions schema."
             raise ValueError(msg) from error
+
+    def _parse_draft_experience_entry_response(
+        self,
+        content: str,
+    ) -> DraftExperienceEntryResponse:
+        try:
+            payload = json.loads(_strip_json_fence(content))
+            return DraftExperienceEntryResponse.model_validate(payload)
+        except (json.JSONDecodeError, ValidationError) as error:
+            msg = "LLM response did not match the draft experience entry schema."
+            raise ValueError(msg) from error
+
+
+def _format_question_answer_pairs(session: ExperienceIntakeSession) -> str:
+    question_text_by_id = {
+        question.id: question.question for question in session.follow_up_questions
+    }
+    lines = []
+    for index, answer in enumerate(session.user_answers, start=1):
+        question = question_text_by_id.get(answer.question_id, answer.question_id)
+        lines.append(f"{index}. Question: {question}\n   Answer: {answer.answer}")
+
+    return "\n".join(lines)
 
 
 def _strip_json_fence(content: str) -> str:

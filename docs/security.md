@@ -15,7 +15,7 @@ expectations. It is not a formal third-party security audit.
 - No account system is implemented.
 - No hosted application service is required to use the current CLI or TUI workflows.
 - Current profile and preference workflows do not send career data to external services.
-- An OpenAI-compatible LLM adapter exists for experience intake and can be triggered through the `experience questions` CLI command.
+- OpenAI-compatible LLM adapter calls can be triggered through the `experience questions` and `experience draft` CLI commands.
 - Optional LLM endpoint settings may be configured for LLM-assisted workflows, but they are not used by profile or preference workflows.
 - No telemetry or background network calls are implemented.
 

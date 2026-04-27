@@ -117,9 +117,11 @@ Completed validation includes:
 - `experience create`
 - `experience list`
 - `experience show`
+- `experience details`
 - `experience source`
 - `experience questions`
 - `experience answer`
+- `experience draft`
 - `tui`
 
 ### TUI Foundation
@@ -185,10 +187,13 @@ Completed scope:
 - OpenAI-compatible experience intake assistant adapter added behind the assistant protocol
 - CLI commands added for creating sessions, capturing source text, showing/listing sessions, and generating follow-up questions
 - CLI command added for capturing user answers to generated follow-up questions
+- role metadata capture added for intake sessions so employer and title are not invented during drafting
+- draft generation added for answered intake sessions, storing a draft `ExperienceEntry`
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
 - keep accepted sessions archived for development traceability and future eval/prompt improvement
+- add review and acceptance flow to copy draft entries into canonical `CareerProfile`
 - compose experience intake into the TUI after the CLI path is validated
 
 ### Career Profile Authoring
@@ -207,11 +212,14 @@ Current commands:
 - `experience list`
 - `experience create`
 - `experience show`
+- `experience details`
 - `experience source`
 - `experience questions`
 - `experience answer`
+- `experience draft`
 
 Planned commands:
+- `experience accept`
 - `experience edit`
 
 Initial scope:
