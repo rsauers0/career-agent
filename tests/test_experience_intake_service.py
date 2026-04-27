@@ -144,6 +144,40 @@ def test_capture_source_text_updates_existing_session() -> None:
     assert repository.load_session("session-123") == updated
 
 
+def test_capture_source_text_can_append_to_existing_source_text() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        source_text="- Built reporting pipeline",
+    )
+    repository.save_session(session)
+
+    updated = service.capture_source_text(
+        "session-123",
+        "- Added alerting",
+        append=True,
+    )
+
+    assert updated.source_text == "- Built reporting pipeline\n\n- Added alerting"
+    assert updated.status == ExperienceIntakeStatus.SOURCE_CAPTURED
+
+
+def test_capture_source_text_append_without_existing_source_behaves_like_save() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    updated = service.capture_source_text(
+        "session-123",
+        "- Added alerting",
+        append=True,
+    )
+
+    assert updated.source_text == "- Added alerting"
+
+
 def test_capture_source_text_rejects_missing_session() -> None:
     service = ExperienceIntakeService(FakeExperienceIntakeRepository())
 

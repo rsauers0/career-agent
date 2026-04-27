@@ -218,6 +218,101 @@ def test_experience_source_captures_source_text(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
+def test_experience_source_reads_source_text_from_file(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    source_file = tmp_path / "bullets.md"
+    source_file.write_text(
+        "- Built reporting pipeline\n- Automated spreadsheet extracts\n",
+        encoding="utf-8",
+    )
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+
+    result = runner.invoke(
+        app,
+        ["experience", "source", session_id, "--from-file", str(source_file)],
+    )
+    updated = repository.load_session(session_id)
+
+    assert result.exit_code == 0
+    assert updated is not None
+    assert updated.source_text == "- Built reporting pipeline\n- Automated spreadsheet extracts"
+
+    get_settings.cache_clear()
+
+
+def test_experience_source_can_append_source_text(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    source_file = tmp_path / "more-bullets.md"
+    source_file.write_text("- Added alerting\n", encoding="utf-8")
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+    runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--text",
+            "- Built reporting pipeline",
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--from-file",
+            str(source_file),
+            "--append",
+        ],
+    )
+    updated = repository.load_session(session_id)
+
+    assert result.exit_code == 0
+    assert updated is not None
+    assert updated.source_text == "- Built reporting pipeline\n\n- Added alerting"
+
+    get_settings.cache_clear()
+
+
+def test_experience_source_rejects_text_and_file_together(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    source_file = tmp_path / "bullets.md"
+    source_file.write_text("- Built reporting pipeline\n", encoding="utf-8")
+    repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(app, ["experience", "create"])
+    session_id = repository.list_sessions()[0].id
+
+    result = runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--text",
+            "- Inline bullet",
+            "--from-file",
+            str(source_file),
+        ],
+    )
+    updated = repository.load_session(session_id)
+
+    assert result.exit_code == 1
+    assert "Use either --text or --from-file, not both." in result.output
+    assert updated is not None
+    assert updated.source_text is None
+
+    get_settings.cache_clear()
+
+
 def test_experience_show_displays_session(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))

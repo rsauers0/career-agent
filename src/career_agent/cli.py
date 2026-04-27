@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import typer
 from rich.console import Console
@@ -541,15 +543,36 @@ def experience_source(
         "-t",
         help="Raw bullets or notes for one role. If omitted, the CLI prompts for text.",
     ),
+    from_file: Path | None = typer.Option(
+        None,
+        "--from-file",
+        "-f",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Read raw bullets or notes from a text file.",
+    ),
+    append: bool = typer.Option(
+        False,
+        "--append",
+        help="Append source text instead of replacing existing source text.",
+    ),
 ) -> None:
     """Capture raw source text for one role-specific intake session."""
 
-    if source_text is None:
+    if source_text is not None and from_file is not None:
+        console.print("[red]Use either --text or --from-file, not both.[/red]")
+        raise typer.Exit(1)
+
+    if from_file is not None:
+        source_text = from_file.read_text(encoding="utf-8")
+    elif source_text is None:
         source_text = typer.prompt("Source text")
 
     service = _build_experience_intake_service()
     try:
-        session = service.capture_source_text(session_id, source_text)
+        session = service.capture_source_text(session_id, source_text, append=append)
     except ValueError as error:
         _handle_experience_error(error)
 

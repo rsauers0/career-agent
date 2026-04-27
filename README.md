@@ -166,6 +166,8 @@ Create an experience intake session, capture source text, and generate follow-up
 uv run career-agent experience create
 uv run career-agent experience details <session-id> --employer-name "Acme Analytics" --job-title "Senior Data Engineer"
 uv run career-agent experience source <session-id> --text "- Built reporting pipeline"
+uv run career-agent experience source <session-id> --from-file bullets.md
+uv run career-agent experience source <session-id> --text "- Added alerting" --append
 uv run career-agent experience questions <session-id>
 uv run career-agent experience answer <session-id>
 uv run career-agent experience draft <session-id>
@@ -174,6 +176,7 @@ uv run career-agent experience show <session-id>
 ```
 
 The `experience accept` command copies the draft `ExperienceEntry` into the canonical `CareerProfile`.
+By default, `experience source` replaces source text. Use `--append` to add to existing source text.
 
 The `experience questions` and `experience draft` commands call the configured OpenAI-compatible LLM endpoint. Use a local endpoint if you want this workflow to remain local-first.
 

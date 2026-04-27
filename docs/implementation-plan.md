@@ -227,6 +227,7 @@ Planned commands:
 Initial scope:
 - create and resume intake sessions for one role at a time
 - capture raw bullets or notes for a specific job/role, not an entire resume dump
+- support multiline source capture from files and intentional source-text appends
 - use guided LLM-assisted steps to clarify missing details and frame work as accomplishments
 - accept reviewed draft entries into canonical `CareerProfile`
 

@@ -57,6 +57,8 @@ class ExperienceIntakeService:
         self,
         session_id: str,
         source_text: str,
+        *,
+        append: bool = False,
     ) -> ExperienceIntakeSession:
         """Store role-specific source text for an existing intake session."""
 
@@ -69,6 +71,9 @@ class ExperienceIntakeService:
         if not normalized_source_text:
             msg = "Experience intake source text is required."
             raise ValueError(msg)
+
+        if append and session.source_text:
+            normalized_source_text = f"{session.source_text.rstrip()}\n\n{normalized_source_text}"
 
         updated = session.model_copy(
             update={
