@@ -5,6 +5,12 @@ from career_agent.domain.models import (
     CareerProfile,
     CommuteDistanceUnit,
     ExperienceEntry,
+    ExperienceIntakeSession,
+    ExperienceIntakeStatus,
+    IntakeAnswer,
+    IntakeMessage,
+    IntakeMessageRole,
+    IntakeQuestion,
     UserPreferences,
     WorkArrangement,
     YearMonth,
@@ -73,7 +79,18 @@ def test_experience_entry_json_round_trip() -> None:
     restored = ExperienceEntry.model_validate_json(payload)
 
     assert restored == experience
+    assert experience.id
     assert experience.start_date == YearMonth(year=2021, month=5)
+
+
+def test_experience_entry_accepts_legacy_experience_id_input() -> None:
+    experience = ExperienceEntry(
+        experience_id="exp-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+
+    assert experience.id == "exp-123"
 
 
 def test_experience_entry_rejects_end_date_before_start_date() -> None:
@@ -127,9 +144,9 @@ def test_career_profile_json_round_trip() -> None:
     assert restored == profile
 
 
-def test_career_profile_rejects_duplicate_experience_ids() -> None:
+def test_career_profile_rejects_duplicate_experience_entry_ids() -> None:
     experience = ExperienceEntry(
-        experience_id="exp-123",
+        id="exp-123",
         employer_name="Acme Analytics",
         job_title="Senior Data Engineer",
     )
@@ -139,9 +156,85 @@ def test_career_profile_rejects_duplicate_experience_ids() -> None:
             experience_entries=[
                 experience,
                 ExperienceEntry(
-                    experience_id="exp-123",
+                    id="exp-123",
                     employer_name="Beta Insights",
                     job_title="Lead Data Engineer",
                 ),
             ]
         )
+
+
+def test_experience_intake_session_json_round_trip() -> None:
+    question = IntakeQuestion(
+        id="question-1",
+        question="What business outcome did this work support?",
+        rationale="Business impact helps convert duties into accomplishments.",
+    )
+    answer = IntakeAnswer(
+        question_id=question.id,
+        answer="It reduced repeated manual reporting work for finance analysts.",
+    )
+    draft_entry = ExperienceEntry(
+        id="exp-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        accomplishments=["Reduced manual reporting effort for finance analysts."],
+    )
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.ACCEPTED,
+        source_text="- Built reporting pipeline",
+        transcript=[
+            IntakeMessage(
+                role=IntakeMessageRole.USER,
+                content="I built a reporting pipeline.",
+            ),
+            IntakeMessage(
+                role=IntakeMessageRole.ASSISTANT,
+                content="What outcome did that create?",
+            ),
+        ],
+        follow_up_questions=[question],
+        user_answers=[answer],
+        draft_experience_entry=draft_entry,
+        accepted_experience_entry_id=draft_entry.id,
+    )
+
+    payload = session.model_dump_json()
+    restored = ExperienceIntakeSession.model_validate_json(payload)
+
+    assert restored == session
+    assert restored.status == ExperienceIntakeStatus.ACCEPTED
+    assert restored.draft_experience_entry is not None
+    assert restored.accepted_experience_entry_id == restored.draft_experience_entry.id
+
+
+def test_experience_intake_session_defaults_to_draft_with_timestamps() -> None:
+    session = ExperienceIntakeSession()
+
+    assert session.status == ExperienceIntakeStatus.DRAFT
+    assert session.created_at.tzinfo is not None
+    assert session.updated_at.tzinfo is not None
+
+
+def test_experience_intake_session_requires_acceptance_id_when_accepted() -> None:
+    with pytest.raises(ValidationError):
+        ExperienceIntakeSession(status=ExperienceIntakeStatus.ACCEPTED)
+
+
+def test_experience_intake_session_rejects_mismatched_acceptance_id() -> None:
+    with pytest.raises(ValidationError):
+        ExperienceIntakeSession(
+            status=ExperienceIntakeStatus.ACCEPTED,
+            draft_experience_entry=ExperienceEntry(
+                id="exp-123",
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+            ),
+            accepted_experience_entry_id="different-id",
+        )
+
+
+def test_experience_intake_session_rejects_naive_timestamps() -> None:
+    with pytest.raises(ValidationError):
+        ExperienceIntakeSession(created_at="2026-01-01T00:00:00")

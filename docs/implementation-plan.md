@@ -81,7 +81,7 @@ Completed validation includes:
 - timezone validation
 - commute unit validation
 - experience date consistency
-- unique `experience_id` values inside `CareerProfile`
+- unique `ExperienceEntry.id` values inside `CareerProfile`
 
 ### Configuration
 - `config.py` implemented with `pydantic-settings`

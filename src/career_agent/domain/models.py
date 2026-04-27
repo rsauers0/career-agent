@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 
 class CommuteDistanceUnit(StrEnum):
@@ -22,6 +22,32 @@ class WorkArrangement(StrEnum):
     REMOTE = "remote"
     HYBRID = "hybrid"
     ONSITE = "onsite"
+
+
+class ExperienceIntakeStatus(StrEnum):
+    """Workflow states for one role-specific experience intake session."""
+
+    DRAFT = "draft"
+    SOURCE_CAPTURED = "source_captured"
+    QUESTIONS_GENERATED = "questions_generated"
+    ANSWERS_CAPTURED = "answers_captured"
+    DRAFT_GENERATED = "draft_generated"
+    ACCEPTED = "accepted"
+    ABANDONED = "abandoned"
+
+
+class IntakeMessageRole(StrEnum):
+    """Supported transcript message roles for intake workflows."""
+
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
+def utc_now() -> datetime:
+    """Return a timezone-aware UTC timestamp."""
+
+    return datetime.now(timezone.utc)
 
 
 def validate_iana_time_zone(value: str | None) -> str | None:
@@ -140,8 +166,9 @@ class UserPreferences(BaseModel):
 class ExperienceEntry(BaseModel):
     """Canonical normalized representation of a single work experience entry."""
 
-    experience_id: str = Field(
+    id: str = Field(
         default_factory=lambda: str(uuid4()),
+        validation_alias=AliasChoices("id", "experience_id"),
         description="Stable identifier for the experience entry.",
     )
     employer_name: str = Field(min_length=1, description="Employer or client name.")
@@ -223,6 +250,136 @@ class ExperienceEntry(BaseModel):
         return self
 
 
+class IntakeMessage(BaseModel):
+    """One retained transcript message from an experience intake workflow."""
+
+    role: IntakeMessageRole = Field(description="Message author role.")
+    content: str = Field(min_length=1, description="Message content.")
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC creation timestamp.",
+    )
+
+    @field_validator("created_at")
+    @classmethod
+    def validate_created_at_timezone(cls, value: datetime) -> datetime:
+        """Ensure retained transcript timestamps are timezone-aware."""
+
+        return validate_timezone_aware(value, "created_at")
+
+
+class IntakeQuestion(BaseModel):
+    """One structured follow-up question generated during intake."""
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Stable identifier for the intake question.",
+    )
+    question: str = Field(min_length=1, description="Question to ask the user.")
+    rationale: str | None = Field(
+        default=None,
+        description="Optional explanation of why the question matters.",
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC creation timestamp.",
+    )
+
+    @field_validator("created_at")
+    @classmethod
+    def validate_created_at_timezone(cls, value: datetime) -> datetime:
+        """Ensure question timestamps are timezone-aware."""
+
+        return validate_timezone_aware(value, "created_at")
+
+
+class IntakeAnswer(BaseModel):
+    """One user answer to a structured intake question."""
+
+    question_id: str = Field(min_length=1, description="Identifier of the answered question.")
+    answer: str = Field(min_length=1, description="User-provided answer.")
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC creation timestamp.",
+    )
+
+    @field_validator("created_at")
+    @classmethod
+    def validate_created_at_timezone(cls, value: datetime) -> datetime:
+        """Ensure answer timestamps are timezone-aware."""
+
+        return validate_timezone_aware(value, "created_at")
+
+
+class ExperienceIntakeSession(BaseModel):
+    """Recoverable workflow state for creating one future experience entry."""
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Stable identifier for the intake session.",
+    )
+    status: ExperienceIntakeStatus = Field(
+        default=ExperienceIntakeStatus.DRAFT,
+        description="Current intake workflow state.",
+    )
+    source_text: str | None = Field(
+        default=None,
+        description="Raw source bullets or notes for one role-specific experience.",
+    )
+    transcript: list[IntakeMessage] = Field(
+        default_factory=list,
+        description="Retained local transcript for development traceability.",
+    )
+    follow_up_questions: list[IntakeQuestion] = Field(
+        default_factory=list,
+        description="Structured follow-up questions generated for this intake.",
+    )
+    user_answers: list[IntakeAnswer] = Field(
+        default_factory=list,
+        description="User answers to generated follow-up questions.",
+    )
+    draft_experience_entry: ExperienceEntry | None = Field(
+        default=None,
+        description="Draft structured experience entry awaiting review or acceptance.",
+    )
+    accepted_experience_entry_id: str | None = Field(
+        default=None,
+        description="Identifier of the accepted canonical experience entry, if any.",
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC creation timestamp.",
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC update timestamp.",
+    )
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def validate_timestamp_timezone(cls, value: datetime) -> datetime:
+        """Ensure intake session timestamps are timezone-aware."""
+
+        return validate_timezone_aware(value, "timestamp")
+
+    @model_validator(mode="after")
+    def validate_acceptance_link(self) -> ExperienceIntakeSession:
+        """Ensure accepted intake sessions link to their accepted experience entry."""
+
+        if self.status is ExperienceIntakeStatus.ACCEPTED:
+            if not self.accepted_experience_entry_id:
+                msg = "accepted_experience_entry_id is required when status is accepted."
+                raise ValueError(msg)
+            if (
+                self.draft_experience_entry is not None
+                and self.accepted_experience_entry_id != self.draft_experience_entry.id
+            ):
+                msg = "accepted_experience_entry_id must match draft_experience_entry.id."
+                raise ValueError(msg)
+
+        return self
+
+
 class CareerProfile(BaseModel):
     """Canonical structured career profile used to generate tailored job documents."""
 
@@ -270,14 +427,23 @@ class CareerProfile(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_unique_experience_ids(self) -> CareerProfile:
+    def validate_unique_experience_entry_ids(self) -> CareerProfile:
         """Ensure the profile does not contain duplicate experience entries."""
 
         seen: set[str] = set()
         for entry in self.experience_entries:
-            if entry.experience_id in seen:
-                msg = "experience_entries cannot contain duplicate experience_id values."
+            if entry.id in seen:
+                msg = "experience_entries cannot contain duplicate id values."
                 raise ValueError(msg)
-            seen.add(entry.experience_id)
+            seen.add(entry.id)
 
         return self
+
+
+def validate_timezone_aware(value: datetime, field_name: str) -> datetime:
+    """Validate that a timestamp includes timezone information."""
+
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        msg = f"{field_name} must be timezone-aware."
+        raise ValueError(msg)
+    return value
