@@ -173,12 +173,14 @@ Completed scope:
 - local JSON persistence added for intake sessions under `intake/experience`
 - snapshot-on-overwrite behavior added for intake sessions
 - application service added for creating, listing, loading, and capturing source text for sessions
+- assistant protocol added for the first narrow LLM step: source text -> follow-up questions
+- service workflow added and tested with a fake assistant for generating follow-up questions
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
 - keep accepted sessions archived for development traceability and future eval/prompt improvement
-- introduce an assistant protocol for the first narrow LLM step: source text -> follow-up questions
-- test the workflow with a fake assistant before wiring a real model provider
+- define prompt content and structured-output handling for the first real assistant adapter
+- wire the first OpenAI-compatible model provider behind the assistant protocol
 
 ### Career Profile Authoring
 Treat `CareerProfile` as the accepted, structured result of guided workflows rather than a large manual data-entry form.

@@ -6,6 +6,7 @@ from career_agent.domain.models import (
     CareerProfile,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    IntakeQuestion,
     UserPreferences,
 )
 
@@ -49,3 +50,13 @@ class ExperienceIntakeRepository(Protocol):
         status: ExperienceIntakeStatus,
     ) -> list[ExperienceIntakeSession]:
         """Return intake sessions matching a workflow status."""
+
+
+class ExperienceIntakeAssistant(Protocol):
+    """Assistant contract for LLM-assisted experience intake workflow steps."""
+
+    def generate_follow_up_questions(
+        self,
+        session: ExperienceIntakeSession,
+    ) -> list[IntakeQuestion]:
+        """Generate structured follow-up questions for an intake session."""
