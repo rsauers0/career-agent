@@ -75,6 +75,7 @@ The experience workflow should specifically help users reframe duty-list resume 
 - `UserPreferences`
 - `YearMonth`
 - `ExperienceEntry`
+- `ExperienceIntakeSession`
 - `CareerProfile`
 
 Completed validation includes:
@@ -82,6 +83,7 @@ Completed validation includes:
 - commute unit validation
 - experience date consistency
 - unique `ExperienceEntry.id` values inside `CareerProfile`
+- recoverable experience intake status transitions and accepted-entry consistency
 
 ### Configuration
 - `config.py` implemented with `pydantic-settings`
@@ -91,12 +93,15 @@ Completed validation includes:
 ### Persistence
 - repository protocol added
 - file-backed profile repository implemented
+- file-backed experience intake repository implemented
 - JSON persistence for `UserPreferences` and `CareerProfile`
+- JSON persistence for recoverable experience intake sessions
 - snapshot-on-overwrite behavior implemented
 - storage scaffolding initialization implemented
 
 ### Application Layer
 - `ProfileService` implemented
+- `ExperienceIntakeService` implemented for creating, listing, loading, and capturing source text for intake sessions
 - reusable preferences normalization/builder logic added
 - reusable component status model and user preferences status evaluation added
 - dashboard status aggregation added
@@ -126,6 +131,7 @@ Completed validation includes:
 - config tests
 - repository tests
 - profile service tests
+- experience intake service tests
 - CLI tests for current commands
 - dashboard status tests
 - TUI factory and formatting tests
@@ -160,11 +166,16 @@ Planned scope:
 ### Experience Intake Foundation
 Build the first role-specific, resumable intake workflow before building a broad Career Profile form.
 
-Initial scope:
-- add stable IDs to `ExperienceEntry`
-- define an `ExperienceIntakeSession` model scoped to one future `ExperienceEntry`
-- define intake statuses such as `draft`, `source_captured`, `questions_generated`, `answers_captured`, `draft_generated`, `accepted`, and `abandoned`
-- store source text, structured questions, answers, transcript messages, draft output, prompt/model metadata, and timestamps locally
+Completed scope:
+- stable IDs added to `ExperienceEntry`
+- `ExperienceIntakeSession` model added and scoped to one future `ExperienceEntry`
+- intake statuses added: `draft`, `source_captured`, `questions_generated`, `answers_captured`, `draft_generated`, `accepted`, and `abandoned`
+- local JSON persistence added for intake sessions under `intake/experience`
+- snapshot-on-overwrite behavior added for intake sessions
+- application service added for creating, listing, loading, and capturing source text for sessions
+
+Remaining initial scope:
+- store prompt/model metadata and evaluation results as workflow steps are added
 - keep accepted sessions archived for development traceability and future eval/prompt improvement
 - introduce an assistant protocol for the first narrow LLM step: source text -> follow-up questions
 - test the workflow with a fake assistant before wiring a real model provider

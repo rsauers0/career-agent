@@ -28,6 +28,7 @@ This map reflects the files currently tracked in Git.
     application/
       __init__.py                      # application package marker
       dashboard.py                     # dashboard section and status aggregation
+      experience_intake_service.py     # application service for recoverable experience intake
       ports.py                         # repository protocols used by application services
       preferences_builder.py           # converts raw preference input into validated models
       profile_service.py               # application service for profile-related workflows
@@ -51,6 +52,7 @@ This map reflects the files currently tracked in Git.
     test_cli.py                        # CLI behavior tests
     test_config.py                     # settings/configuration tests
     test_dashboard.py                  # dashboard status aggregation tests
+    test_experience_intake_service.py  # experience intake service tests
     test_models.py                     # domain model validation and round-trip tests
     test_preferences_builder.py        # preference input normalization tests
     test_profile_service.py            # application service tests
@@ -79,6 +81,7 @@ Current files:
 
 - `src/career_agent/application/ports.py`
 - `src/career_agent/application/dashboard.py`
+- `src/career_agent/application/experience_intake_service.py`
 - `src/career_agent/application/preferences_builder.py`
 - `src/career_agent/application/profile_service.py`
 - `src/career_agent/application/status.py`

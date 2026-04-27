@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from career_agent.domain.models import CareerProfile, UserPreferences
+from career_agent.domain.models import (
+    CareerProfile,
+    ExperienceIntakeSession,
+    ExperienceIntakeStatus,
+    UserPreferences,
+)
 
 
 class ProfileRepository(Protocol):
@@ -25,3 +30,22 @@ class ProfileRepository(Protocol):
 
     def save_career_profile(self, profile: CareerProfile) -> None:
         """Persist the canonical career profile."""
+
+
+class ExperienceIntakeRepository(Protocol):
+    """Persistence contract for recoverable experience intake workflow state."""
+
+    def load_session(self, session_id: str) -> ExperienceIntakeSession | None:
+        """Load an intake session, or return `None` if it does not exist."""
+
+    def save_session(self, session: ExperienceIntakeSession) -> None:
+        """Persist an intake session."""
+
+    def list_sessions(self) -> list[ExperienceIntakeSession]:
+        """Return all intake sessions."""
+
+    def list_sessions_by_status(
+        self,
+        status: ExperienceIntakeStatus,
+    ) -> list[ExperienceIntakeSession]:
+        """Return intake sessions matching a workflow status."""
