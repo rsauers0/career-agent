@@ -191,6 +191,7 @@ Completed scope:
 - role metadata capture added for intake sessions so employer and title are not invented during drafting
 - draft generation added for answered intake sessions, storing a draft `ExperienceEntry`
 - accept flow added to copy draft entries into canonical `CareerProfile`
+- experience intake prompts moved to versioned Markdown templates
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added

@@ -41,6 +41,10 @@ This map reflects the files currently tracked in Git.
     infrastructure/
       __init__.py                      # infrastructure package marker
       llm.py                           # OpenAI-compatible LLM assistant adapters
+      prompts/
+        __init__.py                    # prompt template package marker
+        experience_draft_entry.v1.md   # prompt for drafting experience entries
+        experience_follow_up_questions.v1.md  # prompt for intake questions
       repositories.py                  # file-backed JSON persistence and snapshots
 
     interfaces/
@@ -69,7 +73,7 @@ This map reflects the files currently tracked in Git.
 
 The domain layer defines the application's core data structures and validation rules.
 
-Current file:
+Current files:
 
 - `src/career_agent/domain/models.py`
 
@@ -97,9 +101,10 @@ The infrastructure layer implements technical adapters for storage or external s
 Current file:
 
 - `src/career_agent/infrastructure/llm.py`
+- `src/career_agent/infrastructure/prompts/`
 - `src/career_agent/infrastructure/repositories.py`
 
-This layer handles local filesystem persistence and OpenAI-compatible LLM adapters. Future examples may include renderers, database implementations, or additional provider adapters.
+This layer handles local filesystem persistence, OpenAI-compatible LLM adapters, and versioned prompt templates. Future examples may include renderers, database implementations, or additional provider adapters.
 
 ### Interfaces
 

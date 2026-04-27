@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from importlib import resources
 from typing import Any
 
 import httpx
@@ -9,87 +10,23 @@ from pydantic import BaseModel, Field, SecretStr, ValidationError
 from career_agent.config import Settings
 from career_agent.domain.models import ExperienceEntry, ExperienceIntakeSession, IntakeQuestion
 
+
+def _load_prompt(filename: str) -> str:
+    """Load a versioned prompt template bundled with the package."""
+
+    return (
+        resources.files("career_agent.infrastructure.prompts")
+        .joinpath(filename)
+        .read_text(encoding="utf-8")
+        .strip()
+    )
+
+
 FOLLOW_UP_QUESTIONS_PROMPT_VERSION = "experience_follow_up_questions.v1"
 DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION = "experience_draft_entry.v1"
 
-FOLLOW_UP_QUESTIONS_SYSTEM_PROMPT = """
-You are assisting with a career experience intake workflow.
-
-The user provided raw notes or resume bullets for one specific role. Your job is
-to generate focused follow-up questions that will help transform those notes
-into a strong, accomplishment-focused experience entry.
-
-Analyze the source text for:
-- duty-style statements that need impact or outcome details
-- missing metrics, scale, frequency, volume, cost, time, risk, quality, or reliability details
-- unclear ownership, collaboration, leadership, or scope
-- tools, systems, platforms, and technologies that may need clarification
-- before/after improvements or business outcomes that are implied but not proven
-
-Rules:
-- Do not draft resume bullets.
-- Do not invent facts.
-- Do not assume metrics that were not provided.
-- Do not ask questions already answered by the source text.
-- Ask one concept per question.
-- Prefer questions that help convert duties into accomplishments.
-- Return 3 to 7 follow-up questions.
-
-Return only valid JSON with this exact shape:
-{
-  "questions": [
-    {
-      "question": "The exact question to ask the user.",
-      "rationale": "Why this question matters for improving the experience entry."
-    }
-  ]
-}
-""".strip()
-
-DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT = """
-You are assisting with a career experience intake workflow.
-
-The user has provided raw source text and answers to follow-up questions for one
-specific role. Your job is to draft a structured ExperienceEntry object that
-can be reviewed by the user before it becomes canonical career profile data.
-
-Focus on:
-- turning duty-style statements into accomplishment-focused content
-- preserving only facts supported by the source text or user answers
-- separating responsibilities, accomplishments, metrics, tools, skills, domains, and scope notes
-- using concise, resume-appropriate language
-
-Rules:
-- Do not invent facts.
-- Do not invent metrics.
-- Do not add employer or job title values beyond the role metadata provided.
-- If a detail is not supported, omit it or leave the field empty/null.
-- Prefer concrete accomplishments over generic duties when the provided facts support them.
-- Keep list items concise and useful for later resume tailoring.
-
-Return only valid JSON with this exact shape:
-{
-  "experience_entry": {
-    "employer_name": "Provided employer name",
-    "job_title": "Provided job title",
-    "location": null,
-    "employment_type": null,
-    "start_date": null,
-    "end_date": null,
-    "is_current_role": false,
-    "role_summary": "Short role summary, or null",
-    "responsibilities": [],
-    "accomplishments": [],
-    "metrics": [],
-    "systems_and_tools": [],
-    "skills_demonstrated": [],
-    "domains": [],
-    "team_context": null,
-    "scope_notes": null,
-    "keywords": []
-  }
-}
-""".strip()
+FOLLOW_UP_QUESTIONS_SYSTEM_PROMPT = _load_prompt(f"{FOLLOW_UP_QUESTIONS_PROMPT_VERSION}.md")
+DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT = _load_prompt(f"{DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION}.md")
 
 
 class FollowUpQuestionsResponse(BaseModel):

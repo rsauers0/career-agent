@@ -13,7 +13,9 @@ from career_agent.domain.models import (
 )
 from career_agent.infrastructure.llm import (
     DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION,
+    DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT,
     FOLLOW_UP_QUESTIONS_PROMPT_VERSION,
+    FOLLOW_UP_QUESTIONS_SYSTEM_PROMPT,
     OpenAICompatibleExperienceIntakeAssistant,
 )
 
@@ -58,6 +60,13 @@ def build_chat_completion_response(content: str) -> dict[str, Any]:
             }
         ]
     }
+
+
+def test_prompt_templates_load_from_package_resources() -> None:
+    assert "Return only valid JSON" in FOLLOW_UP_QUESTIONS_SYSTEM_PROMPT
+    assert "Return only valid JSON" in DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT
+    assert FOLLOW_UP_QUESTIONS_PROMPT_VERSION == "experience_follow_up_questions.v1"
+    assert DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION == "experience_draft_entry.v1"
 
 
 def test_generate_follow_up_questions_calls_openai_compatible_endpoint() -> None:
