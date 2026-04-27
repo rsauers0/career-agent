@@ -205,6 +205,50 @@ class ExperienceIntakeService:
         self.repository.save_session(updated)
         return updated
 
+    def update_draft_entry(
+        self,
+        session_id: str,
+        draft: ExperienceEntry,
+    ) -> ExperienceIntakeSession:
+        """Update a generated draft before it is accepted into the career profile."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status is ExperienceIntakeStatus.ACCEPTED:
+            msg = (
+                "Accepted experience intake entries cannot be edited through the "
+                "draft update workflow."
+            )
+            raise ValueError(msg)
+
+        if session.status is not ExperienceIntakeStatus.DRAFT_GENERATED:
+            msg = "Experience intake draft must be generated before it can be updated."
+            raise ValueError(msg)
+
+        if session.draft_experience_entry is None:
+            msg = "Experience intake draft entry is required before updating it."
+            raise ValueError(msg)
+
+        normalized_draft = draft.model_copy(
+            update={
+                "id": session.draft_experience_entry.id,
+                "employer_name": session.employer_name or draft.employer_name,
+                "job_title": session.job_title or draft.job_title,
+            }
+        )
+
+        updated = session.model_copy(
+            update={
+                "draft_experience_entry": normalized_draft,
+                "updated_at": utc_now(),
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
+
     def accept_draft_entry(self, session_id: str) -> ExperienceIntakeSession:
         """Accept a draft experience entry into the canonical career profile."""
 

@@ -543,6 +543,119 @@ def test_generate_draft_entry_requires_role_metadata() -> None:
         service.generate_draft_entry("session-123")
 
 
+def test_update_draft_entry_updates_generated_draft() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    original_draft = ExperienceEntry(
+        id="entry-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        accomplishments=["Old accomplishment."],
+    )
+    edited_draft = ExperienceEntry(
+        id="entry-999",
+        employer_name="Wrong Employer",
+        job_title="Wrong Job",
+        role_summary="Built reporting automation for finance operations.",
+        accomplishments=["Reduced manual reporting time by 10 hours per week."],
+    )
+    session = ExperienceIntakeSession(
+        id="session-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        status=ExperienceIntakeStatus.DRAFT_GENERATED,
+        draft_experience_entry=original_draft,
+    )
+    repository.save_session(session)
+
+    updated = service.update_draft_entry("session-123", edited_draft)
+
+    assert updated.status == ExperienceIntakeStatus.DRAFT_GENERATED
+    assert updated.updated_at > session.updated_at
+    assert updated.draft_experience_entry is not None
+    assert updated.draft_experience_entry.id == "entry-123"
+    assert updated.draft_experience_entry.employer_name == "Acme Analytics"
+    assert updated.draft_experience_entry.job_title == "Senior Data Engineer"
+    assert updated.draft_experience_entry.role_summary == (
+        "Built reporting automation for finance operations."
+    )
+    assert updated.draft_experience_entry.accomplishments == [
+        "Reduced manual reporting time by 10 hours per week."
+    ]
+    assert repository.load_session("session-123") == updated
+
+
+def test_update_draft_entry_rejects_missing_session() -> None:
+    service = ExperienceIntakeService(FakeExperienceIntakeRepository())
+    draft = ExperienceEntry(
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+
+    with pytest.raises(ValueError, match="Experience intake session not found"):
+        service.update_draft_entry("missing", draft)
+
+
+def test_update_draft_entry_requires_draft_generated_status() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    draft = ExperienceEntry(
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.ANSWERS_CAPTURED,
+    )
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="draft must be generated"):
+        service.update_draft_entry("session-123", draft)
+
+    assert repository.load_session("session-123") == session
+
+
+def test_update_draft_entry_rejects_accepted_session() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    draft = ExperienceEntry(
+        id="entry-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.ACCEPTED,
+        draft_experience_entry=draft,
+        accepted_experience_entry_id="entry-123",
+    )
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="cannot be edited"):
+        service.update_draft_entry("session-123", draft)
+
+    assert repository.load_session("session-123") == session
+
+
+def test_update_draft_entry_requires_existing_draft_entry() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    draft = ExperienceEntry(
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.DRAFT_GENERATED,
+    )
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="draft entry is required"):
+        service.update_draft_entry("session-123", draft)
+
+    assert repository.load_session("session-123") == session
+
+
 def test_accept_draft_entry_saves_entry_to_new_career_profile() -> None:
     intake_repository = FakeExperienceIntakeRepository()
     profile_repository = FakeProfileRepository()
