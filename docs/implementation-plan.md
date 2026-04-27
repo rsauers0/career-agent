@@ -175,12 +175,13 @@ Completed scope:
 - application service added for creating, listing, loading, and capturing source text for sessions
 - assistant protocol added for the first narrow LLM step: source text -> follow-up questions
 - service workflow added and tested with a fake assistant for generating follow-up questions
+- initial prompt content and structured JSON response parsing added for follow-up questions
+- OpenAI-compatible experience intake assistant adapter added behind the assistant protocol
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
 - keep accepted sessions archived for development traceability and future eval/prompt improvement
-- define prompt content and structured-output handling for the first real assistant adapter
-- wire the first OpenAI-compatible model provider behind the assistant protocol
+- compose the OpenAI-compatible assistant into a CLI or TUI workflow
 
 ### Career Profile Authoring
 Treat `CareerProfile` as the accepted, structured result of guided workflows rather than a large manual data-entry form.

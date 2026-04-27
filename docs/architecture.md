@@ -40,6 +40,7 @@ This map reflects the files currently tracked in Git.
 
     infrastructure/
       __init__.py                      # infrastructure package marker
+      llm.py                           # OpenAI-compatible LLM assistant adapters
       repositories.py                  # file-backed JSON persistence and snapshots
 
     interfaces/
@@ -53,6 +54,7 @@ This map reflects the files currently tracked in Git.
     test_config.py                     # settings/configuration tests
     test_dashboard.py                  # dashboard status aggregation tests
     test_experience_intake_service.py  # experience intake service tests
+    test_llm.py                        # OpenAI-compatible LLM adapter tests
     test_models.py                     # domain model validation and round-trip tests
     test_preferences_builder.py        # preference input normalization tests
     test_profile_service.py            # application service tests
@@ -94,9 +96,10 @@ The infrastructure layer implements technical adapters for storage or external s
 
 Current file:
 
+- `src/career_agent/infrastructure/llm.py`
 - `src/career_agent/infrastructure/repositories.py`
 
-This layer handles local filesystem persistence today. Future examples may include HTTP clients, LLM provider adapters, renderers, or database implementations.
+This layer handles local filesystem persistence and OpenAI-compatible LLM adapters. Future examples may include renderers, database implementations, or additional provider adapters.
 
 ### Interfaces
 

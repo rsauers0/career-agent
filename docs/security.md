@@ -1,8 +1,8 @@
 # Security And Privacy Posture
 
 Career Agent is designed as a local-first application. Current profile and
-preference workflows store data locally as JSON files and do not send career
-data to external services.
+preference workflows store data locally as JSON files. LLM-assisted workflows
+are intended to be opt-in and user-configured.
 
 This document describes the current security posture and intended privacy
 expectations. It is not a formal third-party security audit.
@@ -14,14 +14,15 @@ expectations. It is not a formal third-party security audit.
 - No telemetry is implemented.
 - No account system is implemented.
 - No hosted application service is required to use the current CLI or TUI workflows.
-- No LLM integration is currently active.
-- Optional LLM endpoint settings may be configured for future workflows, but they are not used by current profile or preference workflows.
-- No outbound application network calls are currently implemented in `src/`.
+- Current profile and preference workflows do not send career data to external services.
+- An OpenAI-compatible LLM adapter exists for experience intake, but it is not yet exposed through a user-facing CLI or TUI workflow.
+- Optional LLM endpoint settings may be configured for LLM-assisted workflows, but they are not used by current profile or preference workflows.
+- No telemetry or background network calls are implemented.
 
 ## Future Networked Features
 
-Future workflows may make outbound network calls for explicitly configured or
-user-triggered features, such as:
+Current or future workflows may make outbound network calls only for explicitly
+configured or user-triggered features, such as:
 
 - fetching job postings from user-provided URLs
 - calling a user-configured local or remote OpenAI-compatible LLM endpoint
@@ -39,12 +40,18 @@ Current storage shape:
   profile/
     user_preferences.json
     career_profile.json
+  intake/
+    experience/
+      <session_id>.json
   snapshots/
     profile/
+    intake/
+      experience/
 ```
 
-Profile writes use snapshot-on-overwrite behavior. When an existing profile JSON
-file is replaced, the previous version is copied into `snapshots/profile/`.
+Profile and experience intake writes use snapshot-on-overwrite behavior. When an
+existing JSON file is replaced, the previous version is copied into the relevant
+`snapshots/` directory.
 
 ## Verification Commands
 
