@@ -122,6 +122,7 @@ Completed validation includes:
 - `experience questions`
 - `experience answer`
 - `experience draft`
+- `experience accept`
 - `tui`
 
 ### TUI Foundation
@@ -189,11 +190,12 @@ Completed scope:
 - CLI command added for capturing user answers to generated follow-up questions
 - role metadata capture added for intake sessions so employer and title are not invented during drafting
 - draft generation added for answered intake sessions, storing a draft `ExperienceEntry`
+- accept flow added to copy draft entries into canonical `CareerProfile`
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
 - keep accepted sessions archived for development traceability and future eval/prompt improvement
-- add review and acceptance flow to copy draft entries into canonical `CareerProfile`
+- add review/edit flow before or after accepting draft entries
 - compose experience intake into the TUI after the CLI path is validated
 
 ### Career Profile Authoring
@@ -217,9 +219,9 @@ Current commands:
 - `experience questions`
 - `experience answer`
 - `experience draft`
+- `experience accept`
 
 Planned commands:
-- `experience accept`
 - `experience edit`
 
 Initial scope:

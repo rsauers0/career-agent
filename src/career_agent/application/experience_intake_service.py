@@ -3,8 +3,10 @@ from __future__ import annotations
 from career_agent.application.ports import (
     ExperienceIntakeAssistant,
     ExperienceIntakeRepository,
+    ProfileRepository,
 )
 from career_agent.domain.models import (
+    CareerProfile,
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
@@ -20,9 +22,11 @@ class ExperienceIntakeService:
         self,
         repository: ExperienceIntakeRepository,
         assistant: ExperienceIntakeAssistant | None = None,
+        profile_repository: ProfileRepository | None = None,
     ) -> None:
         self.repository = repository
         self.assistant = assistant
+        self.profile_repository = profile_repository
 
     def create_session(self) -> ExperienceIntakeSession:
         """Create and persist a new draft intake session."""
@@ -196,6 +200,43 @@ class ExperienceIntakeService:
         self.repository.save_session(updated)
         return updated
 
+    def accept_draft_entry(self, session_id: str) -> ExperienceIntakeSession:
+        """Accept a draft experience entry into the canonical career profile."""
+
+        if self.profile_repository is None:
+            msg = "Profile repository is not configured for accepting experience entries."
+            raise RuntimeError(msg)
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status not in {
+            ExperienceIntakeStatus.DRAFT_GENERATED,
+            ExperienceIntakeStatus.ACCEPTED,
+        }:
+            msg = "Experience intake draft must be generated before accepting it."
+            raise ValueError(msg)
+
+        if session.draft_experience_entry is None:
+            msg = "Experience intake draft entry is required before accepting it."
+            raise ValueError(msg)
+
+        profile = self.profile_repository.load_career_profile() or CareerProfile()
+        profile = self._upsert_experience_entry(profile, session.draft_experience_entry)
+        self.profile_repository.save_career_profile(profile)
+
+        updated = session.model_copy(
+            update={
+                "accepted_experience_entry_id": session.draft_experience_entry.id,
+                "status": ExperienceIntakeStatus.ACCEPTED,
+                "updated_at": utc_now(),
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
+
     def generate_follow_up_questions(self, session_id: str) -> ExperienceIntakeSession:
         """Generate and store follow-up questions for captured source text."""
 
@@ -259,3 +300,12 @@ class ExperienceIntakeService:
                 "job_title": session.job_title,
             }
         )
+
+    def _upsert_experience_entry(
+        self,
+        profile: CareerProfile,
+        entry: ExperienceEntry,
+    ) -> CareerProfile:
+        entries = [existing for existing in profile.experience_entries if existing.id != entry.id]
+        entries.append(entry)
+        return profile.model_copy(update={"experience_entries": entries})

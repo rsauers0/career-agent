@@ -86,12 +86,13 @@ def _build_experience_intake_service(
 ) -> ExperienceIntakeService:
     settings = get_settings()
     repository = FileExperienceIntakeRepository(settings.data_dir)
+    profile_repository = FileProfileRepository(settings.data_dir)
     assistant = (
         OpenAICompatibleExperienceIntakeAssistant.from_settings(settings)
         if include_assistant
         else None
     )
-    return ExperienceIntakeService(repository, assistant)
+    return ExperienceIntakeService(repository, assistant, profile_repository)
 
 
 def _prompt_required_text(prompt_text: str, default: str = "") -> str:
@@ -621,6 +622,22 @@ def experience_draft(session_id: str) -> None:
         _handle_experience_error(error)
 
     console.print(f"Generated draft experience entry for session [bold]{session.id}[/bold].")
+    if session.draft_experience_entry is not None:
+        _render_experience_entry(session.draft_experience_entry)
+
+
+@experience_app.command("accept")
+def experience_accept(session_id: str) -> None:
+    """Accept a draft experience entry into the canonical career profile."""
+
+    service = _build_experience_intake_service()
+    try:
+        session = service.accept_draft_entry(session_id)
+    except (ValueError, RuntimeError) as error:
+        _handle_experience_error(error)
+
+    console.print(f"Accepted draft experience entry for session [bold]{session.id}[/bold].")
+    console.print("Saved accepted entry to the canonical Career Profile.")
     if session.draft_experience_entry is not None:
         _render_experience_entry(session.draft_experience_entry)
 

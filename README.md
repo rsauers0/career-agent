@@ -27,12 +27,13 @@ Implemented:
 - `experience questions`
 - `experience answer`
 - `experience draft`
+- `experience accept`
 - `tui`
 
 Planned next:
 - refine Textual preferences validation and keyboard navigation
 - `profile wizard` or profile authoring screen for high-level `CareerProfile` fields
-- continue experience intake workflow toward review and acceptance into `CareerProfile`
+- refine experience intake review and editing
 - AI-assisted job normalization and fit matching
 - tailored document generation
 
@@ -168,8 +169,11 @@ uv run career-agent experience source <session-id> --text "- Built reporting pip
 uv run career-agent experience questions <session-id>
 uv run career-agent experience answer <session-id>
 uv run career-agent experience draft <session-id>
+uv run career-agent experience accept <session-id>
 uv run career-agent experience show <session-id>
 ```
+
+The `experience accept` command copies the draft `ExperienceEntry` into the canonical `CareerProfile`.
 
 The `experience questions` and `experience draft` commands call the configured OpenAI-compatible LLM endpoint. Use a local endpoint if you want this workflow to remain local-first.
 
