@@ -4,7 +4,7 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from textual.widgets import Checkbox, Input, Static, TextArea
+from textual.widgets import Button, Checkbox, Input, Static, TextArea
 
 from career_agent.application.dashboard import JobWorkflowState, JobWorkflowStatus
 from career_agent.application.experience_intake_service import ExperienceIntakeService
@@ -37,6 +37,7 @@ from career_agent.interfaces.tui_experience import (
     build_question_answer_blocks,
     format_intake_session_title,
     format_intake_status,
+    is_experience_session_editable,
     sort_experience_sessions,
 )
 from career_agent.interfaces.tui_preferences import (
@@ -148,6 +149,24 @@ def test_sort_experience_sessions_uses_current_and_recent_dates() -> None:
     sorted_sessions = sort_experience_sessions([older_past, current, recent_past])
 
     assert [session.id for session in sorted_sessions] == ["current", "recent", "older"]
+
+
+def test_is_experience_session_editable_excludes_locked_entries() -> None:
+    unlocked_session = ExperienceIntakeSession(status=ExperienceIntakeStatus.SOURCE_CAPTURED)
+    draft = ExperienceEntry(
+        id="entry-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    locked_session = ExperienceIntakeSession(
+        status=ExperienceIntakeStatus.LOCKED,
+        draft_experience_entry=draft,
+        accepted_experience_entry_id="entry-123",
+        locked_at="2026-01-01T00:00:00Z",
+    )
+
+    assert is_experience_session_editable(unlocked_session) is True
+    assert is_experience_session_editable(locked_session) is False
 
 
 def test_build_question_answer_blocks_pairs_answers_under_questions() -> None:
@@ -610,6 +629,237 @@ def test_add_experience_back_refreshes_experience_list() -> None:
                 return str(card_title.render())
 
     assert asyncio.run(run_test()) == "Senior Data Engineer at Acme Analytics"
+
+
+def test_experience_list_uses_view_and_edit_actions() -> None:
+    async def run_test() -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            session = ExperienceIntakeSession(
+                id="session-123",
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                status=ExperienceIntakeStatus.SOURCE_CAPTURED,
+                source_text="- Built reporting automation",
+            )
+            experience_repository.save_session(session)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+
+                return [str(button.label) for button in app.screen.query(Button)]
+
+    button_labels = asyncio.run(run_test())
+
+    assert "View" in button_labels
+    assert "Edit" in button_labels
+    assert "Delete" not in button_labels
+
+
+def test_edit_experience_delete_removes_unlocked_session() -> None:
+    async def run_test() -> tuple[str, int]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            session = ExperienceIntakeSession(
+                id="session-123",
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                status=ExperienceIntakeStatus.SOURCE_CAPTURED,
+                source_text="- Built reporting automation",
+            )
+            experience_repository.save_session(session)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click("#edit-experience-session-session-123")
+                await pilot.pause()
+                await pilot.click("#delete-experience")
+                await pilot.pause()
+
+                title = app.screen.query_one("#screen-title", Static)
+                await pilot.click("#confirm-delete-experience")
+                await pilot.pause()
+
+                active_title = app.screen.query_one("#screen-title", Static)
+                return (
+                    str(title.render()),
+                    str(active_title.render()),
+                    len(experience_repository.list_sessions()),
+                )
+
+    confirmation_title, active_title, session_count = asyncio.run(run_test())
+
+    assert confirmation_title == "Delete Experience"
+    assert active_title == "Experience"
+    assert session_count == 0
+
+
+def test_add_experience_back_prompts_before_discarding_unsaved_changes() -> None:
+    async def run_test() -> tuple[str, str, int]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click("#add-experience")
+                await pilot.pause()
+
+                app.screen.query_one("#experience-employer-name", Input).value = "Acme Analytics"
+                app.screen.action_back()
+                await pilot.pause()
+
+                prompt_title = app.screen.query_one("#screen-title", Static)
+                await pilot.click("#discard-unsaved-experience")
+                await pilot.pause()
+
+                active_title = app.screen.query_one("#screen-title", Static)
+                return (
+                    str(prompt_title.render()),
+                    str(active_title.render()),
+                    len(experience_repository.list_sessions()),
+                )
+
+    prompt_title, active_title, session_count = asyncio.run(run_test())
+
+    assert prompt_title == "Unsaved Changes"
+    assert active_title == "Experience"
+    assert session_count == 0
+
+
+def test_add_experience_back_prompt_can_save_unsaved_changes() -> None:
+    async def run_test() -> tuple[str, str, int]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click("#add-experience")
+                await pilot.pause()
+
+                app.screen.query_one("#experience-employer-name", Input).value = "Acme Analytics"
+                app.screen.query_one("#experience-job-title", Input).value = "Senior Data Engineer"
+                app.screen.query_one("#experience-start-month").value = "5"
+                app.screen.query_one("#experience-start-year").value = "2021"
+                app.screen.query_one("#experience-current-role", Checkbox).value = True
+                app.screen.query_one(
+                    "#experience-source-text", TextArea
+                ).text = "- Built reporting automation"
+                app.screen.action_back()
+                await pilot.pause()
+
+                prompt_title = app.screen.query_one("#screen-title", Static)
+                await pilot.click("#save-unsaved-experience")
+                await pilot.pause()
+
+                active_title = app.screen.query_one("#screen-title", Static)
+                return (
+                    str(prompt_title.render()),
+                    str(active_title.render()),
+                    len(experience_repository.list_sessions()),
+                )
+
+    prompt_title, active_title, session_count = asyncio.run(run_test())
+
+    assert prompt_title == "Unsaved Changes"
+    assert active_title == "Experience"
+    assert session_count == 1
+
+
+def test_edit_experience_screen_updates_existing_session() -> None:
+    async def run_test() -> tuple[str, str, str, int]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            session = ExperienceIntakeSession(
+                id="session-123",
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                status=ExperienceIntakeStatus.SOURCE_CAPTURED,
+                source_text="- Built reporting automation",
+                start_date="05/2021",
+                is_current_role=True,
+            )
+            experience_repository.save_session(session)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click("#edit-experience-session-session-123")
+                await pilot.pause()
+
+                title = app.screen.query_one("#screen-title", Static)
+                app.screen.query_one(
+                    "#experience-job-title", Input
+                ).value = "Principal Data Engineer"
+                app.screen.query_one(
+                    "#experience-source-text", TextArea
+                ).text = "- Built reporting automation\n- Reduced manual work"
+                await pilot.click("#save-experience")
+                await pilot.pause()
+
+                updated = experience_repository.load_session("session-123")
+                assert updated is not None
+                return (
+                    str(title.render()),
+                    updated.job_title or "",
+                    updated.source_text or "",
+                    len(experience_repository.list_sessions()),
+                )
+
+    screen_title, job_title, source_text, session_count = asyncio.run(run_test())
+
+    assert screen_title == "Edit Experience"
+    assert job_title == "Principal Data Engineer"
+    assert source_text == "- Built reporting automation\n- Reduced manual work"
+    assert session_count == 1
 
 
 def test_experience_screen_back_returns_to_career_profile() -> None:

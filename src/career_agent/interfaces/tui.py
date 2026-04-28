@@ -158,6 +158,23 @@ class CareerAgentTUI(App[None]):
         background: #2d393d;
     }
 
+    .danger-button {
+        color: #f4efe6;
+        background: #8a3f38;
+        text-style: bold;
+    }
+
+    .danger-button:hover {
+        color: #f4efe6;
+        background: #a84d43;
+    }
+
+    .danger-button:focus {
+        color: #f4efe6;
+        background: #a84d43;
+        border: tall #f5c16c;
+    }
+
     Select {
         margin-bottom: 1;
     }
@@ -295,6 +312,14 @@ class CareerAgentTUI(App[None]):
         background: #2a1717;
         border-left: thick #9c4f42;
         padding: 1 2;
+    }
+
+    .message-warning {
+        color: #f0a79b;
+        background: #2a1717;
+        border-left: thick #9c4f42;
+        padding: 1 2;
+        margin-bottom: 1;
     }
 
     .message-success {
@@ -576,6 +601,10 @@ class CareerAgentTUI(App[None]):
 
     .experience-action-row Button {
         margin-right: 1;
+    }
+
+    .action-spacer {
+        width: 1fr;
     }
 
     .status-draft {

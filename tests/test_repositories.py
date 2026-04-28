@@ -216,6 +216,33 @@ def test_saving_over_existing_experience_intake_session_creates_snapshot(
     assert snapshot_session == first
 
 
+def test_delete_experience_intake_session_removes_file_and_creates_snapshot(
+    tmp_path: Path,
+) -> None:
+    repository = FileExperienceIntakeRepository(tmp_path)
+    session = build_intake_session()
+
+    repository.save_session(session)
+
+    assert repository.delete_session(session.id) is True
+    assert repository.load_session(session.id) is None
+
+    snapshots = sorted(
+        (tmp_path / "snapshots" / "intake" / "experience").glob("session-123-*.json")
+    )
+    assert len(snapshots) == 1
+    snapshot_session = ExperienceIntakeSession.model_validate_json(
+        snapshots[0].read_text(encoding="utf-8")
+    )
+    assert snapshot_session == session
+
+
+def test_delete_missing_experience_intake_session_returns_false(tmp_path: Path) -> None:
+    repository = FileExperienceIntakeRepository(tmp_path)
+
+    assert repository.delete_session("missing") is False
+
+
 def test_load_invalid_experience_intake_session_json_raises_validation_error(
     tmp_path: Path,
 ) -> None:

@@ -43,6 +43,9 @@ class ExperienceIntakeRepository(Protocol):
     def save_session(self, session: ExperienceIntakeSession) -> None:
         """Persist an intake session."""
 
+    def delete_session(self, session_id: str) -> bool:
+        """Delete an intake session if it exists."""
+
     def list_sessions(self) -> list[ExperienceIntakeSession]:
         """Return all intake sessions."""
 

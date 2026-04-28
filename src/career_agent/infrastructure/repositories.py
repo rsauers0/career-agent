@@ -98,6 +98,17 @@ class FileExperienceIntakeRepository:
 
         self._save_model(session, self._session_path(session.id))
 
+    def delete_session(self, session_id: str) -> bool:
+        """Delete an intake session from disk, snapshotting it first if present."""
+
+        path = self._session_path(session_id)
+        if not path.exists():
+            return False
+
+        self._create_snapshot(path)
+        path.unlink()
+        return True
+
     def list_sessions(self) -> list[ExperienceIntakeSession]:
         """Return all persisted intake sessions sorted by update time."""
 

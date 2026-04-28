@@ -23,6 +23,9 @@ class FakeExperienceIntakeRepository:
     def save_session(self, session: ExperienceIntakeSession) -> None:
         self.sessions[session.id] = session
 
+    def delete_session(self, session_id: str) -> bool:
+        return self.sessions.pop(session_id, None) is not None
+
     def list_sessions(self) -> list[ExperienceIntakeSession]:
         return list(self.sessions.values())
 
@@ -133,6 +136,51 @@ def test_list_sessions_by_status_returns_repository_values() -> None:
     repository.save_session(captured)
 
     assert service.list_sessions_by_status(ExperienceIntakeStatus.SOURCE_CAPTURED) == [captured]
+
+
+def test_delete_session_removes_unlocked_session() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.SOURCE_CAPTURED,
+        source_text="- Built reporting pipeline",
+    )
+    repository.save_session(session)
+
+    service.delete_session("session-123")
+
+    assert repository.load_session("session-123") is None
+
+
+def test_delete_session_rejects_missing_session() -> None:
+    service = ExperienceIntakeService(FakeExperienceIntakeRepository())
+
+    with pytest.raises(ValueError, match="not found"):
+        service.delete_session("missing")
+
+
+def test_delete_session_rejects_locked_session() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    draft = ExperienceEntry(
+        id="entry-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.LOCKED,
+        draft_experience_entry=draft,
+        accepted_experience_entry_id="entry-123",
+        locked_at="2026-01-01T00:00:00Z",
+    )
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="cannot be deleted"):
+        service.delete_session("session-123")
+
+    assert repository.load_session("session-123") == session
 
 
 def test_capture_source_text_updates_existing_session() -> None:

@@ -54,6 +54,20 @@ class ExperienceIntakeService:
 
         return self.repository.list_sessions_by_status(status)
 
+    def delete_session(self, session_id: str) -> None:
+        """Delete an unlocked intake session."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot be deleted."
+            raise ValueError(msg)
+
+        self.repository.delete_session(session_id)
+
     def capture_source_text(
         self,
         session_id: str,
