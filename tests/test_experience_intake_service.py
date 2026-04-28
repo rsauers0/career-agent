@@ -4,6 +4,8 @@ import pytest
 
 from career_agent.application.experience_intake_service import ExperienceIntakeService
 from career_agent.domain.models import (
+    CandidateBullet,
+    CandidateBulletStatus,
     CareerProfile,
     ExperienceEntry,
     ExperienceIntakeSession,
@@ -181,6 +183,133 @@ def test_delete_session_rejects_locked_session() -> None:
         service.delete_session("session-123")
 
     assert repository.load_session("session-123") == session
+
+
+def test_add_source_entry_appends_append_only_source() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    updated = service.add_source_entry("session-123", "  - Built reporting pipeline  ")
+
+    assert len(updated.source_entries) == 1
+    assert updated.source_entries[0].content == "- Built reporting pipeline"
+    assert updated.status == ExperienceIntakeStatus.SOURCE_CAPTURED
+    assert repository.load_session("session-123") == updated
+
+
+def test_add_source_entry_rejects_locked_session() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    draft = ExperienceEntry(
+        id="entry-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    session = ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.LOCKED,
+        draft_experience_entry=draft,
+        accepted_experience_entry_id=draft.id,
+        locked_at="2026-01-01T00:00:00Z",
+    )
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="cannot receive new source entries"):
+        service.add_source_entry("session-123", "- Built reporting pipeline")
+
+
+def test_mark_source_entries_analyzed_updates_selected_sources() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+    updated = service.add_source_entry("session-123", "- Built reporting pipeline")
+    source_id = updated.source_entries[0].id
+
+    analyzed = service.mark_source_entries_analyzed("session-123", [source_id])
+
+    assert analyzed.source_entries[0].analyzed_at is not None
+    assert repository.load_session("session-123") == analyzed
+
+
+def test_mark_source_entries_analyzed_rejects_unknown_sources() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    repository.save_session(ExperienceIntakeSession(id="session-123"))
+
+    with pytest.raises(ValueError, match="Unknown source entry IDs"):
+        service.mark_source_entries_analyzed("session-123", ["missing-source"])
+
+
+def test_replace_candidate_bullets_validates_source_references() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+    updated = service.add_source_entry("session-123", "- Built reporting pipeline")
+    source_id = updated.source_entries[0].id
+    bullet = CandidateBullet(
+        id="bullet-1",
+        text="Reduced manual reporting work by building a reporting pipeline.",
+        source_entry_ids=[source_id],
+    )
+
+    replaced = service.replace_candidate_bullets("session-123", [bullet])
+
+    assert replaced.candidate_bullets == [bullet]
+
+    with pytest.raises(ValueError, match="unknown source entry IDs"):
+        service.replace_candidate_bullets(
+            "session-123",
+            [CandidateBullet(text="Unsupported bullet.", source_entry_ids=["missing-source"])],
+        )
+
+
+def test_mark_candidate_bullet_reviewed_and_removed_updates_status() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        candidate_bullets=[CandidateBullet(id="bullet-1", text="Built reporting automation.")],
+    )
+    repository.save_session(session)
+
+    reviewed = service.mark_candidate_bullet_reviewed("session-123", "bullet-1")
+    removed = service.remove_candidate_bullet("session-123", "bullet-1")
+
+    assert reviewed.candidate_bullets[0].status == CandidateBulletStatus.REVIEWED
+    assert removed.candidate_bullets[0].status == CandidateBulletStatus.REMOVED
+
+
+def test_update_candidate_bullet_text_resets_review_and_retains_revision() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        candidate_bullets=[
+            CandidateBullet(
+                id="bullet-1",
+                text="Built reporting automation.",
+                status=CandidateBulletStatus.REVIEWED,
+            )
+        ],
+    )
+    repository.save_session(session)
+
+    updated = service.update_candidate_bullet_text(
+        "session-123",
+        "bullet-1",
+        "Reduced manual reporting work by building reporting automation.",
+        reason="User clarified the outcome.",
+    )
+    bullet = updated.candidate_bullets[0]
+
+    assert bullet.status == CandidateBulletStatus.NEEDS_REVIEW
+    assert bullet.text == "Reduced manual reporting work by building reporting automation."
+    assert bullet.revision_history[0].text == "Built reporting automation."
+    assert bullet.revision_history[0].reason == "User clarified the outcome."
 
 
 def test_capture_source_text_updates_existing_session() -> None:

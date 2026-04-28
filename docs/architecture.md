@@ -18,7 +18,9 @@ This map reflects the files currently tracked in Git.
 
   docs/
     architecture.md                    # architecture overview and file responsibilities
+    cli-reference.md                   # CLI command examples for scripting and debugging
     implementation-plan.md             # living implementation plan and roadmap
+    security.md                        # security and privacy posture
 
   src/career_agent/
     __init__.py                        # package marker

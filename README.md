@@ -1,58 +1,27 @@
 # Career Agent
 
-Career Agent is a local-first Python application for managing structured career data, analyzing jobs, and generating tailored application materials.
+Career Agent is a local-first Python TUI application for building structured career data, refining experience entries, and preparing for future job analysis and tailored document generation.
 
-A core design goal is to use local LLMs through OpenAI-compatible APIs wherever practical. Instead of assuming a single large hosted model, the project is being built around structured workflows, intermediate validation, and evaluation-driven iteration so smaller/local models can produce high-quality results with lower cost and better privacy.
+The project is designed around structured workflows and local-first AI assistance. Instead of assuming one large hosted model, Career Agent breaks work into smaller reviewable steps that can run against local or OpenAI-compatible model endpoints.
 
 ## Current Status
 
 Implemented:
-- Typer/Rich CLI scaffold
-- initial Textual TUI dashboard
-- editable Textual user preferences screen
-- Textual Career Profile overview screen
-- Textual Experience list/detail screens and Add Experience form
-- Pydantic domain models
-- local file-based persistence with snapshot-on-overwrite
-- profile service layer
-- component status evaluation
-- `profile init` (storage scaffolding only)
-- `profile show`
-- `preferences show`
-- `preferences status`
-- `preferences wizard`
-- `experience create`
-- `experience list`
-- `experience show`
-- `experience details`
-- `experience source`
-- `experience questions`
-- `experience answer`
-- `experience draft`
-- `experience lock`
-- `experience accept`
-- `tui`
+- Textual TUI dashboard
+- editable User Preferences screen
+- Career Profile overview screen
+- Experience list, detail, add, edit, and delete screens
+- Pydantic domain models for preferences, career profile, experience intake, source entries, and candidate bullets
+- local JSON persistence with snapshot-on-overwrite and snapshot-on-delete behavior
+- Typer/Rich CLI for scripting, debugging, and development workflows
+- OpenAI-compatible LLM adapter for current experience question/draft commands
 
 Planned next:
-- refine Textual preferences validation and keyboard navigation
-- `profile wizard` or profile authoring screen for high-level `CareerProfile` fields
-- refine experience intake review and editing
-- AI-assisted job normalization and fit matching
-- tailored document generation
-
-## Design Direction
-
-Career Agent is being built around:
-- local-first structured data
-- modular domain / application / infrastructure separation
-- AI workflows grounded in canonical data
-- reusable workflows that can move from CLI to TUI cleanly
-- component-first development: implement behavior, validate/status it, then expose it in the interface
-- Textual as the planned primary local interface, with Typer remaining useful for scripting and development
-- LLM assistance only where it adds value, not as a requirement for simple data entry
-
-See [docs/architecture.md](docs/architecture.md) for the current layer map and file responsibilities.
-See [docs/security.md](docs/security.md) for the current security and privacy posture.
+- migrate the Experience TUI from one source text field to append-only source entries
+- add candidate bullet review controls in the TUI
+- analyze new source entries against existing candidate bullets
+- generate final experience entries only after active candidate bullets are reviewed
+- expand Career Profile readiness and job analysis workflows
 
 ## Install And Run The TUI
 
@@ -67,13 +36,14 @@ Install Git:
 - Windows: install Git for Windows from <https://git-scm.com/install/windows>, or use `winget install --id Git.Git -e --source winget`.
 
 Install uv:
-- Linux/macOS:
+
+Linux/macOS:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-- Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
@@ -99,11 +69,44 @@ uv run career-agent tui
 
 The first `uv sync` creates the local virtual environment and installs dependencies from `uv.lock`. The `uv run career-agent tui` command launches the TUI.
 
+## Using The TUI
+
+From the dashboard:
+- Press `p` or choose `Open Preferences` to review and update User Preferences.
+- Press `c` or choose `Open Career Profile` to open the Career Profile overview.
+- From Career Profile, choose `Manage Experience` to create, edit, view, or delete experience intake sessions.
+
+Current Experience workflow:
+- Add role facts such as employer, title, location, employment type, and dates.
+- Add source notes or bullets for the role.
+- Save the intake session locally.
+- Review, edit, or delete unlocked intake sessions.
+
+The Experience workflow is being refactored toward append-only source entries and reviewed candidate bullets. Until that TUI migration is complete, some lower-level workflow steps remain available through the CLI.
+
+## CLI Reference
+
+The CLI remains useful for scripting, debugging, and validating application workflows. See [docs/cli-reference.md](docs/cli-reference.md) for command examples.
+
+## Design Direction
+
+Career Agent is being built around:
+- local-first structured data
+- a primary Textual TUI interface
+- modular domain / application / infrastructure separation
+- AI workflows grounded in retained evidence and reviewed structured outputs
+- reviewable workflow states before data becomes canonical
+- Typer CLI support for development, scripting, and workflow validation
+
+See [docs/architecture.md](docs/architecture.md) for the current layer map and file responsibilities.
+See [docs/implementation-plan.md](docs/implementation-plan.md) for the living roadmap.
+See [docs/security.md](docs/security.md) for the current security and privacy posture.
+
 ## Storage Model
 
 Canonical data is stored locally as structured JSON for transparency, portability, and privacy-focused use.
 
-Profile writes use snapshot-on-overwrite behavior so earlier states can be preserved during iterative editing.
+Profile writes use snapshot-on-overwrite behavior so earlier states can be preserved during iterative editing. Experience intake files are also snapshotted before overwrite or delete operations.
 
 Current storage shape:
 
@@ -121,80 +124,6 @@ Current storage shape:
       experience/
 ```
 
-## Development
-
-Install dependencies:
-
-```bash
-uv sync
-```
-
-Run the CLI:
-
-```bash
-uv run career-agent --help
-```
-
-Launch the local TUI:
-
-```bash
-uv run career-agent tui
-```
-
-From the TUI dashboard:
-- press `p` to open User Preferences, save edits from the form, and press `b` or `Esc` to return
-- press `c` to open Career Profile, then choose Manage Experience to add or review experience intake sessions
-
-Initialize storage scaffolding:
-
-```bash
-uv run career-agent profile init
-```
-
-Create or update user preferences:
-
-```bash
-uv run career-agent preferences wizard
-```
-
-Show current stored data:
-
-```bash
-uv run career-agent preferences show
-uv run career-agent preferences status
-uv run career-agent profile show
-```
-
-Create an experience intake session, capture source text, and generate follow-up questions:
-
-```bash
-uv run career-agent experience create \
-  --employer-name "Acme Analytics" \
-  --job-title "Senior Data Engineer" \
-  --location "Chicago, IL" \
-  --employment-type full-time \
-  --start-date "05/2021" \
-  --end-date "06/2024"
-uv run career-agent experience details <session-id> \
-  --employer-name "Acme Analytics" \
-  --job-title "Senior Data Engineer" \
-  --start-date "05/2021" \
-  --current-role
-uv run career-agent experience source <session-id> --text "- Built reporting pipeline"
-uv run career-agent experience source <session-id> --from-file bullets.md
-uv run career-agent experience source <session-id> --text "- Added alerting" --append
-uv run career-agent experience questions <session-id>
-uv run career-agent experience answer <session-id>
-uv run career-agent experience draft <session-id>
-uv run career-agent experience lock <session-id>
-uv run career-agent experience show <session-id>
-```
-
-The `experience lock` command copies the draft `ExperienceEntry` into the canonical `CareerProfile` and marks the intake session as locked. The older `experience accept` command remains as a compatibility alias for `experience lock`.
-By default, `experience source` replaces source text. Use `--append` to add to existing source text.
-
-The `experience questions` and `experience draft` commands call the configured OpenAI-compatible LLM endpoint. Use a local endpoint if you want this workflow to remain local-first.
-
 ## Configuration
 
 Configuration is loaded from environment variables or a local `.env` file via `pydantic-settings`.
@@ -205,35 +134,25 @@ Create a local config file if needed:
 cp .env.example .env
 ```
 
-On Windows PowerShell, use:
+On Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Currently supported:
+Supported settings:
 - `CAREER_AGENT_DATA_DIR`
-  Overrides the default local data directory.
 - `CAREER_AGENT_LLM_BASE_URL`
-  Optional OpenAI-compatible LLM API base URL for LLM-assisted workflows.
 - `CAREER_AGENT_LLM_API_KEY`
-  Optional API key for the configured LLM endpoint.
 - `CAREER_AGENT_LLM_MODEL`
-  Optional default model name for LLM-assisted workflows.
 - `CAREER_AGENT_LLM_EXTRACTION_BASE_URL`
-  Optional OpenAI-compatible LLM API base URL for extraction workflows. Defaults to `CAREER_AGENT_LLM_BASE_URL` if unset.
 - `CAREER_AGENT_LLM_EXTRACTION_API_KEY`
-  Optional API key for the extraction endpoint. Defaults to `CAREER_AGENT_LLM_API_KEY` if unset.
 - `CAREER_AGENT_LLM_EXTRACTION_MODEL`
-  Optional model name for extraction workflows. Defaults to `CAREER_AGENT_LLM_MODEL` if unset.
 - `CAREER_AGENT_LLM_EVAL_BASE_URL`
-  Optional OpenAI-compatible LLM API base URL for evaluation workflows. Defaults to `CAREER_AGENT_LLM_BASE_URL` if unset.
 - `CAREER_AGENT_LLM_EVAL_API_KEY`
-  Optional API key for the evaluation endpoint. Defaults to `CAREER_AGENT_LLM_API_KEY` if unset.
 - `CAREER_AGENT_LLM_EVAL_MODEL`
-  Optional model name for evaluation workflows. Defaults to `CAREER_AGENT_LLM_MODEL` if unset.
 
-If `CAREER_AGENT_DATA_DIR` is unset, the app creates a `.career-agent` directory under the current user's home directory using Python's `Path.home()`. This keeps the default portable across Linux, macOS, and Windows.
+If `CAREER_AGENT_DATA_DIR` is unset, the app creates a `.career-agent` directory under the current user's home directory using Python's `Path.home()`.
 
 Example `.env` values:
 
@@ -245,7 +164,7 @@ CAREER_AGENT_DATA_DIR=~/.career-agent
 CAREER_AGENT_DATA_DIR=C:/Users/ExampleUser/.career-agent
 ```
 
-The `~/.career-agent` value is the recommended cross-platform option because the app expands `~` through Python's `Path.expanduser()`. Forward slashes are recommended in `.env` paths because Python handles them correctly on Windows and they avoid backslash escaping confusion.
+The `~/.career-agent` value is the recommended cross-platform option because the app expands `~` through Python's `Path.expanduser()`. Forward slashes are recommended in `.env` paths because Python handles them correctly on Windows and avoid backslash escaping confusion.
 
 Example LLM `.env` values:
 
@@ -267,9 +186,15 @@ CAREER_AGENT_LLM_MODEL=gpt-4.1-mini
 
 Role-specific extraction and evaluation settings can point to different OpenAI-compatible endpoints if your local or hosted model router separates those workloads.
 
-LLM configuration is optional. Profile and preference workflows do not require an LLM connection. The `experience questions` and `experience draft` commands require a configured OpenAI-compatible endpoint because they send captured experience intake data to the configured model provider.
+LLM configuration is optional for basic profile and preference workflows. Any workflow that calls a configured LLM endpoint sends the relevant local workflow data to that configured provider.
 
-The project is currently developed and tested on Linux. The storage and configuration code is written with `pathlib` for cross-platform path handling, but Windows should be validated before claiming full Windows support.
+## Development
+
+Install dependencies:
+
+```bash
+uv sync
+```
 
 Run tests:
 
@@ -283,6 +208,8 @@ Run linting:
 uv run ruff check .
 uv run ruff format --check .
 ```
+
+The project is currently developed and tested on Linux. The storage and configuration code is written with `pathlib` for cross-platform path handling, but Windows should be validated before claiming full Windows support.
 
 ## License
 

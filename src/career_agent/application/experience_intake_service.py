@@ -6,10 +6,14 @@ from career_agent.application.ports import (
     ProfileRepository,
 )
 from career_agent.domain.models import (
+    CandidateBullet,
+    CandidateBulletRevision,
+    CandidateBulletStatus,
     CareerProfile,
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceSourceEntry,
     IntakeAnswer,
     YearMonth,
     utc_now,
@@ -67,6 +71,180 @@ class ExperienceIntakeService:
             raise ValueError(msg)
 
         self.repository.delete_session(session_id)
+
+    def add_source_entry(self, session_id: str, content: str) -> ExperienceIntakeSession:
+        """Append a source entry to an unlocked intake session."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot receive new source entries."
+            raise ValueError(msg)
+
+        source_entry = ExperienceSourceEntry(content=content)
+        updated = session.model_copy(
+            update={
+                "source_entries": [*session.source_entries, source_entry],
+                "status": ExperienceIntakeStatus.SOURCE_CAPTURED,
+                "updated_at": utc_now(),
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
+
+    def mark_source_entries_analyzed(
+        self,
+        session_id: str,
+        source_entry_ids: list[str],
+    ) -> ExperienceIntakeSession:
+        """Mark append-only source entries as analyzed by a workflow step."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        source_entry_id_set = set(source_entry_ids)
+        if len(source_entry_id_set) != len(source_entry_ids):
+            msg = "source_entry_ids cannot contain duplicates."
+            raise ValueError(msg)
+
+        existing_source_entry_ids = {source_entry.id for source_entry in session.source_entries}
+        unknown_ids = sorted(source_entry_id_set - existing_source_entry_ids)
+        if unknown_ids:
+            msg = f"Unknown source entry IDs: {', '.join(unknown_ids)}."
+            raise ValueError(msg)
+
+        analyzed_at = utc_now()
+        source_entries = [
+            source_entry.model_copy(update={"analyzed_at": analyzed_at})
+            if source_entry.id in source_entry_id_set
+            else source_entry
+            for source_entry in session.source_entries
+        ]
+        updated = session.model_copy(
+            update={
+                "source_entries": source_entries,
+                "updated_at": analyzed_at,
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
+
+    def replace_candidate_bullets(
+        self,
+        session_id: str,
+        candidate_bullets: list[CandidateBullet],
+    ) -> ExperienceIntakeSession:
+        """Replace candidate bullets after an analysis or deterministic test step."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot update candidate bullets."
+            raise ValueError(msg)
+
+        updated = ExperienceIntakeSession.model_validate(
+            session.model_copy(
+                update={
+                    "candidate_bullets": candidate_bullets,
+                    "updated_at": utc_now(),
+                }
+            ).model_dump()
+        )
+        self.repository.save_session(updated)
+        return updated
+
+    def mark_candidate_bullet_reviewed(
+        self,
+        session_id: str,
+        bullet_id: str,
+    ) -> ExperienceIntakeSession:
+        """Mark one candidate bullet as reviewed by the user."""
+
+        return self._update_candidate_bullet_status(
+            session_id,
+            bullet_id,
+            CandidateBulletStatus.REVIEWED,
+        )
+
+    def remove_candidate_bullet(
+        self,
+        session_id: str,
+        bullet_id: str,
+    ) -> ExperienceIntakeSession:
+        """Remove one candidate bullet from active downstream use."""
+
+        return self._update_candidate_bullet_status(
+            session_id,
+            bullet_id,
+            CandidateBulletStatus.REMOVED,
+        )
+
+    def update_candidate_bullet_text(
+        self,
+        session_id: str,
+        bullet_id: str,
+        text: str,
+        *,
+        reason: str | None = None,
+    ) -> ExperienceIntakeSession:
+        """Update candidate bullet text and reset it to needs_review."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot update candidate bullets."
+            raise ValueError(msg)
+
+        updated_at = utc_now()
+        candidate_bullets: list[CandidateBullet] = []
+        bullet_found = False
+        for bullet in session.candidate_bullets:
+            if bullet.id != bullet_id:
+                candidate_bullets.append(bullet)
+                continue
+
+            revision = CandidateBulletRevision(
+                text=bullet.text,
+                reason=reason,
+                source_entry_ids=bullet.source_entry_ids,
+            )
+            candidate_bullets.append(
+                bullet.model_copy(
+                    update={
+                        "text": text,
+                        "status": CandidateBulletStatus.NEEDS_REVIEW,
+                        "revision_history": [*bullet.revision_history, revision],
+                        "updated_at": updated_at,
+                    }
+                )
+            )
+            bullet_found = True
+
+        if not bullet_found:
+            msg = f"Candidate bullet not found: {bullet_id}."
+            raise ValueError(msg)
+
+        updated = ExperienceIntakeSession.model_validate(
+            session.model_copy(
+                update={
+                    "candidate_bullets": candidate_bullets,
+                    "updated_at": updated_at,
+                }
+            ).model_dump()
+        )
+        self.repository.save_session(updated)
+        return updated
 
     def capture_source_text(
         self,
@@ -389,6 +567,51 @@ class ExperienceIntakeService:
         if not session.user_answers:
             msg = "Experience intake answers are required before generating a draft."
             raise ValueError(msg)
+
+    def _update_candidate_bullet_status(
+        self,
+        session_id: str,
+        bullet_id: str,
+        status: CandidateBulletStatus,
+    ) -> ExperienceIntakeSession:
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot update candidate bullets."
+            raise ValueError(msg)
+
+        updated_at = utc_now()
+        candidate_bullets: list[CandidateBullet] = []
+        bullet_found = False
+        for bullet in session.candidate_bullets:
+            if bullet.id == bullet_id:
+                candidate_bullets.append(
+                    bullet.model_copy(
+                        update={
+                            "status": status,
+                            "updated_at": updated_at,
+                        }
+                    )
+                )
+                bullet_found = True
+            else:
+                candidate_bullets.append(bullet)
+
+        if not bullet_found:
+            msg = f"Candidate bullet not found: {bullet_id}."
+            raise ValueError(msg)
+
+        updated = session.model_copy(
+            update={
+                "candidate_bullets": candidate_bullets,
+                "updated_at": updated_at,
+            }
+        )
+        self.repository.save_session(updated)
+        return updated
 
     def _normalize_draft_role_details(
         self,

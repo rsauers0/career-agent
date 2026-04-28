@@ -54,13 +54,17 @@ Design goals:
 - support future DSPy-style prompt optimization from retained workflow and evaluation data
 
 Experience intake should be built as a sequence of narrow transitions:
-- source text for one role -> follow-up questions
-- source text + answers -> structured facts
-- structured facts -> draft `ExperienceEntry`
-- draft `ExperienceEntry` -> quality/completeness evaluation
+- role facts + append-only source entries -> candidate bullets
+- pending source entries + existing candidate bullets -> bullet updates or new candidate bullets
+- candidate bullet edits -> `needs_review`
+- user-reviewed candidate bullets -> final draft `ExperienceEntry`
 - locked draft -> canonical `CareerProfile`
 
 The experience workflow should specifically help users reframe duty-list resume bullets into accomplishment-focused entries. Strong outputs should emphasize business impact, measurable outcomes where available, and defensible subjective accomplishments when hard metrics are unavailable. The guided process should teach better resume and cover-letter writing rather than simply storing vague or noisy source text.
+
+Experience source entries are evidence, not final bullets. They should be append-only after submission so later workflow analysis can trace which source material produced or changed a candidate bullet. If a user has new information later, they add a new source entry rather than editing an old one.
+
+Generated candidate bullets should remain editable. A bullet is considered usable only after the user marks it as reviewed. Any material LLM or user edit resets the bullet to `needs_review`. Removed bullets stay retained for traceability but should not feed final experience generation or downstream job analysis.
 
 ## Completed
 
@@ -201,8 +205,15 @@ Completed scope:
 - application service method added for safely updating generated drafts before locking
 - initial TUI experience list/detail and Add Experience form added under the Career Profile overview
 - legacy accept command and service method retained as compatibility aliases for locking
+- append-only `ExperienceSourceEntry` model added for retained source evidence
+- `CandidateBullet` model added with `needs_review`, `reviewed`, and `removed` states
+- candidate bullet revision history added for traceability
+- service helpers added for appending sources, marking sources analyzed, replacing candidate bullets, reviewing bullets, removing bullets, and editing bullets
 
 Remaining initial scope:
+- move TUI experience source capture from one legacy source text field toward append-only source entries
+- add LLM workflow that analyzes pending source entries against existing candidate bullets
+- add TUI review controls for candidate bullets before final entry generation
 - store prompt/model metadata and evaluation results as workflow steps are added
 - keep locked sessions archived for development traceability and future eval/prompt improvement
 - add editable TUI review flow for generated drafts before locking entries
@@ -237,7 +248,9 @@ Planned commands:
 Initial scope:
 - create and resume intake sessions for one role at a time
 - capture role facts directly: company, job title, optional location, employment type, start date, end date or current role
-- capture raw bullets or notes for a specific job/role, not an entire resume dump
+- capture append-only source entries for a specific job/role, not an entire resume dump
+- analyze new source entries against existing candidate bullets instead of reprocessing all prior source text
+- require all active candidate bullets to be reviewed before generating a final experience entry
 - support multiline source capture from files and intentional source-text appends
 - use guided LLM-assisted steps to clarify missing details and frame work as accomplishments
 - lock reviewed draft entries into canonical `CareerProfile`

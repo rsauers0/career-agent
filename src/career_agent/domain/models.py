@@ -48,6 +48,14 @@ class ExperienceIntakeStatus(StrEnum):
     ABANDONED = "abandoned"
 
 
+class CandidateBulletStatus(StrEnum):
+    """Review states for LLM-generated candidate experience bullets."""
+
+    NEEDS_REVIEW = "needs_review"
+    REVIEWED = "reviewed"
+    REMOVED = "removed"
+
+
 class IntakeMessageRole(StrEnum):
     """Supported transcript message roles for intake workflows."""
 
@@ -323,6 +331,162 @@ class IntakeAnswer(BaseModel):
         return validate_timezone_aware(value, "created_at")
 
 
+class ExperienceSourceEntry(BaseModel):
+    """Append-only source material provided for one experience intake session."""
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Stable identifier for the retained source entry.",
+    )
+    content: str = Field(
+        min_length=1,
+        description="Raw source text retained for traceability.",
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC creation timestamp.",
+    )
+    analyzed_at: datetime | None = Field(
+        default=None,
+        description="Timezone-aware UTC timestamp when this source was analyzed, if any.",
+    )
+
+    @field_validator("content")
+    @classmethod
+    def normalize_content(cls, value: str) -> str:
+        """Trim surrounding whitespace while preserving the submitted source text."""
+
+        normalized = value.strip()
+        if not normalized:
+            msg = "content cannot be blank."
+            raise ValueError(msg)
+        return normalized
+
+    @field_validator("created_at", "analyzed_at")
+    @classmethod
+    def validate_timestamp_timezone(cls, value: datetime | None) -> datetime | None:
+        """Ensure source timestamps are timezone-aware."""
+
+        if value is None:
+            return value
+
+        return validate_timezone_aware(value, "timestamp")
+
+
+class CandidateBulletRevision(BaseModel):
+    """One retained revision of a candidate experience bullet."""
+
+    text: str = Field(
+        min_length=1,
+        description="Bullet text before or after a revision, depending on workflow usage.",
+    )
+    reason: str | None = Field(
+        default=None,
+        description="Optional reason the revision was retained.",
+    )
+    source_entry_ids: list[str] = Field(
+        default_factory=list,
+        description="Source entries that informed this revision.",
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC creation timestamp.",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        """Trim surrounding whitespace from retained bullet text."""
+
+        normalized = value.strip()
+        if not normalized:
+            msg = "text cannot be blank."
+            raise ValueError(msg)
+        return normalized
+
+    @field_validator("created_at")
+    @classmethod
+    def validate_created_at_timezone(cls, value: datetime) -> datetime:
+        """Ensure revision timestamps are timezone-aware."""
+
+        return validate_timezone_aware(value, "created_at")
+
+    @model_validator(mode="after")
+    def validate_unique_source_entry_ids(self) -> CandidateBulletRevision:
+        """Ensure a revision does not reference the same source entry more than once."""
+
+        if len(set(self.source_entry_ids)) != len(self.source_entry_ids):
+            msg = "source_entry_ids cannot contain duplicates."
+            raise ValueError(msg)
+
+        return self
+
+
+class CandidateBullet(BaseModel):
+    """LLM-generated or user-edited bullet awaiting user review."""
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Stable identifier for the candidate bullet.",
+    )
+    text: str = Field(
+        min_length=1,
+        description="Candidate accomplishment-focused bullet text.",
+    )
+    status: CandidateBulletStatus = Field(
+        default=CandidateBulletStatus.NEEDS_REVIEW,
+        description="Current user-review state for this candidate bullet.",
+    )
+    source_entry_ids: list[str] = Field(
+        default_factory=list,
+        description="Source entries that support or informed this candidate bullet.",
+    )
+    review_notes: list[str] = Field(
+        default_factory=list,
+        description="Review notes, including optional LLM recommendations.",
+    )
+    revision_history: list[CandidateBulletRevision] = Field(
+        default_factory=list,
+        description="Retained revision history for traceability.",
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC creation timestamp.",
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        description="Timezone-aware UTC update timestamp.",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        """Trim surrounding whitespace from candidate bullet text."""
+
+        normalized = value.strip()
+        if not normalized:
+            msg = "text cannot be blank."
+            raise ValueError(msg)
+        return normalized
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def validate_timestamp_timezone(cls, value: datetime) -> datetime:
+        """Ensure candidate bullet timestamps are timezone-aware."""
+
+        return validate_timezone_aware(value, "timestamp")
+
+    @model_validator(mode="after")
+    def validate_unique_source_entry_ids(self) -> CandidateBullet:
+        """Ensure a candidate bullet does not duplicate source references."""
+
+        if len(set(self.source_entry_ids)) != len(self.source_entry_ids):
+            msg = "source_entry_ids cannot contain duplicates."
+            raise ValueError(msg)
+
+        return self
+
+
 class ExperienceIntakeSession(BaseModel):
     """Recoverable workflow state for creating one future experience entry."""
 
@@ -337,6 +501,16 @@ class ExperienceIntakeSession(BaseModel):
     source_text: str | None = Field(
         default=None,
         description="Raw source bullets or notes for one role-specific experience.",
+    )
+    source_entries: list[ExperienceSourceEntry] = Field(
+        default_factory=list,
+        description=(
+            "Append-only source entries retained as evidence for generated candidate bullets."
+        ),
+    )
+    candidate_bullets: list[CandidateBullet] = Field(
+        default_factory=list,
+        description="Generated or user-edited bullets that must be reviewed before finalization.",
     )
     employer_name: str | None = Field(
         default=None,
@@ -430,6 +604,32 @@ class ExperienceIntakeSession(BaseModel):
         if self.status is ExperienceIntakeStatus.LOCKED and self.locked_at is None:
             msg = "locked_at is required when status is locked."
             raise ValueError(msg)
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_intake_artifact_ids(self) -> ExperienceIntakeSession:
+        """Ensure source entries and candidate bullets have stable unique IDs."""
+
+        source_entry_ids = [source_entry.id for source_entry in self.source_entries]
+        if len(set(source_entry_ids)) != len(source_entry_ids):
+            msg = "source_entries cannot contain duplicate id values."
+            raise ValueError(msg)
+
+        candidate_bullet_ids = [bullet.id for bullet in self.candidate_bullets]
+        if len(set(candidate_bullet_ids)) != len(candidate_bullet_ids):
+            msg = "candidate_bullets cannot contain duplicate id values."
+            raise ValueError(msg)
+
+        known_source_entry_ids = set(source_entry_ids)
+        for bullet in self.candidate_bullets:
+            unknown_ids = sorted(set(bullet.source_entry_ids) - known_source_entry_ids)
+            if unknown_ids:
+                msg = (
+                    "candidate_bullets reference unknown source entry IDs: "
+                    f"{', '.join(unknown_ids)}."
+                )
+                raise ValueError(msg)
 
         return self
 

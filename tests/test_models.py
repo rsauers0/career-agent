@@ -2,12 +2,16 @@ import pytest
 from pydantic import ValidationError
 
 from career_agent.domain.models import (
+    CandidateBullet,
+    CandidateBulletRevision,
+    CandidateBulletStatus,
     CareerProfile,
     CommuteDistanceUnit,
     EmploymentType,
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceSourceEntry,
     IntakeAnswer,
     IntakeMessage,
     IntakeMessageRole,
@@ -177,6 +181,24 @@ def test_career_profile_rejects_duplicate_experience_entry_ids() -> None:
 
 
 def test_experience_intake_session_json_round_trip() -> None:
+    source_entry = ExperienceSourceEntry(
+        id="source-1",
+        content="- Built reporting pipeline",
+        analyzed_at="2026-01-01T00:00:00+00:00",
+    )
+    candidate_bullet = CandidateBullet(
+        id="bullet-1",
+        text="Reduced manual reporting by building a finance reporting pipeline.",
+        status=CandidateBulletStatus.REVIEWED,
+        source_entry_ids=[source_entry.id],
+        revision_history=[
+            CandidateBulletRevision(
+                text="Built a reporting pipeline.",
+                reason="Initial generated version.",
+                source_entry_ids=[source_entry.id],
+            )
+        ],
+    )
     question = IntakeQuestion(
         id="question-1",
         question="What business outcome did this work support?",
@@ -196,6 +218,8 @@ def test_experience_intake_session_json_round_trip() -> None:
         id="session-123",
         status=ExperienceIntakeStatus.LOCKED,
         source_text="- Built reporting pipeline",
+        source_entries=[source_entry],
+        candidate_bullets=[candidate_bullet],
         employer_name="Acme Analytics",
         job_title="Senior Data Engineer",
         location="Chicago, IL",
@@ -230,6 +254,58 @@ def test_experience_intake_session_json_round_trip() -> None:
     assert restored.start_date == YearMonth(year=2021, month=5)
     assert restored.end_date is None
     assert restored.is_current_role is True
+    assert restored.source_entries[0].id == "source-1"
+    assert restored.candidate_bullets[0].status == CandidateBulletStatus.REVIEWED
+
+
+def test_experience_source_entry_rejects_blank_content_and_naive_timestamps() -> None:
+    with pytest.raises(ValidationError):
+        ExperienceSourceEntry(content="   ")
+
+    with pytest.raises(ValidationError):
+        ExperienceSourceEntry(
+            content="- Built reporting pipeline",
+            analyzed_at="2026-01-01T00:00:00",
+        )
+
+
+def test_candidate_bullet_defaults_to_needs_review() -> None:
+    bullet = CandidateBullet(text="Built reporting automation for finance analysts.")
+
+    assert bullet.status == CandidateBulletStatus.NEEDS_REVIEW
+    assert bullet.created_at.tzinfo is not None
+    assert bullet.updated_at.tzinfo is not None
+
+
+def test_candidate_bullet_rejects_duplicate_source_references() -> None:
+    with pytest.raises(ValidationError):
+        CandidateBullet(
+            text="Built reporting automation for finance analysts.",
+            source_entry_ids=["source-1", "source-1"],
+        )
+
+
+def test_experience_intake_session_rejects_duplicate_source_and_bullet_ids() -> None:
+    source_entry = ExperienceSourceEntry(id="source-1", content="- Built reporting pipeline")
+    candidate_bullet = CandidateBullet(id="bullet-1", text="Built reporting automation.")
+
+    with pytest.raises(ValidationError, match="source_entries"):
+        ExperienceIntakeSession(source_entries=[source_entry, source_entry])
+
+    with pytest.raises(ValidationError, match="candidate_bullets"):
+        ExperienceIntakeSession(candidate_bullets=[candidate_bullet, candidate_bullet])
+
+
+def test_experience_intake_session_rejects_unknown_candidate_bullet_sources() -> None:
+    with pytest.raises(ValidationError, match="unknown source entry IDs"):
+        ExperienceIntakeSession(
+            candidate_bullets=[
+                CandidateBullet(
+                    text="Built reporting automation.",
+                    source_entry_ids=["missing-source"],
+                )
+            ]
+        )
 
 
 def test_experience_intake_session_defaults_to_draft_with_timestamps() -> None:
