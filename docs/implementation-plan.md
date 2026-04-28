@@ -58,9 +58,9 @@ Experience intake should be built as a sequence of narrow transitions:
 - source text + answers -> structured facts
 - structured facts -> draft `ExperienceEntry`
 - draft `ExperienceEntry` -> quality/completeness evaluation
-- accepted draft -> canonical `CareerProfile`
+- locked draft -> canonical `CareerProfile`
 
-The experience workflow should specifically help users reframe duty-list resume bullets into accomplishment-focused entries. Strong outputs should emphasize business impact, measurable outcomes where available, and defensible subjective accomplishments when hard metrics are unavailable. The guided process should teach better resume and cover-letter writing rather than simply accepting vague or noisy source text.
+The experience workflow should specifically help users reframe duty-list resume bullets into accomplishment-focused entries. Strong outputs should emphasize business impact, measurable outcomes where available, and defensible subjective accomplishments when hard metrics are unavailable. The guided process should teach better resume and cover-letter writing rather than simply storing vague or noisy source text.
 
 ## Completed
 
@@ -83,7 +83,7 @@ Completed validation includes:
 - commute unit validation
 - experience date consistency
 - unique `ExperienceEntry.id` values inside `CareerProfile`
-- recoverable experience intake status transitions and accepted-entry consistency
+- recoverable experience intake status transitions and locked-entry consistency
 
 ### Configuration
 - `config.py` implemented with `pydantic-settings`
@@ -122,6 +122,7 @@ Completed validation includes:
 - `experience questions`
 - `experience answer`
 - `experience draft`
+- `experience lock`
 - `experience accept`
 - `tui`
 
@@ -183,7 +184,7 @@ Build the first role-specific, resumable intake workflow before building a broad
 Completed scope:
 - stable IDs added to `ExperienceEntry`
 - `ExperienceIntakeSession` model added and scoped to one future `ExperienceEntry`
-- intake statuses added: `draft`, `source_captured`, `questions_generated`, `answers_captured`, `draft_generated`, `accepted`, and `abandoned`
+- intake statuses added: `draft`, `source_captured`, `questions_generated`, `answers_captured`, `draft_generated`, `locked`, legacy `accepted`, and `abandoned`
 - local JSON persistence added for intake sessions under `intake/experience`
 - snapshot-on-overwrite behavior added for intake sessions
 - application service added for creating, listing, loading, and capturing source text for sessions
@@ -195,23 +196,24 @@ Completed scope:
 - CLI command added for capturing user answers to generated follow-up questions
 - role metadata capture added for intake sessions so employer, title, location, employment type, and role dates are not invented during drafting
 - draft generation added for answered intake sessions, storing a draft `ExperienceEntry`
-- accept flow added to copy draft entries into canonical `CareerProfile`
+- lock flow added to copy draft entries into canonical `CareerProfile`
 - experience intake prompts moved to versioned Markdown templates
-- application service method added for safely updating generated drafts before acceptance
+- application service method added for safely updating generated drafts before locking
 - initial TUI experience list/detail and Add Experience form added under the Career Profile overview
+- legacy accept command and service method retained as compatibility aliases for locking
 
 Remaining initial scope:
 - store prompt/model metadata and evaluation results as workflow steps are added
-- keep accepted sessions archived for development traceability and future eval/prompt improvement
-- add editable TUI review flow for generated drafts before accepting entries
+- keep locked sessions archived for development traceability and future eval/prompt improvement
+- add editable TUI review flow for generated drafts before locking entries
 
 ### Career Profile Authoring
-Treat `CareerProfile` as the accepted, structured result of guided workflows rather than a large manual data-entry form.
+Treat `CareerProfile` as the locked, structured result of guided workflows rather than a large manual data-entry form.
 
 Initial direction:
-- accepted `ExperienceEntry` records become the foundation of `CareerProfile`
-- skills, tools, technologies, achievements, and career themes should be derived or refined from accepted experience data where possible
-- users should review and accept derived profile components before they become canonical
+- locked `ExperienceEntry` records become the foundation of `CareerProfile`
+- skills, tools, technologies, achievements, and career themes should be derived or refined from locked experience data where possible
+- users should review and lock derived profile components before they become canonical
 - high-level profile screens should focus on review, correction, and narrative direction rather than asking the user to manually brain-dump everything
 
 ### Experience Management
@@ -226,6 +228,7 @@ Current commands:
 - `experience questions`
 - `experience answer`
 - `experience draft`
+- `experience lock`
 - `experience accept`
 
 Planned commands:
@@ -237,7 +240,7 @@ Initial scope:
 - capture raw bullets or notes for a specific job/role, not an entire resume dump
 - support multiline source capture from files and intentional source-text appends
 - use guided LLM-assisted steps to clarify missing details and frame work as accomplishments
-- accept reviewed draft entries into canonical `CareerProfile`
+- lock reviewed draft entries into canonical `CareerProfile`
 
 ## Later
 
@@ -246,7 +249,7 @@ Expand the first intake workflow into a full collaborative authoring loop.
 
 Likely additions:
 - transcript summarization or cleanup to reduce local storage footprint
-- retained eval datasets from accepted/rejected drafts
+- retained eval datasets from locked/rejected drafts
 - prompt version tracking and evaluation history
 - optional DSPy experiments once enough workflow examples exist
 

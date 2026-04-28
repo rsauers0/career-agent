@@ -572,6 +572,71 @@ def test_add_experience_screen_saves_metadata_and_source_text() -> None:
     assert is_current_role is True
 
 
+def test_add_experience_back_refreshes_experience_list() -> None:
+    async def run_test() -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click("#add-experience")
+                await pilot.pause()
+
+                app.screen.query_one("#experience-employer-name", Input).value = "Acme Analytics"
+                app.screen.query_one("#experience-job-title", Input).value = "Senior Data Engineer"
+                app.screen.query_one("#experience-start-month").value = "5"
+                app.screen.query_one("#experience-start-year").value = "2021"
+                app.screen.query_one("#experience-current-role", Checkbox).value = True
+                app.screen.query_one(
+                    "#experience-source-text", TextArea
+                ).text = "- Built reporting automation"
+                await pilot.click("#save-experience")
+                await pilot.pause()
+
+                app.screen.action_back()
+                await pilot.pause()
+
+                card_title = app.screen.query_one(".card-title", Static)
+                return str(card_title.render())
+
+    assert asyncio.run(run_test()) == "Senior Data Engineer at Acme Analytics"
+
+
+def test_experience_screen_back_returns_to_career_profile() -> None:
+    async def run_test() -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+            )
+
+            async with app.run_test(size=(160, 80)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+
+                app.screen.action_back()
+                await pilot.pause()
+
+                title = app.screen.query_one("#screen-title", Static)
+                return str(title.render())
+
+    assert asyncio.run(run_test()) == "Career Profile"
+
+
 def test_career_profile_screen_opens_experience_sessions_and_detail() -> None:
     async def run_test() -> tuple[str, str]:
         with tempfile.TemporaryDirectory() as tmp:

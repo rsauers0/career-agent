@@ -194,7 +194,7 @@ def test_experience_intake_session_json_round_trip() -> None:
     )
     session = ExperienceIntakeSession(
         id="session-123",
-        status=ExperienceIntakeStatus.ACCEPTED,
+        status=ExperienceIntakeStatus.LOCKED,
         source_text="- Built reporting pipeline",
         employer_name="Acme Analytics",
         job_title="Senior Data Engineer",
@@ -216,15 +216,17 @@ def test_experience_intake_session_json_round_trip() -> None:
         user_answers=[answer],
         draft_experience_entry=draft_entry,
         accepted_experience_entry_id=draft_entry.id,
+        locked_at="2026-01-01T00:00:00+00:00",
     )
 
     payload = session.model_dump_json()
     restored = ExperienceIntakeSession.model_validate_json(payload)
 
     assert restored == session
-    assert restored.status == ExperienceIntakeStatus.ACCEPTED
+    assert restored.status == ExperienceIntakeStatus.LOCKED
     assert restored.draft_experience_entry is not None
     assert restored.accepted_experience_entry_id == restored.draft_experience_entry.id
+    assert restored.locked_at is not None
     assert restored.start_date == YearMonth(year=2021, month=5)
     assert restored.end_date is None
     assert restored.is_current_role is True
@@ -238,22 +240,40 @@ def test_experience_intake_session_defaults_to_draft_with_timestamps() -> None:
     assert session.updated_at.tzinfo is not None
 
 
-def test_experience_intake_session_requires_acceptance_id_when_accepted() -> None:
+def test_experience_intake_session_requires_profile_entry_id_when_locked() -> None:
     with pytest.raises(ValidationError):
-        ExperienceIntakeSession(status=ExperienceIntakeStatus.ACCEPTED)
+        ExperienceIntakeSession(status=ExperienceIntakeStatus.LOCKED)
+
+
+def test_experience_intake_session_requires_locked_at_when_locked() -> None:
+    with pytest.raises(ValidationError):
+        ExperienceIntakeSession(
+            status=ExperienceIntakeStatus.LOCKED,
+            accepted_experience_entry_id="entry-123",
+        )
 
 
 def test_experience_intake_session_rejects_mismatched_acceptance_id() -> None:
     with pytest.raises(ValidationError):
         ExperienceIntakeSession(
-            status=ExperienceIntakeStatus.ACCEPTED,
+            status=ExperienceIntakeStatus.LOCKED,
             draft_experience_entry=ExperienceEntry(
                 id="exp-123",
                 employer_name="Acme Analytics",
                 job_title="Senior Data Engineer",
             ),
             accepted_experience_entry_id="different-id",
+            locked_at="2026-01-01T00:00:00+00:00",
         )
+
+
+def test_experience_intake_session_accepts_legacy_accepted_status() -> None:
+    session = ExperienceIntakeSession(
+        status=ExperienceIntakeStatus.ACCEPTED,
+        accepted_experience_entry_id="entry-123",
+    )
+
+    assert session.status == ExperienceIntakeStatus.ACCEPTED
 
 
 def test_experience_intake_session_rejects_invalid_role_dates() -> None:

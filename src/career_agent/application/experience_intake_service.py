@@ -229,17 +229,17 @@ class ExperienceIntakeService:
         session_id: str,
         draft: ExperienceEntry,
     ) -> ExperienceIntakeSession:
-        """Update a generated draft before it is accepted into the career profile."""
+        """Update a generated draft before it is locked into the career profile."""
 
         session = self.repository.load_session(session_id)
         if session is None:
             msg = f"Experience intake session not found: {session_id}."
             raise ValueError(msg)
 
-        if session.status is ExperienceIntakeStatus.ACCEPTED:
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
             msg = (
-                "Accepted experience intake entries cannot be edited through the "
-                "draft update workflow."
+                "Locked experience intake entries cannot be edited through the draft "
+                "update workflow."
             )
             raise ValueError(msg)
 
@@ -273,11 +273,11 @@ class ExperienceIntakeService:
         self.repository.save_session(updated)
         return updated
 
-    def accept_draft_entry(self, session_id: str) -> ExperienceIntakeSession:
-        """Accept a draft experience entry into the canonical career profile."""
+    def lock_draft_entry(self, session_id: str) -> ExperienceIntakeSession:
+        """Lock a draft experience entry into the canonical career profile."""
 
         if self.profile_repository is None:
-            msg = "Profile repository is not configured for accepting experience entries."
+            msg = "Profile repository is not configured for locking experience entries."
             raise RuntimeError(msg)
 
         session = self.repository.load_session(session_id)
@@ -287,28 +287,36 @@ class ExperienceIntakeService:
 
         if session.status not in {
             ExperienceIntakeStatus.DRAFT_GENERATED,
+            ExperienceIntakeStatus.LOCKED,
             ExperienceIntakeStatus.ACCEPTED,
         }:
-            msg = "Experience intake draft must be generated before accepting it."
+            msg = "Experience intake draft must be generated before locking it."
             raise ValueError(msg)
 
         if session.draft_experience_entry is None:
-            msg = "Experience intake draft entry is required before accepting it."
+            msg = "Experience intake draft entry is required before locking it."
             raise ValueError(msg)
 
         profile = self.profile_repository.load_career_profile() or CareerProfile()
         profile = self._upsert_experience_entry(profile, session.draft_experience_entry)
         self.profile_repository.save_career_profile(profile)
+        locked_at = utc_now()
 
         updated = session.model_copy(
             update={
                 "accepted_experience_entry_id": session.draft_experience_entry.id,
-                "status": ExperienceIntakeStatus.ACCEPTED,
-                "updated_at": utc_now(),
+                "status": ExperienceIntakeStatus.LOCKED,
+                "locked_at": locked_at,
+                "updated_at": locked_at,
             }
         )
         self.repository.save_session(updated)
         return updated
+
+    def accept_draft_entry(self, session_id: str) -> ExperienceIntakeSession:
+        """Compatibility wrapper for the older accept terminology."""
+
+        return self.lock_draft_entry(session_id)
 
     def generate_follow_up_questions(self, session_id: str) -> ExperienceIntakeSession:
         """Generate and store follow-up questions for captured source text."""

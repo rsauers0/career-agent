@@ -244,7 +244,11 @@ class ExperienceIntakeScreen(Screen[None]):
         """Return to the previous screen."""
 
         self.app.pop_screen()
-        self.app.refresh(recompose=True)
+
+    def on_screen_resume(self) -> None:
+        """Refresh sessions when returning from child screens."""
+
+        self.refresh(recompose=True)
 
     def action_refresh_sessions(self) -> None:
         """Refresh the session list from storage."""

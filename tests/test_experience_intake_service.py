@@ -705,7 +705,7 @@ def test_update_draft_entry_requires_draft_generated_status() -> None:
     assert repository.load_session("session-123") == session
 
 
-def test_update_draft_entry_rejects_accepted_session() -> None:
+def test_update_draft_entry_rejects_locked_session() -> None:
     repository = FakeExperienceIntakeRepository()
     service = ExperienceIntakeService(repository)
     draft = ExperienceEntry(
@@ -715,9 +715,10 @@ def test_update_draft_entry_rejects_accepted_session() -> None:
     )
     session = ExperienceIntakeSession(
         id="session-123",
-        status=ExperienceIntakeStatus.ACCEPTED,
+        status=ExperienceIntakeStatus.LOCKED,
         draft_experience_entry=draft,
         accepted_experience_entry_id="entry-123",
+        locked_at="2026-01-01T00:00:00+00:00",
     )
     repository.save_session(session)
 
@@ -746,7 +747,7 @@ def test_update_draft_entry_requires_existing_draft_entry() -> None:
     assert repository.load_session("session-123") == session
 
 
-def test_accept_draft_entry_saves_entry_to_new_career_profile() -> None:
+def test_lock_draft_entry_saves_entry_to_new_career_profile() -> None:
     intake_repository = FakeExperienceIntakeRepository()
     profile_repository = FakeProfileRepository()
     service = ExperienceIntakeService(
@@ -766,17 +767,18 @@ def test_accept_draft_entry_saves_entry_to_new_career_profile() -> None:
     )
     intake_repository.save_session(session)
 
-    updated = service.accept_draft_entry("session-123")
+    updated = service.lock_draft_entry("session-123")
 
-    assert updated.status == ExperienceIntakeStatus.ACCEPTED
+    assert updated.status == ExperienceIntakeStatus.LOCKED
     assert updated.accepted_experience_entry_id == "entry-123"
+    assert updated.locked_at is not None
     assert updated.updated_at > session.updated_at
     assert intake_repository.load_session("session-123") == updated
     assert profile_repository.career_profile is not None
     assert profile_repository.career_profile.experience_entries == [draft]
 
 
-def test_accept_draft_entry_replaces_existing_profile_entry_with_same_id() -> None:
+def test_lock_draft_entry_replaces_existing_profile_entry_with_same_id() -> None:
     intake_repository = FakeExperienceIntakeRepository()
     profile_repository = FakeProfileRepository()
     service = ExperienceIntakeService(
@@ -811,30 +813,30 @@ def test_accept_draft_entry_replaces_existing_profile_entry_with_same_id() -> No
         )
     )
 
-    service.accept_draft_entry("session-123")
+    service.lock_draft_entry("session-123")
 
     assert profile_repository.career_profile is not None
     assert profile_repository.career_profile.experience_entries == [other_entry, new_entry]
 
 
-def test_accept_draft_entry_rejects_unconfigured_profile_repository() -> None:
+def test_lock_draft_entry_rejects_unconfigured_profile_repository() -> None:
     service = ExperienceIntakeService(FakeExperienceIntakeRepository())
 
     with pytest.raises(RuntimeError, match="Profile repository is not configured"):
-        service.accept_draft_entry("session-123")
+        service.lock_draft_entry("session-123")
 
 
-def test_accept_draft_entry_rejects_missing_session() -> None:
+def test_lock_draft_entry_rejects_missing_session() -> None:
     service = ExperienceIntakeService(
         FakeExperienceIntakeRepository(),
         profile_repository=FakeProfileRepository(),
     )
 
     with pytest.raises(ValueError, match="Experience intake session not found"):
-        service.accept_draft_entry("missing")
+        service.lock_draft_entry("missing")
 
 
-def test_accept_draft_entry_requires_draft_generated_status() -> None:
+def test_lock_draft_entry_requires_draft_generated_status() -> None:
     intake_repository = FakeExperienceIntakeRepository()
     service = ExperienceIntakeService(
         intake_repository,
@@ -844,12 +846,12 @@ def test_accept_draft_entry_requires_draft_generated_status() -> None:
     intake_repository.save_session(session)
 
     with pytest.raises(ValueError, match="draft must be generated"):
-        service.accept_draft_entry("session-123")
+        service.lock_draft_entry("session-123")
 
     assert intake_repository.load_session("session-123") == session
 
 
-def test_accept_draft_entry_requires_draft_entry() -> None:
+def test_lock_draft_entry_requires_draft_entry() -> None:
     intake_repository = FakeExperienceIntakeRepository()
     service = ExperienceIntakeService(
         intake_repository,
@@ -862,6 +864,32 @@ def test_accept_draft_entry_requires_draft_entry() -> None:
     intake_repository.save_session(session)
 
     with pytest.raises(ValueError, match="draft entry is required"):
-        service.accept_draft_entry("session-123")
+        service.lock_draft_entry("session-123")
 
     assert intake_repository.load_session("session-123") == session
+
+
+def test_accept_draft_entry_wraps_lock_draft_entry_for_compatibility() -> None:
+    intake_repository = FakeExperienceIntakeRepository()
+    profile_repository = FakeProfileRepository()
+    service = ExperienceIntakeService(
+        intake_repository,
+        profile_repository=profile_repository,
+    )
+    draft = ExperienceEntry(
+        id="entry-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    intake_repository.save_session(
+        ExperienceIntakeSession(
+            id="session-123",
+            status=ExperienceIntakeStatus.DRAFT_GENERATED,
+            draft_experience_entry=draft,
+        )
+    )
+
+    updated = service.accept_draft_entry("session-123")
+
+    assert updated.status == ExperienceIntakeStatus.LOCKED
+    assert updated.locked_at is not None

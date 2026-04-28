@@ -111,7 +111,7 @@ class CareerProfileScreen(Screen[None]):
                 yield ProfileMetricCard(
                     "Experience",
                     summary.experience_count,
-                    "Accepted role entries in the canonical profile.",
+                    "Locked role entries in the canonical profile.",
                 )
                 yield ProfileMetricCard(
                     "Education",
@@ -131,16 +131,18 @@ class CareerProfileScreen(Screen[None]):
                         yield Static("Experience", classes="card-title")
                         yield Static(
                             (
-                                "Create, review, and accept role-specific experience entries. "
+                                "Create, review, and lock role-specific experience entries. "
                                 "This is where the current experience intake workflow lives."
                             ),
                             classes="status-detail",
                         )
-                    yield Button(
-                        "Manage Experience",
-                        id="open-experience-intake",
-                        variant="primary",
-                    )
+                    with Vertical(classes="profile-action-button-container"):
+                        yield Button(
+                            "Manage Experience",
+                            id="open-experience-intake",
+                            variant="primary",
+                            classes="profile-action-button",
+                        )
 
                 with Horizontal(classes="profile-action-row"):
                     with Vertical(classes="profile-action-copy"):
@@ -149,7 +151,12 @@ class CareerProfileScreen(Screen[None]):
                             "Education entry management is planned as a separate workflow.",
                             classes="status-detail",
                         )
-                    yield Button("Coming Soon", disabled=True)
+                    with Vertical(classes="profile-action-button-container"):
+                        yield Button(
+                            "Coming Soon",
+                            disabled=True,
+                            classes="profile-action-button",
+                        )
 
                 with Horizontal(classes="profile-action-row"):
                     with Vertical(classes="profile-action-copy"):
@@ -158,7 +165,12 @@ class CareerProfileScreen(Screen[None]):
                             "Certification entry management is planned as a separate workflow.",
                             classes="status-detail",
                         )
-                    yield Button("Coming Soon", disabled=True)
+                    with Vertical(classes="profile-action-button-container"):
+                        yield Button(
+                            "Coming Soon",
+                            disabled=True,
+                            classes="profile-action-button",
+                        )
 
                 yield Static("Derived Profile Signals", classes="section-title")
                 yield Static(

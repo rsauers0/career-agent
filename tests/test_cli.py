@@ -527,7 +527,7 @@ def test_experience_draft_uses_configured_assistant(
     get_settings.cache_clear()
 
 
-def test_experience_accept_saves_draft_to_career_profile(
+def test_experience_accept_locks_draft_to_career_profile(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -585,15 +585,79 @@ def test_experience_accept_saves_draft_to_career_profile(
     profile = profile_repository.load_career_profile()
 
     assert result.exit_code == 0
-    assert "Accepted draft experience entry" in result.output
+    assert "Locked draft experience entry" in result.output
     assert session is not None
-    assert session.status.value == "accepted"
+    assert session.status.value == "locked"
     assert session.accepted_experience_entry_id is not None
+    assert session.locked_at is not None
     assert profile is not None
     assert len(profile.experience_entries) == 1
     assert profile.experience_entries[0].id == session.accepted_experience_entry_id
     assert profile.experience_entries[0].employer_name == "Acme Analytics"
     assert profile.experience_entries[0].job_title == "Senior Data Engineer"
+
+    get_settings.cache_clear()
+
+
+def test_experience_lock_saves_draft_to_career_profile(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import career_agent.cli as cli_module
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("CAREER_AGENT_LLM_MODEL", "gemma4-doc")
+
+    monkeypatch.setattr(
+        cli_module.OpenAICompatibleExperienceIntakeAssistant,
+        "from_settings",
+        lambda settings: FakeExperienceIntakeAssistant(),
+    )
+
+    intake_repository = FileExperienceIntakeRepository(tmp_path)
+    runner.invoke(
+        app,
+        [
+            "experience",
+            "create",
+            "--employer-name",
+            "Acme Analytics",
+            "--job-title",
+            "Senior Data Engineer",
+            "--start-date",
+            "05/2021",
+            "--end-date",
+            "06/2024",
+        ],
+    )
+    session_id = intake_repository.list_sessions()[0].id
+    runner.invoke(
+        app,
+        [
+            "experience",
+            "source",
+            session_id,
+            "--text",
+            "- Built reporting pipeline",
+        ],
+    )
+    runner.invoke(app, ["experience", "questions", session_id])
+    runner.invoke(
+        app,
+        ["experience", "answer", session_id],
+        input="Reduced manual reporting time by 10 hours per week.\n",
+    )
+    runner.invoke(app, ["experience", "draft", session_id])
+
+    result = runner.invoke(app, ["experience", "lock", session_id])
+    session = intake_repository.load_session(session_id)
+
+    assert result.exit_code == 0
+    assert "Locked draft experience entry" in result.output
+    assert session is not None
+    assert session.status.value == "locked"
 
     get_settings.cache_clear()
 

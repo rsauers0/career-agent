@@ -29,6 +29,7 @@ Implemented:
 - `experience questions`
 - `experience answer`
 - `experience draft`
+- `experience lock`
 - `experience accept`
 - `tui`
 
@@ -185,11 +186,11 @@ uv run career-agent experience source <session-id> --text "- Added alerting" --a
 uv run career-agent experience questions <session-id>
 uv run career-agent experience answer <session-id>
 uv run career-agent experience draft <session-id>
-uv run career-agent experience accept <session-id>
+uv run career-agent experience lock <session-id>
 uv run career-agent experience show <session-id>
 ```
 
-The `experience accept` command copies the draft `ExperienceEntry` into the canonical `CareerProfile`.
+The `experience lock` command copies the draft `ExperienceEntry` into the canonical `CareerProfile` and marks the intake session as locked. The older `experience accept` command remains as a compatibility alias for `experience lock`.
 By default, `experience source` replaces source text. Use `--append` to add to existing source text.
 
 The `experience questions` and `experience draft` commands call the configured OpenAI-compatible LLM endpoint. Use a local endpoint if you want this workflow to remain local-first.

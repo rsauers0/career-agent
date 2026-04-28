@@ -476,8 +476,18 @@ class CareerAgentTUI(App[None]):
     }
 
     .profile-action-copy {
-        width: 1fr;
+        width: 70%;
         height: auto;
+        margin-right: 4;
+    }
+
+    .profile-action-button-container {
+        width: 28;
+        height: auto;
+    }
+
+    .profile-action-button {
+        width: 26;
     }
 
     #experience-session-list {
@@ -589,6 +599,11 @@ class CareerAgentTUI(App[None]):
     }
 
     .status-draft_generated {
+        background: #5d7b6f;
+        color: #f4efe6;
+    }
+
+    .status-locked {
         background: #5d7b6f;
         color: #f4efe6;
     }

@@ -742,20 +742,31 @@ def experience_draft(session_id: str) -> None:
         _render_experience_entry(session.draft_experience_entry)
 
 
-@experience_app.command("accept")
-def experience_accept(session_id: str) -> None:
-    """Accept a draft experience entry into the canonical career profile."""
-
+def _lock_experience_session(session_id: str) -> None:
     service = _build_experience_intake_service()
     try:
-        session = service.accept_draft_entry(session_id)
+        session = service.lock_draft_entry(session_id)
     except (ValueError, RuntimeError) as error:
         _handle_experience_error(error)
 
-    console.print(f"Accepted draft experience entry for session [bold]{session.id}[/bold].")
-    console.print("Saved accepted entry to the canonical Career Profile.")
+    console.print(f"Locked draft experience entry for session [bold]{session.id}[/bold].")
+    console.print("Saved locked entry to the canonical Career Profile.")
     if session.draft_experience_entry is not None:
         _render_experience_entry(session.draft_experience_entry)
+
+
+@experience_app.command("lock")
+def experience_lock(session_id: str) -> None:
+    """Lock a draft experience entry into the canonical career profile."""
+
+    _lock_experience_session(session_id)
+
+
+@experience_app.command("accept")
+def experience_accept(session_id: str) -> None:
+    """Compatibility alias for locking a draft experience entry."""
+
+    _lock_experience_session(session_id)
 
 
 app.add_typer(preferences_app, name="preferences")

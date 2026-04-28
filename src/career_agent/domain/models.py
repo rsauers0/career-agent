@@ -43,6 +43,7 @@ class ExperienceIntakeStatus(StrEnum):
     QUESTIONS_GENERATED = "questions_generated"
     ANSWERS_CAPTURED = "answers_captured"
     DRAFT_GENERATED = "draft_generated"
+    LOCKED = "locked"
     ACCEPTED = "accepted"
     ABANDONED = "abandoned"
 
@@ -379,11 +380,18 @@ class ExperienceIntakeSession(BaseModel):
     )
     draft_experience_entry: ExperienceEntry | None = Field(
         default=None,
-        description="Draft structured experience entry awaiting review or acceptance.",
+        description="Draft structured experience entry awaiting review or locking.",
     )
     accepted_experience_entry_id: str | None = Field(
         default=None,
-        description="Identifier of the accepted canonical experience entry, if any.",
+        description=(
+            "Identifier of the canonical experience entry created when the intake is locked. "
+            "The field name is retained for backward compatibility."
+        ),
+    )
+    locked_at: datetime | None = Field(
+        default=None,
+        description="Timezone-aware UTC timestamp when this intake was locked, if any.",
     )
     created_at: datetime = Field(
         default_factory=utc_now,
@@ -394,20 +402,23 @@ class ExperienceIntakeSession(BaseModel):
         description="Timezone-aware UTC update timestamp.",
     )
 
-    @field_validator("created_at", "updated_at")
+    @field_validator("created_at", "updated_at", "locked_at")
     @classmethod
-    def validate_timestamp_timezone(cls, value: datetime) -> datetime:
+    def validate_timestamp_timezone(cls, value: datetime | None) -> datetime | None:
         """Ensure intake session timestamps are timezone-aware."""
+
+        if value is None:
+            return value
 
         return validate_timezone_aware(value, "timestamp")
 
     @model_validator(mode="after")
-    def validate_acceptance_link(self) -> ExperienceIntakeSession:
-        """Ensure accepted intake sessions link to their accepted experience entry."""
+    def validate_profile_entry_link(self) -> ExperienceIntakeSession:
+        """Ensure locked intake sessions link to their canonical experience entry."""
 
-        if self.status is ExperienceIntakeStatus.ACCEPTED:
+        if self.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
             if not self.accepted_experience_entry_id:
-                msg = "accepted_experience_entry_id is required when status is accepted."
+                msg = "accepted_experience_entry_id is required when status is locked or accepted."
                 raise ValueError(msg)
             if (
                 self.draft_experience_entry is not None
@@ -415,6 +426,10 @@ class ExperienceIntakeSession(BaseModel):
             ):
                 msg = "accepted_experience_entry_id must match draft_experience_entry.id."
                 raise ValueError(msg)
+
+        if self.status is ExperienceIntakeStatus.LOCKED and self.locked_at is None:
+            msg = "locked_at is required when status is locked."
+            raise ValueError(msg)
 
         return self
 
