@@ -538,6 +538,33 @@ class CareerAgentTUI(App[None]):
         height: auto;
     }
 
+    SourceEntryCard {
+        border: round #355266;
+        padding: 1 2;
+        margin-bottom: 1;
+        background: #111c20;
+        height: auto;
+    }
+
+    .source-entry-heading {
+        color: #f0d58c;
+        text-style: bold;
+    }
+
+    .source-entry-summary-row {
+        height: auto;
+    }
+
+    .source-entry-summary {
+        width: 1fr;
+        height: auto;
+    }
+
+    .source-entry-toggle {
+        width: 16;
+        margin-left: 2;
+    }
+
     .session-open-button {
         margin-top: 1;
         color: #f4efe6;

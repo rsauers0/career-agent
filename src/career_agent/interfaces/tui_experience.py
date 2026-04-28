@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Button, Checkbox, Footer, Header, Input, Select, Static, TextArea
 
@@ -16,11 +17,13 @@ from career_agent.domain.models import (
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceSourceEntry,
     YearMonth,
 )
 
 VIEW_SESSION_BUTTON_PREFIX = "view-experience-session-"
 EDIT_SESSION_BUTTON_PREFIX = "edit-experience-session-"
+TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX = "toggle-source-entry-"
 REQUIRED_MARKER = "[#f05f5f]*[/]"
 MONTH_OPTIONS = [
     ("January", "1"),
@@ -78,6 +81,32 @@ def format_updated_at(session: ExperienceIntakeSession) -> str:
 
     updated_at = session.updated_at.astimezone(UTC)
     return updated_at.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def format_source_created_at(source_entry: ExperienceSourceEntry) -> str:
+    """Return a stable UTC timestamp for source entry display."""
+
+    created_at = source_entry.created_at.astimezone(UTC)
+    return created_at.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def format_source_analysis_status(source_entry: ExperienceSourceEntry) -> str:
+    """Return the source entry analysis status label."""
+
+    if source_entry.analyzed_at is None:
+        return "Not analyzed"
+
+    return "Analyzed"
+
+
+def format_source_preview(source_entry: ExperienceSourceEntry, *, max_length: int = 90) -> str:
+    """Return a compact one-line preview for a source entry."""
+
+    preview = " ".join(source_entry.content.split())
+    if len(preview) <= max_length:
+        return preview
+
+    return f"{preview[: max_length - 3]}..."
 
 
 def format_year_month(value: YearMonth | None) -> str:
@@ -215,6 +244,42 @@ class ExperienceSessionCard(Static):
                 )
 
 
+class SourceEntryCard(Static):
+    """Compact, optionally expanded display for one append-only source entry."""
+
+    def __init__(self, source_entry: ExperienceSourceEntry, *, expanded: bool = False) -> None:
+        super().__init__()
+        self.source_entry = source_entry
+        self.expanded = expanded
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(classes="source-entry-summary-row"):
+            with Vertical(classes="source-entry-summary"):
+                yield Static(
+                    (
+                        f"{format_source_created_at(self.source_entry)} · "
+                        f"{format_source_analysis_status(self.source_entry)}"
+                    ),
+                    classes="source-entry-heading",
+                )
+                yield Static(
+                    f"Preview: {format_source_preview(self.source_entry)}",
+                    classes="status-detail",
+                    markup=False,
+                )
+            yield Button(
+                "Hide" if self.expanded else "View",
+                id=f"{TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX}{self.source_entry.id}",
+                classes="session-open-button source-entry-toggle",
+            )
+        if self.expanded:
+            yield Static(
+                self.source_entry.content,
+                classes="read-only-panel",
+                markup=False,
+            )
+
+
 class ExperienceIntakeScreen(Screen[None]):
     """Experience intake session list screen."""
 
@@ -242,14 +307,14 @@ class ExperienceIntakeScreen(Screen[None]):
                 ),
                 classes="help-text",
             )
-            yield Button("Add Experience", id="add-experience", variant="primary")
+            yield Button("Add New Role", id="add-experience", variant="primary")
 
             with VerticalScroll(id="experience-session-list"):
                 if not sessions:
                     yield Static(
                         (
                             "No experience entries or intake sessions found. Choose Add "
-                            "Experience to start one."
+                            "New Role to start one."
                         ),
                         classes="empty-state",
                     )
@@ -274,7 +339,7 @@ class ExperienceIntakeScreen(Screen[None]):
         self.refresh(recompose=True)
 
     def action_add_experience(self) -> None:
-        """Open the Add Experience form."""
+        """Open the New Role form."""
 
         self.app.push_screen(AddExperienceScreen(self.service))
 
@@ -308,6 +373,7 @@ class ExperienceSessionDetailScreen(Screen[None]):
         super().__init__()
         self.service = service
         self.session_id = session_id
+        self.expanded_source_entry_id: str | None = None
 
     def compose(self) -> ComposeResult:
         session = self.service.get_session(self.session_id)
@@ -351,6 +417,16 @@ class ExperienceSessionDetailScreen(Screen[None]):
                         markup=False,
                     )
 
+                    yield Static("Source Entries", classes="section-title")
+                    if session.source_entries:
+                        for source_entry in session.source_entries:
+                            yield SourceEntryCard(
+                                source_entry,
+                                expanded=source_entry.id == self.expanded_source_entry_id,
+                            )
+                    else:
+                        yield Static("No source entries added.", classes="read-only-panel")
+
                     yield Static("Questions And Answers", classes="section-title")
                     if session.follow_up_questions:
                         for question_answer_block in build_question_answer_blocks(session):
@@ -373,6 +449,19 @@ class ExperienceSessionDetailScreen(Screen[None]):
         """Return to the experience session list."""
 
         self.app.pop_screen()
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle source entry expansion."""
+
+        button_id = event.button.id or ""
+        if not button_id.startswith(TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX):
+            return
+
+        source_entry_id = button_id.removeprefix(TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX)
+        self.expanded_source_entry_id = (
+            None if self.expanded_source_entry_id == source_entry_id else source_entry_id
+        )
+        self.refresh(recompose=True)
 
 
 class DeleteExperienceSessionScreen(Screen[None]):
@@ -507,6 +596,8 @@ class AddExperienceScreen(Screen[None]):
         self.service = service
         self.session_id = session_id
         self._initial_form_state: dict[str, object] | None = None
+        self.expanded_source_entry_id: str | None = None
+        self._form_message: tuple[str, str] | None = None
 
     def compose(self) -> ComposeResult:
         years = year_options()
@@ -515,15 +606,21 @@ class AddExperienceScreen(Screen[None]):
 
         yield Header(show_clock=True)
         with Container(id="add-experience-screen"):
-            yield Static("Edit Experience" if is_editing else "Add Experience", id="screen-title")
+            yield Static("Edit Role" if is_editing else "New Role", id="screen-title")
             yield Static(
                 (
-                    "Enter known role facts and paste bullets or notes. Analysis will later "
-                    "generate structured follow-up questions from this saved intake session."
+                    "Save required role details first. After the role is saved, add source "
+                    "entries as append-only evidence for future bullet generation."
                 ),
                 classes="help-text",
             )
-            yield Static("", id="experience-form-message", classes="form-message")
+            message_text = self._form_message[0] if self._form_message else ""
+            message_class = (
+                f"form-message message-{self._form_message[1]}"
+                if self._form_message
+                else "form-message"
+            )
+            yield Static(message_text, id="experience-form-message", classes=message_class)
 
             if is_editing and session is None:
                 yield Static(
@@ -547,12 +644,13 @@ class AddExperienceScreen(Screen[None]):
                     if session is not None and self._has_generated_outputs(session):
                         yield Static(
                             (
-                                "Editing saved role facts or bullets may make existing questions "
-                                "or draft content stale. Re-run analysis after saving changes."
+                                "Editing saved role details after analysis may require generated "
+                                "content to be reviewed again."
                             ),
                             classes="message-warning",
                         )
 
+                    yield Static("Role Details", classes="section-title")
                     yield Static(
                         required_label("Company / Employer"),
                         classes="form-label required-label",
@@ -632,15 +730,8 @@ class AddExperienceScreen(Screen[None]):
                             id="experience-current-role",
                         )
 
-                    yield Static(
-                        required_label("Bullets / Notes"),
-                        classes="form-label required-label",
-                    )
-                    yield TextArea(id="experience-source-text")
-
                     with Horizontal(classes="experience-action-row"):
-                        yield Button("Save", id="save-experience", variant="primary")
-                        yield Button("Analyze with LLM", id="analyze-placeholder", disabled=True)
+                        yield Button("Save Role Details", id="save-experience", variant="primary")
                         if session is not None:
                             yield Static("", classes="action-spacer")
                             yield Button(
@@ -649,11 +740,56 @@ class AddExperienceScreen(Screen[None]):
                                 classes="danger-button",
                             )
 
+                    yield Static("Source Entries", classes="section-title")
+                    yield Static(
+                        (
+                            "Source entries are retained as submitted for traceability. "
+                            "To correct or add context later, add another source entry."
+                        ),
+                        classes="field-tip",
+                    )
+                    if session is None:
+                        yield Static(
+                            "Save role details before adding source entries.",
+                            classes="read-only-panel",
+                        )
+                    else:
+                        if session.source_entries:
+                            for source_entry in session.source_entries:
+                                yield SourceEntryCard(
+                                    source_entry,
+                                    expanded=source_entry.id == self.expanded_source_entry_id,
+                                )
+                        else:
+                            yield Static("No source entries added.", classes="read-only-panel")
+
+                        yield Static("Add Source Entry", classes="form-label")
+                        yield Static(
+                            (
+                                "Paste resume bullets, project notes, duty lists, performance "
+                                "review excerpts, or paragraphs."
+                            ),
+                            classes="field-tip",
+                        )
+                        yield TextArea(id="experience-source-text")
+
+                        with Horizontal(classes="experience-action-row"):
+                            yield Button(
+                                "Add Source Entry",
+                                id="add-source-entry",
+                                variant="primary",
+                            )
+                            yield Button(
+                                "Analyze with LLM",
+                                id="analyze-placeholder",
+                                disabled=True,
+                            )
+
                     yield Static("Assistant", classes="section-title")
                     yield Static(
                         (
-                            "LLM analysis placeholder: the next workflow step will generate "
-                            "follow-up questions from the saved role facts and source bullets."
+                            "LLM analysis placeholder: a future workflow step will analyze "
+                            "pending source entries against existing candidate bullets."
                         ),
                         classes="read-only-panel",
                     )
@@ -668,7 +804,6 @@ class AddExperienceScreen(Screen[None]):
                 self._initial_form_state = self._current_form_state()
             return
 
-        self.query_one("#experience-source-text", TextArea).text = session.source_text or ""
         self._initial_form_state = self._current_form_state()
 
     def action_back(self) -> None:
@@ -683,21 +818,30 @@ class AddExperienceScreen(Screen[None]):
         self.app.pop_screen()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle Add Experience form buttons."""
+        """Handle role form buttons."""
 
         if event.button.id == "save-experience":
             self._save_experience()
+        elif event.button.id == "add-source-entry":
+            self._add_source_entry()
         elif event.button.id == "delete-experience" and self.session_id is not None:
             self.app.push_screen(
                 DeleteExperienceSessionScreen(self.service, self.session_id),
                 callback=self._handle_delete_result,
             )
+        elif (event.button.id or "").startswith(TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX):
+            source_entry_id = (event.button.id or "").removeprefix(
+                TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX
+            )
+            self.expanded_source_entry_id = (
+                None if self.expanded_source_entry_id == source_entry_id else source_entry_id
+            )
+            self.refresh(recompose=True)
 
     def _save_experience(self) -> bool:
         try:
             employer_name = self._required_input("experience-employer-name", "Company / Employer")
             job_title = self._required_input("experience-job-title", "Job Title")
-            source_text = self._source_text()
             start_date = self._required_year_month(
                 "experience-start-month",
                 "experience-start-year",
@@ -723,7 +867,6 @@ class AddExperienceScreen(Screen[None]):
                 end_date=end_date,
                 is_current_role=is_current_role,
             )
-            session = self.service.capture_source_text(session.id, source_text)
         except (ValueError, ValidationError) as exc:
             self._set_message(str(exc), kind="error")
             return False
@@ -731,18 +874,17 @@ class AddExperienceScreen(Screen[None]):
         self.session_id = session.id
         self._initial_form_state = self._current_form_state()
 
-        self._set_message(
-            (
-                f"Saved experience intake session {session.id}. "
-                "LLM analysis will generate follow-up questions in the next workflow slice."
-            ),
-            kind="success",
-        )
+        message = f"Saved role details for {format_intake_session_title(session)}."
+        if self._source_text_area_exists():
+            self._set_message(message, kind="success")
+        else:
+            self._form_message = (message, "success")
+            self.refresh(recompose=True)
         return True
 
     def _handle_unsaved_changes_action(self, action: str | None) -> None:
         if action == "save":
-            if self._save_experience():
+            if self._save_experience() and self._save_unadded_source_entry():
                 self.app.pop_screen()
         elif action == "discard":
             self.app.pop_screen()
@@ -750,6 +892,38 @@ class AddExperienceScreen(Screen[None]):
     def _handle_delete_result(self, deleted: bool | None) -> None:
         if deleted:
             self.app.pop_screen()
+
+    def _add_source_entry(self) -> bool:
+        if self.session_id is None:
+            self._set_message("Save role details before adding source entries.", kind="error")
+            return False
+
+        if self._role_details_have_unsaved_changes():
+            self._set_message(
+                "Save role details before adding a source entry.",
+                kind="error",
+            )
+            return False
+
+        try:
+            source_text = self._source_text()
+            session = self.service.add_source_entry(self.session_id, source_text)
+        except (ValueError, ValidationError) as exc:
+            self._set_message(str(exc), kind="error")
+            return False
+
+        self.session_id = session.id
+        self._form_message = ("Added source entry.", "success")
+        self._initial_form_state = self._current_form_state(source_text=None)
+        self.refresh(recompose=True)
+        return True
+
+    def _save_unadded_source_entry(self) -> bool:
+        source_text = self._optional_source_text()
+        if source_text is None:
+            return True
+
+        return self._add_source_entry()
 
     def _target_session_id(self) -> str:
         if self.session_id is None:
@@ -785,7 +959,26 @@ class AddExperienceScreen(Screen[None]):
 
         return self._current_form_state() != self._initial_form_state
 
-    def _current_form_state(self) -> dict[str, object]:
+    def _role_details_have_unsaved_changes(self) -> bool:
+        if self._initial_form_state is None:
+            return False
+
+        current_state = self._current_form_state()
+        source_keys = {"source_text"}
+        for key, value in current_state.items():
+            if key in source_keys:
+                continue
+            if value != self._initial_form_state.get(key):
+                return True
+
+        return False
+
+    def _current_form_state(
+        self,
+        *,
+        source_text: str | None | object = Ellipsis,
+    ) -> dict[str, object]:
+        source_value = self._optional_source_text() if source_text is Ellipsis else source_text
         return {
             "employer_name": self._optional_input("experience-employer-name"),
             "job_title": self._optional_input("experience-job-title"),
@@ -796,7 +989,7 @@ class AddExperienceScreen(Screen[None]):
             "end_month": self._select_value("experience-end-month"),
             "end_year": self._select_value("experience-end-year"),
             "is_current_role": self.query_one("#experience-current-role", Checkbox).value,
-            "source_text": self.query_one("#experience-source-text", TextArea).text.strip(),
+            "source_text": source_value,
         }
 
     def _required_input(self, widget_id: str, label: str) -> str:
@@ -811,11 +1004,25 @@ class AddExperienceScreen(Screen[None]):
         return value or None
 
     def _source_text(self) -> str:
-        value = self.query_one("#experience-source-text", TextArea).text.strip()
+        value = self._optional_source_text()
         if not value:
-            msg = "Bullets / Notes are required."
+            msg = "Source entry text is required."
             raise ValueError(msg)
         return value
+
+    def _optional_source_text(self) -> str | None:
+        if not self._source_text_area_exists():
+            return None
+
+        value = self.query_one("#experience-source-text", TextArea).text.strip()
+        return value or None
+
+    def _source_text_area_exists(self) -> bool:
+        try:
+            self.query_one("#experience-source-text", TextArea)
+        except NoMatches:
+            return False
+        return True
 
     def _select_value(self, widget_id: str) -> str | None:
         value = self.query_one(f"#{widget_id}", Select).value
@@ -846,12 +1053,15 @@ class AddExperienceScreen(Screen[None]):
         return YearMonth(year=int(year_value), month=int(month_value))
 
     def _set_message(self, message: str, *, kind: str = "info") -> None:
+        self._form_message = (message, kind)
         message_widget = self.query_one("#experience-form-message", Static)
-        message_widget.remove_class("message-error", "message-success")
+        message_widget.remove_class("message-error", "message-success", "message-warning")
         if kind == "error":
             message_widget.add_class("message-error")
         elif kind == "success":
             message_widget.add_class("message-success")
+        elif kind == "warning":
+            message_widget.add_class("message-warning")
         message_widget.update(message)
 
 

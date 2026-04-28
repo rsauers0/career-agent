@@ -33,6 +33,7 @@ from career_agent.interfaces.tui_dashboard import (
     get_status_label,
 )
 from career_agent.interfaces.tui_experience import (
+    SourceEntryCard,
     build_experience_entry_sections,
     build_question_answer_blocks,
     format_intake_session_title,
@@ -538,7 +539,7 @@ def test_dashboard_career_profile_button_opens_profile_screen() -> None:
     assert asyncio.run(run_test()) == "Career Profile"
 
 
-def test_add_experience_screen_saves_metadata_and_source_text() -> None:
+def test_new_role_screen_saves_role_details_then_adds_source_entry() -> None:
     async def run_test() -> tuple[str, int, str | None, str | None, bool]:
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)
@@ -565,10 +566,13 @@ def test_add_experience_screen_saves_metadata_and_source_text() -> None:
                 app.screen.query_one("#experience-start-month").value = "5"
                 app.screen.query_one("#experience-start-year").value = "2021"
                 app.screen.query_one("#experience-current-role", Checkbox).value = True
+                await pilot.click("#save-experience")
+                await pilot.pause()
+
                 app.screen.query_one(
                     "#experience-source-text", TextArea
                 ).text = "- Built reporting automation"
-                await pilot.click("#save-experience")
+                await pilot.click("#add-source-entry")
                 await pilot.pause()
 
                 message = app.screen.query_one("#experience-form-message", Static)
@@ -578,13 +582,13 @@ def test_add_experience_screen_saves_metadata_and_source_text() -> None:
                     str(message.render()),
                     len(sessions),
                     session.employment_type,
-                    session.source_text,
+                    session.source_entries[0].content,
                     session.is_current_role,
                 )
 
     message, session_count, employment_type, source_text, is_current_role = asyncio.run(run_test())
 
-    assert "Saved experience intake session" in message
+    assert "Added source entry." in message
     assert session_count == 1
     assert employment_type == "full-time"
     assert source_text == "- Built reporting automation"
@@ -616,9 +620,6 @@ def test_add_experience_back_refreshes_experience_list() -> None:
                 app.screen.query_one("#experience-start-month").value = "5"
                 app.screen.query_one("#experience-start-year").value = "2021"
                 app.screen.query_one("#experience-current-role", Checkbox).value = True
-                app.screen.query_one(
-                    "#experience-source-text", TextArea
-                ).text = "- Built reporting automation"
                 await pilot.click("#save-experience")
                 await pilot.pause()
 
@@ -629,6 +630,59 @@ def test_add_experience_back_refreshes_experience_list() -> None:
                 return str(card_title.render())
 
     assert asyncio.run(run_test()) == "Senior Data Engineer at Acme Analytics"
+
+
+def test_edit_role_screen_expands_existing_source_entry() -> None:
+    async def run_test() -> tuple[str, str, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            experience_service = ExperienceIntakeService(experience_repository)
+            session = experience_service.create_session()
+            session = experience_service.capture_role_details(
+                session.id,
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                start_date="05/2021",
+                is_current_role=True,
+            )
+            session = experience_service.add_source_entry(
+                session.id,
+                "- Built reporting automation for finance analysts",
+            )
+            source_id = session.source_entries[0].id
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=experience_service,
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click(f"#edit-experience-session-{session.id}")
+                await pilot.pause()
+
+                preview = app.screen.query_one(".source-entry-heading", Static)
+                await pilot.click(f"#toggle-source-entry-{source_id}")
+                await pilot.pause()
+
+                expanded = app.screen.query_one(SourceEntryCard)
+                panel = expanded.query_one(".read-only-panel", Static)
+                return (
+                    str(preview.render()),
+                    str(panel.render()),
+                    str(expanded.query_one(Button).label),
+                )
+
+    heading, source_text, button_label = asyncio.run(run_test())
+
+    assert "Not analyzed" in heading
+    assert source_text == "- Built reporting automation for finance analysts"
+    assert button_label == "Hide"
 
 
 def test_experience_list_uses_view_and_edit_actions() -> None:
@@ -781,9 +835,6 @@ def test_add_experience_back_prompt_can_save_unsaved_changes() -> None:
                 app.screen.query_one("#experience-start-month").value = "5"
                 app.screen.query_one("#experience-start-year").value = "2021"
                 app.screen.query_one("#experience-current-role", Checkbox).value = True
-                app.screen.query_one(
-                    "#experience-source-text", TextArea
-                ).text = "- Built reporting automation"
                 app.screen.action_back()
                 await pilot.pause()
 
@@ -805,8 +856,55 @@ def test_add_experience_back_prompt_can_save_unsaved_changes() -> None:
     assert session_count == 1
 
 
+def test_add_source_entry_then_back_does_not_prompt_for_saved_source() -> None:
+    async def run_test() -> tuple[str, int]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=ExperienceIntakeService(experience_repository),
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click("#add-experience")
+                await pilot.pause()
+
+                app.screen.query_one("#experience-employer-name", Input).value = "Acme Analytics"
+                app.screen.query_one("#experience-job-title", Input).value = "Senior Data Engineer"
+                app.screen.query_one("#experience-start-month").value = "5"
+                app.screen.query_one("#experience-start-year").value = "2021"
+                app.screen.query_one("#experience-current-role", Checkbox).value = True
+                await pilot.click("#save-experience")
+                await pilot.pause()
+
+                app.screen.query_one(
+                    "#experience-source-text", TextArea
+                ).text = "- Built reporting automation"
+                await pilot.click("#add-source-entry")
+                await pilot.pause()
+
+                app.screen.action_back()
+                await pilot.pause()
+
+                active_title = app.screen.query_one("#screen-title", Static)
+                session = experience_repository.list_sessions()[0]
+                return str(active_title.render()), len(session.source_entries)
+
+    active_title, source_count = asyncio.run(run_test())
+
+    assert active_title == "Experience"
+    assert source_count == 1
+
+
 def test_edit_experience_screen_updates_existing_session() -> None:
-    async def run_test() -> tuple[str, str, str, int]:
+    async def run_test() -> tuple[str, str, int]:
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)
             profile_service = ProfileService(FileProfileRepository(data_dir))
@@ -839,9 +937,6 @@ def test_edit_experience_screen_updates_existing_session() -> None:
                 app.screen.query_one(
                     "#experience-job-title", Input
                 ).value = "Principal Data Engineer"
-                app.screen.query_one(
-                    "#experience-source-text", TextArea
-                ).text = "- Built reporting automation\n- Reduced manual work"
                 await pilot.click("#save-experience")
                 await pilot.pause()
 
@@ -850,15 +945,13 @@ def test_edit_experience_screen_updates_existing_session() -> None:
                 return (
                     str(title.render()),
                     updated.job_title or "",
-                    updated.source_text or "",
                     len(experience_repository.list_sessions()),
                 )
 
-    screen_title, job_title, source_text, session_count = asyncio.run(run_test())
+    screen_title, job_title, session_count = asyncio.run(run_test())
 
-    assert screen_title == "Edit Experience"
+    assert screen_title == "Edit Role"
     assert job_title == "Principal Data Engineer"
-    assert source_text == "- Built reporting automation\n- Reduced manual work"
     assert session_count == 1
 
 
