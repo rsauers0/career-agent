@@ -10,8 +10,11 @@ from career_agent.config import Settings
 from career_agent.domain.models import (
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceSourceEntry,
 )
 from career_agent.infrastructure.llm import (
+    DRAFT_CANDIDATE_BULLETS_PROMPT_VERSION,
+    DRAFT_CANDIDATE_BULLETS_SYSTEM_PROMPT,
     DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION,
     DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT,
     FOLLOW_UP_QUESTIONS_PROMPT_VERSION,
@@ -25,6 +28,23 @@ def build_captured_session() -> ExperienceIntakeSession:
         id="session-123",
         status=ExperienceIntakeStatus.SOURCE_CAPTURED,
         source_text="- Built reporting pipeline",
+    )
+
+
+def build_source_entry_session() -> ExperienceIntakeSession:
+    return ExperienceIntakeSession(
+        id="session-123",
+        status=ExperienceIntakeStatus.SOURCE_CAPTURED,
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        start_date="05/2021",
+        is_current_role=True,
+        source_entries=[
+            ExperienceSourceEntry(
+                id="source-1",
+                content="- Built reporting pipeline",
+            )
+        ],
     )
 
 
@@ -64,8 +84,10 @@ def build_chat_completion_response(content: str) -> dict[str, Any]:
 
 def test_prompt_templates_load_from_package_resources() -> None:
     assert "Return only valid JSON" in FOLLOW_UP_QUESTIONS_SYSTEM_PROMPT
+    assert "Return only valid JSON" in DRAFT_CANDIDATE_BULLETS_SYSTEM_PROMPT
     assert "Return only valid JSON" in DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT
     assert FOLLOW_UP_QUESTIONS_PROMPT_VERSION == "experience_follow_up_questions.v1"
+    assert DRAFT_CANDIDATE_BULLETS_PROMPT_VERSION == "experience_candidate_bullets.v1"
     assert DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION == "experience_draft_entry.v1"
 
 
@@ -189,6 +211,77 @@ def test_generate_follow_up_questions_rejects_missing_message_content() -> None:
 
     with pytest.raises(ValueError, match="choices\\[0\\].message.content"):
         assistant.generate_follow_up_questions(build_captured_session())
+
+
+def test_generate_candidate_bullets_calls_openai_compatible_endpoint() -> None:
+    captured_requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        return httpx.Response(
+            200,
+            json=build_chat_completion_response(
+                json.dumps(
+                    {
+                        "candidate_bullets": [
+                            {
+                                "text": (
+                                    "Reduced manual reporting work by building a reporting "
+                                    "pipeline."
+                                ),
+                                "source_entry_ids": ["source-1"],
+                                "review_notes": ["Confirm impact before final use."],
+                            }
+                        ]
+                    }
+                )
+            ),
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    assistant = OpenAICompatibleExperienceIntakeAssistant(
+        base_url="http://localhost:1234/v1",
+        model="gemma4-doc",
+        api_key="test-key",
+        client=client,
+    )
+    session = build_source_entry_session()
+
+    bullets = assistant.generate_candidate_bullets(session, session.source_entries)
+
+    assert len(bullets) == 1
+    assert bullets[0].text == "Reduced manual reporting work by building a reporting pipeline."
+    assert bullets[0].source_entry_ids == ["source-1"]
+
+    request = captured_requests[0]
+    payload = json.loads(request.content)
+    assert str(request.url) == "http://localhost:1234/v1/chat/completions"
+    assert request.headers["Authorization"] == "Bearer test-key"
+    assert payload["model"] == "gemma4-doc"
+    assert payload["response_format"] == {"type": "json_object"}
+    assert payload["temperature"] == 0.2
+    assert DRAFT_CANDIDATE_BULLETS_PROMPT_VERSION in payload["messages"][1]["content"]
+    assert "source-1" in payload["messages"][1]["content"]
+    assert "- Built reporting pipeline" in payload["messages"][1]["content"]
+
+
+def test_generate_candidate_bullets_rejects_invalid_response_shape() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=build_chat_completion_response(json.dumps({"not_candidate_bullets": []})),
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    assistant = OpenAICompatibleExperienceIntakeAssistant(
+        base_url="http://localhost:1234/v1",
+        model="gemma4-doc",
+        client=client,
+    )
+    session = build_source_entry_session()
+
+    with pytest.raises(ValueError, match="candidate bullets schema"):
+        assistant.generate_candidate_bullets(session, session.source_entries)
 
 
 def test_draft_experience_entry_calls_openai_compatible_endpoint() -> None:

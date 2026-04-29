@@ -13,6 +13,8 @@ from textual.widgets import Button, Checkbox, Footer, Header, Input, Select, Sta
 
 from career_agent.application.experience_intake_service import ExperienceIntakeService
 from career_agent.domain.models import (
+    CandidateBullet,
+    CandidateBulletStatus,
     EmploymentType,
     ExperienceEntry,
     ExperienceIntakeSession,
@@ -24,6 +26,8 @@ from career_agent.domain.models import (
 VIEW_SESSION_BUTTON_PREFIX = "view-experience-session-"
 EDIT_SESSION_BUTTON_PREFIX = "edit-experience-session-"
 TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX = "toggle-source-entry-"
+REVIEW_CANDIDATE_BULLET_BUTTON_PREFIX = "review-candidate-bullet-"
+REMOVE_CANDIDATE_BULLET_BUTTON_PREFIX = "remove-candidate-bullet-"
 REQUIRED_MARKER = "[#f05f5f]*[/]"
 MONTH_OPTIONS = [
     ("January", "1"),
@@ -107,6 +111,12 @@ def format_source_preview(source_entry: ExperienceSourceEntry, *, max_length: in
         return preview
 
     return f"{preview[: max_length - 3]}..."
+
+
+def format_candidate_bullet_status(status: CandidateBulletStatus) -> str:
+    """Format a candidate bullet status for display."""
+
+    return status.value.replace("_", " ").title()
 
 
 def format_year_month(value: YearMonth | None) -> str:
@@ -278,6 +288,40 @@ class SourceEntryCard(Static):
                 classes="read-only-panel",
                 markup=False,
             )
+
+
+class CandidateBulletCard(Static):
+    """Display and review controls for one candidate bullet."""
+
+    def __init__(self, bullet: CandidateBullet) -> None:
+        super().__init__()
+        self.bullet = bullet
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            format_candidate_bullet_status(self.bullet.status),
+            classes=f"status-pill status-{self.bullet.status.value}",
+        )
+        yield Static(self.bullet.text, classes="read-only-panel", markup=False)
+        if self.bullet.review_notes:
+            yield Static(
+                "\n".join(f"- {note}" for note in self.bullet.review_notes),
+                classes="status-detail",
+                markup=False,
+            )
+        with Horizontal(classes="experience-action-row"):
+            if self.bullet.status != CandidateBulletStatus.REVIEWED:
+                yield Button(
+                    "Mark Reviewed",
+                    id=f"{REVIEW_CANDIDATE_BULLET_BUTTON_PREFIX}{self.bullet.id}",
+                    classes="session-open-button",
+                )
+            if self.bullet.status != CandidateBulletStatus.REMOVED:
+                yield Button(
+                    "Remove",
+                    id=f"{REMOVE_CANDIDATE_BULLET_BUTTON_PREFIX}{self.bullet.id}",
+                    classes="danger-button",
+                )
 
 
 class ExperienceIntakeScreen(Screen[None]):
@@ -763,6 +807,17 @@ class AddExperienceScreen(Screen[None]):
                         else:
                             yield Static("No source entries added.", classes="read-only-panel")
 
+                        with Horizontal(classes="experience-action-row"):
+                            yield Button(
+                                "Analyze Sources",
+                                id="analyze-source-entries",
+                                variant="primary",
+                                disabled=not any(
+                                    source_entry.analyzed_at is None
+                                    for source_entry in session.source_entries
+                                ),
+                            )
+
                         yield Static("Add Source Entry", classes="form-label")
                         yield Static(
                             (
@@ -779,11 +834,21 @@ class AddExperienceScreen(Screen[None]):
                                 id="add-source-entry",
                                 variant="primary",
                             )
-                            yield Button(
-                                "Analyze with LLM",
-                                id="analyze-placeholder",
-                                disabled=True,
-                            )
+
+                    yield Static("Candidate Bullets", classes="section-title")
+                    if session is None:
+                        yield Static(
+                            "Save role details and add source entries before generating bullets.",
+                            classes="read-only-panel",
+                        )
+                    elif session.candidate_bullets:
+                        for bullet in session.candidate_bullets:
+                            yield CandidateBulletCard(bullet)
+                    else:
+                        yield Static(
+                            "No candidate bullets generated yet.",
+                            classes="read-only-panel",
+                        )
 
                     yield Static("Assistant", classes="section-title")
                     yield Static(
@@ -824,11 +889,19 @@ class AddExperienceScreen(Screen[None]):
             self._save_experience()
         elif event.button.id == "add-source-entry":
             self._add_source_entry()
+        elif event.button.id == "analyze-source-entries":
+            self._analyze_source_entries()
         elif event.button.id == "delete-experience" and self.session_id is not None:
             self.app.push_screen(
                 DeleteExperienceSessionScreen(self.service, self.session_id),
                 callback=self._handle_delete_result,
             )
+        elif (event.button.id or "").startswith(REVIEW_CANDIDATE_BULLET_BUTTON_PREFIX):
+            bullet_id = (event.button.id or "").removeprefix(REVIEW_CANDIDATE_BULLET_BUTTON_PREFIX)
+            self._mark_candidate_bullet_reviewed(bullet_id)
+        elif (event.button.id or "").startswith(REMOVE_CANDIDATE_BULLET_BUTTON_PREFIX):
+            bullet_id = (event.button.id or "").removeprefix(REMOVE_CANDIDATE_BULLET_BUTTON_PREFIX)
+            self._remove_candidate_bullet(bullet_id)
         elif (event.button.id or "").startswith(TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX):
             source_entry_id = (event.button.id or "").removeprefix(
                 TOGGLE_SOURCE_ENTRY_BUTTON_PREFIX
@@ -918,6 +991,62 @@ class AddExperienceScreen(Screen[None]):
         self.refresh(recompose=True)
         return True
 
+    def _analyze_source_entries(self) -> bool:
+        if self.session_id is None:
+            self._set_message("Save role details before analyzing source entries.", kind="error")
+            return False
+
+        if self._has_unsaved_changes():
+            self._set_message(
+                "Save role details and add or clear source text before analyzing.",
+                kind="error",
+            )
+            return False
+
+        try:
+            session = self.service.analyze_pending_source_entries(self.session_id)
+        except (RuntimeError, ValueError, ValidationError) as exc:
+            self._set_message(str(exc), kind="error")
+            return False
+
+        self._form_message = (
+            f"Generated {len(session.candidate_bullets)} candidate bullet(s).",
+            "success",
+        )
+        self._initial_form_state = self._current_form_state(source_text=None)
+        self.refresh(recompose=True)
+        return True
+
+    def _mark_candidate_bullet_reviewed(self, bullet_id: str) -> bool:
+        if self.session_id is None:
+            self._set_message("Save role details before reviewing bullets.", kind="error")
+            return False
+
+        try:
+            self.service.mark_candidate_bullet_reviewed(self.session_id, bullet_id)
+        except ValueError as exc:
+            self._set_message(str(exc), kind="error")
+            return False
+
+        self._form_message = ("Marked candidate bullet reviewed.", "success")
+        self.refresh(recompose=True)
+        return True
+
+    def _remove_candidate_bullet(self, bullet_id: str) -> bool:
+        if self.session_id is None:
+            self._set_message("Save role details before removing bullets.", kind="error")
+            return False
+
+        try:
+            self.service.remove_candidate_bullet(self.session_id, bullet_id)
+        except ValueError as exc:
+            self._set_message(str(exc), kind="error")
+            return False
+
+        self._form_message = ("Removed candidate bullet from active use.", "success")
+        self.refresh(recompose=True)
+        return True
+
     def _save_unadded_source_entry(self) -> bool:
         source_text = self._optional_source_text()
         if source_text is None:
@@ -951,6 +1080,7 @@ class AddExperienceScreen(Screen[None]):
             session.follow_up_questions
             or session.user_answers
             or session.draft_experience_entry is not None
+            or session.candidate_bullets
         )
 
     def _has_unsaved_changes(self) -> bool:

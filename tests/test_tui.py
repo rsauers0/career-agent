@@ -12,6 +12,7 @@ from career_agent.application.profile_service import ProfileService
 from career_agent.application.status import ComponentStatus, ComponentStatusState
 from career_agent.config import Settings, get_settings
 from career_agent.domain.models import (
+    CandidateBullet,
     CareerProfile,
     ExperienceEntry,
     ExperienceIntakeSession,
@@ -33,6 +34,7 @@ from career_agent.interfaces.tui_dashboard import (
     get_status_label,
 )
 from career_agent.interfaces.tui_experience import (
+    CandidateBulletCard,
     SourceEntryCard,
     build_experience_entry_sections,
     build_question_answer_blocks,
@@ -51,6 +53,26 @@ from career_agent.interfaces.tui_preferences import (
     required_label,
 )
 from career_agent.interfaces.tui_profile import build_career_profile_summary
+
+
+class FakeExperienceIntakeAssistant:
+    def generate_follow_up_questions(self, session):
+        return []
+
+    def generate_candidate_bullets(self, session, source_entries):
+        return [
+            CandidateBullet(
+                id="bullet-1",
+                text="Reduced manual reporting work by building reporting automation.",
+                source_entry_ids=[source_entry.id for source_entry in source_entries],
+            )
+        ]
+
+    def draft_experience_entry(self, session):
+        return ExperienceEntry(
+            employer_name=session.employer_name or "Acme Analytics",
+            job_title=session.job_title or "Senior Data Engineer",
+        )
 
 
 def test_format_component_name_converts_internal_key_to_label() -> None:
@@ -901,6 +923,67 @@ def test_add_source_entry_then_back_does_not_prompt_for_saved_source() -> None:
 
     assert active_title == "Experience"
     assert source_count == 1
+
+
+def test_analyze_sources_generates_candidate_bullets_for_review() -> None:
+    async def run_test() -> tuple[str, str, str, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            experience_service = ExperienceIntakeService(
+                experience_repository,
+                FakeExperienceIntakeAssistant(),
+            )
+            session = experience_service.create_session()
+            session = experience_service.capture_role_details(
+                session.id,
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                start_date="05/2021",
+                is_current_role=True,
+            )
+            session = experience_service.add_source_entry(
+                session.id,
+                "- Built reporting automation",
+            )
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=experience_service,
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click(f"#edit-experience-session-{session.id}")
+                await pilot.pause()
+                await pilot.click("#analyze-source-entries")
+                await pilot.pause()
+
+                bullet_card = app.screen.query_one(CandidateBulletCard)
+                bullet_text = bullet_card.query_one(".read-only-panel", Static)
+                status = bullet_card.query_one(".status-pill", Static)
+                app.screen._mark_candidate_bullet_reviewed("bullet-1")
+                await pilot.pause()
+
+                updated = experience_repository.load_session(session.id)
+                assert updated is not None
+                return (
+                    str(status.render()),
+                    str(bullet_text.render()),
+                    updated.candidate_bullets[0].status.value,
+                    str(updated.source_entries[0].analyzed_at is not None),
+                )
+
+    status_label, bullet_text, bullet_status, source_analyzed = asyncio.run(run_test())
+
+    assert status_label == "Needs Review"
+    assert bullet_text == "Reduced manual reporting work by building reporting automation."
+    assert bullet_status == "reviewed"
+    assert source_analyzed == "True"
 
 
 def test_edit_experience_screen_updates_existing_session() -> None:

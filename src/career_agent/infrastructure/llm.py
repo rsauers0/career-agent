@@ -8,7 +8,14 @@ import httpx
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from career_agent.config import Settings
-from career_agent.domain.models import ExperienceEntry, ExperienceIntakeSession, IntakeQuestion
+from career_agent.domain.models import (
+    CandidateBullet,
+    CandidateBulletStatus,
+    ExperienceEntry,
+    ExperienceIntakeSession,
+    ExperienceSourceEntry,
+    IntakeQuestion,
+)
 
 
 def _load_prompt(filename: str) -> str:
@@ -23,9 +30,11 @@ def _load_prompt(filename: str) -> str:
 
 
 FOLLOW_UP_QUESTIONS_PROMPT_VERSION = "experience_follow_up_questions.v1"
+DRAFT_CANDIDATE_BULLETS_PROMPT_VERSION = "experience_candidate_bullets.v1"
 DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION = "experience_draft_entry.v1"
 
 FOLLOW_UP_QUESTIONS_SYSTEM_PROMPT = _load_prompt(f"{FOLLOW_UP_QUESTIONS_PROMPT_VERSION}.md")
+DRAFT_CANDIDATE_BULLETS_SYSTEM_PROMPT = _load_prompt(f"{DRAFT_CANDIDATE_BULLETS_PROMPT_VERSION}.md")
 DRAFT_EXPERIENCE_ENTRY_SYSTEM_PROMPT = _load_prompt(f"{DRAFT_EXPERIENCE_ENTRY_PROMPT_VERSION}.md")
 
 
@@ -39,6 +48,12 @@ class DraftExperienceEntryResponse(BaseModel):
     """Structured response expected from the draft experience entry prompt."""
 
     experience_entry: ExperienceEntry
+
+
+class DraftCandidateBulletsResponse(BaseModel):
+    """Structured response expected from the candidate bullet prompt."""
+
+    candidate_bullets: list[CandidateBullet] = Field(min_length=1, max_length=12)
 
 
 class OpenAICompatibleExperienceIntakeAssistant:
@@ -102,6 +117,37 @@ class OpenAICompatibleExperienceIntakeAssistant:
         content = self._extract_message_content(response.json())
         parsed = self._parse_follow_up_questions_response(content)
         return parsed.questions
+
+    def generate_candidate_bullets(
+        self,
+        session: ExperienceIntakeSession,
+        source_entries: list[ExperienceSourceEntry],
+    ) -> list[CandidateBullet]:
+        """Generate candidate bullets from pending source entries."""
+
+        if not source_entries:
+            msg = "Experience source entries are required."
+            raise ValueError(msg)
+        if not session.employer_name:
+            msg = "Experience intake employer name is required."
+            raise ValueError(msg)
+        if not session.job_title:
+            msg = "Experience intake job title is required."
+            raise ValueError(msg)
+
+        response = self.client.post(
+            f"{self.base_url}/chat/completions",
+            headers=self._headers(),
+            json=self._build_candidate_bullets_payload(session, source_entries),
+        )
+        response.raise_for_status()
+
+        content = self._extract_message_content(response.json())
+        parsed = self._parse_candidate_bullets_response(content)
+        return [
+            bullet.model_copy(update={"status": CandidateBulletStatus.NEEDS_REVIEW})
+            for bullet in parsed.candidate_bullets
+        ]
 
     def draft_experience_entry(
         self,
@@ -170,6 +216,40 @@ class OpenAICompatibleExperienceIntakeAssistant:
             "response_format": {"type": "json_object"},
         }
 
+    def _build_candidate_bullets_payload(
+        self,
+        session: ExperienceIntakeSession,
+        source_entries: list[ExperienceSourceEntry],
+    ) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": DRAFT_CANDIDATE_BULLETS_SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Prompt version: {DRAFT_CANDIDATE_BULLETS_PROMPT_VERSION}\n\n"
+                        f"Experience intake session ID: {session.id}\n\n"
+                        "Role metadata:\n"
+                        f"- Employer: {session.employer_name}\n"
+                        f"- Job title: {session.job_title}\n"
+                        f"- Location: {session.location or '-'}\n"
+                        f"- Employment type: {session.employment_type or '-'}\n"
+                        f"- Dates: {_format_session_dates(session)}\n\n"
+                        "Existing candidate bullets:\n"
+                        f"{_format_candidate_bullets(session)}\n\n"
+                        "Pending source entries to analyze:\n"
+                        f"{_format_source_entries(source_entries)}"
+                    ),
+                },
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+
     def _build_draft_experience_entry_payload(
         self,
         session: ExperienceIntakeSession,
@@ -224,6 +304,17 @@ class OpenAICompatibleExperienceIntakeAssistant:
             msg = "LLM response did not match the follow-up questions schema."
             raise ValueError(msg) from error
 
+    def _parse_candidate_bullets_response(
+        self,
+        content: str,
+    ) -> DraftCandidateBulletsResponse:
+        try:
+            payload = json.loads(_strip_json_fence(content))
+            return DraftCandidateBulletsResponse.model_validate(payload)
+        except (json.JSONDecodeError, ValidationError) as error:
+            msg = "LLM response did not match the candidate bullets schema."
+            raise ValueError(msg) from error
+
     def _parse_draft_experience_entry_response(
         self,
         content: str,
@@ -246,6 +337,42 @@ def _format_question_answer_pairs(session: ExperienceIntakeSession) -> str:
         lines.append(f"{index}. Question: {question}\n   Answer: {answer.answer}")
 
     return "\n".join(lines)
+
+
+def _format_source_entries(source_entries: list[ExperienceSourceEntry]) -> str:
+    lines = []
+    for index, source_entry in enumerate(source_entries, start=1):
+        lines.append(
+            f"{index}. Source entry ID: {source_entry.id}\n   Content:\n{source_entry.content}"
+        )
+
+    return "\n\n".join(lines)
+
+
+def _format_candidate_bullets(session: ExperienceIntakeSession) -> str:
+    if not session.candidate_bullets:
+        return "None."
+
+    lines = []
+    for index, bullet in enumerate(session.candidate_bullets, start=1):
+        lines.append(
+            f"{index}. ID: {bullet.id}\n"
+            f"   Status: {bullet.status.value}\n"
+            f"   Text: {bullet.text}\n"
+            f"   Source entry IDs: {', '.join(bullet.source_entry_ids) or '-'}"
+        )
+
+    return "\n".join(lines)
+
+
+def _format_session_dates(session: ExperienceIntakeSession) -> str:
+    start_date = session.start_date.model_dump() if session.start_date else "-"
+    if session.is_current_role:
+        end_date = "Present"
+    else:
+        end_date = session.end_date.model_dump() if session.end_date else "-"
+
+    return f"{start_date} to {end_date}"
 
 
 def _strip_json_fence(content: str) -> str:

@@ -161,6 +161,63 @@ class ExperienceIntakeService:
         self.repository.save_session(updated)
         return updated
 
+    def analyze_pending_source_entries(self, session_id: str) -> ExperienceIntakeSession:
+        """Analyze pending source entries into candidate bullets."""
+
+        if self.assistant is None:
+            msg = "Experience intake assistant is not configured."
+            raise RuntimeError(msg)
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot analyze source entries."
+            raise ValueError(msg)
+
+        pending_sources = [
+            source_entry
+            for source_entry in session.source_entries
+            if source_entry.analyzed_at is None
+        ]
+        if not pending_sources:
+            msg = "No pending source entries are available to analyze."
+            raise ValueError(msg)
+
+        candidate_bullets = self.assistant.generate_candidate_bullets(session, pending_sources)
+        if not candidate_bullets:
+            msg = "Experience intake assistant returned no candidate bullets."
+            raise ValueError(msg)
+
+        normalized_bullets = [
+            bullet.model_copy(update={"status": CandidateBulletStatus.NEEDS_REVIEW})
+            for bullet in candidate_bullets
+        ]
+        analyzed_at = utc_now()
+        pending_source_ids = {source_entry.id for source_entry in pending_sources}
+        source_entries = [
+            source_entry.model_copy(update={"analyzed_at": analyzed_at})
+            if source_entry.id in pending_source_ids
+            else source_entry
+            for source_entry in session.source_entries
+        ]
+        updated = ExperienceIntakeSession.model_validate(
+            session.model_copy(
+                update={
+                    "source_entries": source_entries,
+                    "candidate_bullets": [
+                        *session.candidate_bullets,
+                        *normalized_bullets,
+                    ],
+                    "updated_at": analyzed_at,
+                }
+            ).model_dump()
+        )
+        self.repository.save_session(updated)
+        return updated
+
     def mark_candidate_bullet_reviewed(
         self,
         session_id: str,

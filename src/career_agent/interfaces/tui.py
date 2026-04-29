@@ -10,6 +10,7 @@ from career_agent.application.dashboard import build_dashboard_sections
 from career_agent.application.experience_intake_service import ExperienceIntakeService
 from career_agent.application.profile_service import ProfileService
 from career_agent.config import Settings, get_settings
+from career_agent.infrastructure.llm import OpenAICompatibleExperienceIntakeAssistant
 from career_agent.infrastructure.repositories import (
     FileExperienceIntakeRepository,
     FileProfileRepository,
@@ -673,6 +674,21 @@ class CareerAgentTUI(App[None]):
         background: #9c4f42;
         color: #fff8ed;
     }
+
+    .status-needs_review {
+        background: #b88746;
+        color: #101820;
+    }
+
+    .status-reviewed {
+        background: #5d7b6f;
+        color: #f4efe6;
+    }
+
+    .status-removed {
+        background: #9c4f42;
+        color: #fff8ed;
+    }
     """
 
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
@@ -748,8 +764,12 @@ def build_tui() -> CareerAgentTUI:
     settings = get_settings()
     profile_repository = FileProfileRepository(settings.data_dir)
     profile_service = ProfileService(profile_repository)
+    assistant = None
+    if settings.effective_llm_extraction_base_url and settings.effective_llm_extraction_model:
+        assistant = OpenAICompatibleExperienceIntakeAssistant.from_settings(settings)
     experience_intake_service = ExperienceIntakeService(
         FileExperienceIntakeRepository(settings.data_dir),
+        assistant=assistant,
         profile_repository=profile_repository,
     )
     return CareerAgentTUI(

@@ -3,10 +3,12 @@ from __future__ import annotations
 from typing import Protocol
 
 from career_agent.domain.models import (
+    CandidateBullet,
     CareerProfile,
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceSourceEntry,
     IntakeQuestion,
     UserPreferences,
 )
@@ -64,6 +66,13 @@ class ExperienceIntakeAssistant(Protocol):
         session: ExperienceIntakeSession,
     ) -> list[IntakeQuestion]:
         """Generate structured follow-up questions for an intake session."""
+
+    def generate_candidate_bullets(
+        self,
+        session: ExperienceIntakeSession,
+        source_entries: list[ExperienceSourceEntry],
+    ) -> list[CandidateBullet]:
+        """Generate candidate bullets from pending source entries."""
 
     def draft_experience_entry(
         self,

@@ -73,7 +73,13 @@ class FakeExperienceIntakeAssistant:
                 )
             ]
         self.questions = questions
+        self.candidate_bullets = [
+            CandidateBullet(
+                text="Reduced manual reporting work by building reporting automation.",
+            )
+        ]
         self.received_session: ExperienceIntakeSession | None = None
+        self.received_source_entry_ids: list[str] = []
         self.received_draft_session: ExperienceIntakeSession | None = None
 
     def generate_follow_up_questions(
@@ -82,6 +88,20 @@ class FakeExperienceIntakeAssistant:
     ) -> list[IntakeQuestion]:
         self.received_session = session
         return self.questions
+
+    def generate_candidate_bullets(
+        self,
+        session: ExperienceIntakeSession,
+        source_entries,
+    ) -> list[CandidateBullet]:
+        self.received_session = session
+        self.received_source_entry_ids = [source_entry.id for source_entry in source_entries]
+        return [
+            bullet.model_copy(
+                update={"source_entry_ids": [source_entry.id for source_entry in source_entries]}
+            )
+            for bullet in self.candidate_bullets
+        ]
 
     def draft_experience_entry(self, session: ExperienceIntakeSession) -> ExperienceEntry:
         self.received_draft_session = session
@@ -265,6 +285,48 @@ def test_replace_candidate_bullets_validates_source_references() -> None:
             "session-123",
             [CandidateBullet(text="Unsupported bullet.", source_entry_ids=["missing-source"])],
         )
+
+
+def test_analyze_pending_source_entries_generates_bullets_and_marks_sources_analyzed() -> None:
+    repository = FakeExperienceIntakeRepository()
+    assistant = FakeExperienceIntakeAssistant()
+    service = ExperienceIntakeService(repository, assistant)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+    )
+    repository.save_session(session)
+    updated = service.add_source_entry("session-123", "- Built reporting automation")
+    source_id = updated.source_entries[0].id
+
+    analyzed = service.analyze_pending_source_entries("session-123")
+
+    assert assistant.received_source_entry_ids == [source_id]
+    assert analyzed.source_entries[0].analyzed_at is not None
+    assert len(analyzed.candidate_bullets) == 1
+    assert analyzed.candidate_bullets[0].status == CandidateBulletStatus.NEEDS_REVIEW
+    assert analyzed.candidate_bullets[0].source_entry_ids == [source_id]
+    assert repository.load_session("session-123") == analyzed
+
+
+def test_analyze_pending_source_entries_requires_assistant() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    with pytest.raises(RuntimeError, match="assistant is not configured"):
+        service.analyze_pending_source_entries("session-123")
+
+
+def test_analyze_pending_source_entries_requires_pending_sources() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository, FakeExperienceIntakeAssistant())
+    repository.save_session(ExperienceIntakeSession(id="session-123"))
+
+    with pytest.raises(ValueError, match="No pending source entries"):
+        service.analyze_pending_source_entries("session-123")
 
 
 def test_mark_candidate_bullet_reviewed_and_removed_updates_status() -> None:
