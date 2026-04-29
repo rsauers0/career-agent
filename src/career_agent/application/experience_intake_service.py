@@ -13,6 +13,7 @@ from career_agent.domain.models import (
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceRoleStatus,
     ExperienceSourceEntry,
     IntakeAnswer,
     YearMonth,
@@ -88,6 +89,8 @@ class ExperienceIntakeService:
         updated = session.model_copy(
             update={
                 "source_entries": [*session.source_entries, source_entry],
+                "role_status": self._role_status_after_change(session),
+                "role_reviewed_at": None,
                 "status": ExperienceIntakeStatus.SOURCE_CAPTURED,
                 "updated_at": utc_now(),
             }
@@ -154,6 +157,8 @@ class ExperienceIntakeService:
             session.model_copy(
                 update={
                     "candidate_bullets": candidate_bullets,
+                    "role_status": ExperienceRoleStatus.REVIEW_REQUIRED,
+                    "role_reviewed_at": None,
                     "updated_at": utc_now(),
                 }
             ).model_dump()
@@ -211,6 +216,8 @@ class ExperienceIntakeService:
                         *session.candidate_bullets,
                         *normalized_bullets,
                     ],
+                    "role_status": ExperienceRoleStatus.REVIEW_REQUIRED,
+                    "role_reviewed_at": None,
                     "updated_at": analyzed_at,
                 }
             ).model_dump()
@@ -296,6 +303,8 @@ class ExperienceIntakeService:
             session.model_copy(
                 update={
                     "candidate_bullets": candidate_bullets,
+                    "role_status": ExperienceRoleStatus.REVIEW_REQUIRED,
+                    "role_reviewed_at": None,
                     "updated_at": updated_at,
                 }
             ).model_dump()
@@ -328,6 +337,8 @@ class ExperienceIntakeService:
         updated = session.model_copy(
             update={
                 "source_text": normalized_source_text,
+                "role_status": self._role_status_after_change(session),
+                "role_reviewed_at": None,
                 "status": ExperienceIntakeStatus.SOURCE_CAPTURED,
                 "updated_at": utc_now(),
             }
@@ -379,6 +390,8 @@ class ExperienceIntakeService:
                 "start_date": normalized_start_date,
                 "end_date": normalized_end_date,
                 "is_current_role": is_current_role,
+                "role_status": self._role_status_after_change(session),
+                "role_reviewed_at": None,
                 "updated_at": utc_now(),
             }
         )
@@ -567,6 +580,76 @@ class ExperienceIntakeService:
 
         return self.lock_draft_entry(session_id)
 
+    def save_role_focus_statement(
+        self,
+        session_id: str,
+        statement: str,
+    ) -> ExperienceIntakeSession:
+        """Store the user's plain-language role focus statement."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot update role focus."
+            raise ValueError(msg)
+
+        normalized_statement = statement.strip()
+        if not normalized_statement:
+            msg = "Role focus statement is required."
+            raise ValueError(msg)
+
+        updated = session.model_copy(
+            update={
+                "role_focus_statement": normalized_statement,
+                "role_status": self._role_status_after_change(session),
+                "role_reviewed_at": None,
+                "updated_at": utc_now(),
+            }
+        )
+        updated = ExperienceIntakeSession.model_validate(updated.model_dump())
+        self.repository.save_session(updated)
+        return updated
+
+    def mark_role_reviewed(
+        self,
+        session_id: str,
+        *,
+        notes: list[str] | None = None,
+    ) -> ExperienceIntakeSession:
+        """Mark the role as reviewed by the user."""
+
+        session = self.repository.load_session(session_id)
+        if session is None:
+            msg = f"Experience intake session not found: {session_id}."
+            raise ValueError(msg)
+
+        if session.status in {ExperienceIntakeStatus.LOCKED, ExperienceIntakeStatus.ACCEPTED}:
+            msg = "Locked experience intake entries cannot update role review."
+            raise ValueError(msg)
+
+        self._validate_ready_for_role_review(session)
+
+        reviewed_at = utc_now()
+        review_notes = session.role_review_notes
+        if notes:
+            review_notes = [*review_notes, *notes]
+
+        updated = ExperienceIntakeSession.model_validate(
+            session.model_copy(
+                update={
+                    "role_status": ExperienceRoleStatus.REVIEWED,
+                    "role_reviewed_at": reviewed_at,
+                    "role_review_notes": review_notes,
+                    "updated_at": reviewed_at,
+                }
+            ).model_dump()
+        )
+        self.repository.save_session(updated)
+        return updated
+
     def generate_follow_up_questions(self, session_id: str) -> ExperienceIntakeSession:
         """Generate and store follow-up questions for captured source text."""
 
@@ -664,11 +747,51 @@ class ExperienceIntakeService:
         updated = session.model_copy(
             update={
                 "candidate_bullets": candidate_bullets,
+                "role_status": ExperienceRoleStatus.REVIEW_REQUIRED,
+                "role_reviewed_at": None,
                 "updated_at": updated_at,
             }
         )
         self.repository.save_session(updated)
         return updated
+
+    def _validate_ready_for_role_review(self, session: ExperienceIntakeSession) -> None:
+        if not session.employer_name:
+            msg = "Experience intake employer name is required before role review."
+            raise ValueError(msg)
+        if not session.job_title:
+            msg = "Experience intake job title is required before role review."
+            raise ValueError(msg)
+        if not session.start_date:
+            msg = "Experience intake start date is required before role review."
+            raise ValueError(msg)
+        if not session.is_current_role and not session.end_date:
+            msg = "Experience intake end date is required before role review."
+            raise ValueError(msg)
+        if not session.role_focus_statement:
+            msg = "Role focus statement is required before role review."
+            raise ValueError(msg)
+        if not session.source_entries:
+            msg = "At least one source entry is required before role review."
+            raise ValueError(msg)
+
+        active_bullets = [
+            bullet
+            for bullet in session.candidate_bullets
+            if bullet.status is not CandidateBulletStatus.REMOVED
+        ]
+        if not active_bullets:
+            msg = "At least one active candidate bullet is required before role review."
+            raise ValueError(msg)
+
+    def _role_status_after_change(
+        self,
+        session: ExperienceIntakeSession,
+    ) -> ExperienceRoleStatus:
+        if session.role_status is ExperienceRoleStatus.REVIEWED:
+            return ExperienceRoleStatus.REVIEW_REQUIRED
+
+        return session.role_status
 
     def _normalize_draft_role_details(
         self,

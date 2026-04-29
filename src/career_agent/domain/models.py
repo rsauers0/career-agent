@@ -48,6 +48,15 @@ class ExperienceIntakeStatus(StrEnum):
     ABANDONED = "abandoned"
 
 
+class ExperienceRoleStatus(StrEnum):
+    """User-facing review status for a role-level experience workflow."""
+
+    INPUT_REQUIRED = "input_required"
+    REVIEW_REQUIRED = "review_required"
+    REVIEWED = "reviewed"
+    ARCHIVED = "archived"
+
+
 class CandidateBulletStatus(StrEnum):
     """Review states for LLM-generated candidate experience bullets."""
 
@@ -498,6 +507,14 @@ class ExperienceIntakeSession(BaseModel):
         default=ExperienceIntakeStatus.DRAFT,
         description="Current intake workflow state.",
     )
+    role_status: ExperienceRoleStatus = Field(
+        default=ExperienceRoleStatus.INPUT_REQUIRED,
+        description="User-facing readiness/review state for this role.",
+    )
+    role_focus_statement: str | None = Field(
+        default=None,
+        description="User's short plain-language description of the role focus.",
+    )
     source_text: str | None = Field(
         default=None,
         description="Raw source bullets or notes for one role-specific experience.",
@@ -567,6 +584,14 @@ class ExperienceIntakeSession(BaseModel):
         default=None,
         description="Timezone-aware UTC timestamp when this intake was locked, if any.",
     )
+    role_reviewed_at: datetime | None = Field(
+        default=None,
+        description="Timezone-aware UTC timestamp when the role was last reviewed.",
+    )
+    role_review_notes: list[str] = Field(
+        default_factory=list,
+        description="User or assistant notes retained from role-level review.",
+    )
     created_at: datetime = Field(
         default_factory=utc_now,
         description="Timezone-aware UTC creation timestamp.",
@@ -576,7 +601,7 @@ class ExperienceIntakeSession(BaseModel):
         description="Timezone-aware UTC update timestamp.",
     )
 
-    @field_validator("created_at", "updated_at", "locked_at")
+    @field_validator("created_at", "updated_at", "locked_at", "role_reviewed_at")
     @classmethod
     def validate_timestamp_timezone(cls, value: datetime | None) -> datetime | None:
         """Ensure intake session timestamps are timezone-aware."""
@@ -585,6 +610,24 @@ class ExperienceIntakeSession(BaseModel):
             return value
 
         return validate_timezone_aware(value, "timestamp")
+
+    @field_validator("role_focus_statement")
+    @classmethod
+    def normalize_role_focus_statement(cls, value: str | None) -> str | None:
+        """Trim optional role focus text and normalize blanks to None."""
+
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("role_review_notes")
+    @classmethod
+    def normalize_role_review_notes(cls, values: list[str]) -> list[str]:
+        """Trim role review notes and discard blank entries."""
+
+        return [value.strip() for value in values if value.strip()]
 
     @model_validator(mode="after")
     def validate_profile_entry_link(self) -> ExperienceIntakeSession:
@@ -630,6 +673,20 @@ class ExperienceIntakeSession(BaseModel):
                     f"{', '.join(unknown_ids)}."
                 )
                 raise ValueError(msg)
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_role_review_state(self) -> ExperienceIntakeSession:
+        """Ensure reviewed role state carries review metadata."""
+
+        if self.role_status is ExperienceRoleStatus.REVIEWED and self.role_reviewed_at is None:
+            msg = "role_reviewed_at is required when role_status is reviewed."
+            raise ValueError(msg)
+
+        if self.role_status is not ExperienceRoleStatus.REVIEWED and self.role_reviewed_at:
+            msg = "role_reviewed_at is only valid when role_status is reviewed."
+            raise ValueError(msg)
 
         return self
 

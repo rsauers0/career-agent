@@ -10,6 +10,8 @@ from career_agent.domain.models import (
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceRoleStatus,
+    ExperienceSourceEntry,
     IntakeQuestion,
     YearMonth,
 )
@@ -240,6 +242,22 @@ def test_add_source_entry_rejects_locked_session() -> None:
         service.add_source_entry("session-123", "- Built reporting pipeline")
 
 
+def test_add_source_entry_marks_reviewed_role_as_needing_review() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        role_status=ExperienceRoleStatus.REVIEWED,
+        role_reviewed_at="2026-01-01T00:00:00+00:00",
+    )
+    repository.save_session(session)
+
+    updated = service.add_source_entry("session-123", "- Added new project outcome")
+
+    assert updated.role_status == ExperienceRoleStatus.REVIEW_REQUIRED
+    assert updated.role_reviewed_at is None
+
+
 def test_mark_source_entries_analyzed_updates_selected_sources() -> None:
     repository = FakeExperienceIntakeRepository()
     service = ExperienceIntakeService(repository)
@@ -285,6 +303,32 @@ def test_replace_candidate_bullets_validates_source_references() -> None:
             "session-123",
             [CandidateBullet(text="Unsupported bullet.", source_entry_ids=["missing-source"])],
         )
+
+
+def test_replace_candidate_bullets_marks_role_as_needing_review() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    source_entry = ExperienceSourceEntry(id="source-1", content="- Built reporting pipeline")
+    session = ExperienceIntakeSession(
+        id="session-123",
+        role_status=ExperienceRoleStatus.REVIEWED,
+        role_reviewed_at="2026-01-01T00:00:00+00:00",
+        source_entries=[source_entry],
+    )
+    repository.save_session(session)
+
+    updated = service.replace_candidate_bullets(
+        "session-123",
+        [
+            CandidateBullet(
+                text="Reduced manual reporting work by building a reporting pipeline.",
+                source_entry_ids=["source-1"],
+            )
+        ],
+    )
+
+    assert updated.role_status == ExperienceRoleStatus.REVIEW_REQUIRED
+    assert updated.role_reviewed_at is None
 
 
 def test_analyze_pending_source_entries_generates_bullets_and_marks_sources_analyzed() -> None:
@@ -372,6 +416,109 @@ def test_update_candidate_bullet_text_resets_review_and_retains_revision() -> No
     assert bullet.text == "Reduced manual reporting work by building reporting automation."
     assert bullet.revision_history[0].text == "Built reporting automation."
     assert bullet.revision_history[0].reason == "User clarified the outcome."
+
+
+def test_save_role_focus_statement_updates_existing_session() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    updated = service.save_role_focus_statement(
+        "session-123",
+        "  I helped finance teams reduce manual reporting.  ",
+    )
+
+    assert updated.role_focus_statement == "I helped finance teams reduce manual reporting."
+    assert updated.role_status == ExperienceRoleStatus.INPUT_REQUIRED
+    assert updated.updated_at > session.updated_at
+    assert repository.load_session("session-123") == updated
+
+
+def test_save_role_focus_statement_marks_reviewed_role_as_needing_review() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(
+        id="session-123",
+        role_status=ExperienceRoleStatus.REVIEWED,
+        role_reviewed_at="2026-01-01T00:00:00+00:00",
+    )
+    repository.save_session(session)
+
+    updated = service.save_role_focus_statement(
+        "session-123",
+        "I helped finance teams reduce manual reporting.",
+    )
+
+    assert updated.role_status == ExperienceRoleStatus.REVIEW_REQUIRED
+    assert updated.role_reviewed_at is None
+
+
+def test_save_role_focus_statement_rejects_blank_statement() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="Role focus statement is required"):
+        service.save_role_focus_statement("session-123", "   ")
+
+    assert repository.load_session("session-123") == session
+
+
+def test_mark_role_reviewed_sets_status_timestamp_and_notes() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    source_entry = ExperienceSourceEntry(id="source-1", content="- Built reporting pipeline")
+    session = ExperienceIntakeSession(
+        id="session-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        start_date="05/2021",
+        is_current_role=True,
+        role_focus_statement="I helped finance teams reduce manual reporting.",
+        source_entries=[source_entry],
+        candidate_bullets=[
+            CandidateBullet(
+                text="Reduced manual reporting work by building a reporting pipeline.",
+                source_entry_ids=["source-1"],
+            )
+        ],
+    )
+    repository.save_session(session)
+
+    updated = service.mark_role_reviewed(
+        "session-123",
+        notes=["  User confirmed the role is accurate.  ", "   "],
+    )
+
+    assert updated.role_status == ExperienceRoleStatus.REVIEWED
+    assert updated.role_reviewed_at is not None
+    assert updated.role_review_notes == ["User confirmed the role is accurate."]
+    assert updated.updated_at == updated.role_reviewed_at
+    assert repository.load_session("session-123") == updated
+
+
+def test_mark_role_reviewed_requires_ready_role() -> None:
+    repository = FakeExperienceIntakeRepository()
+    service = ExperienceIntakeService(repository)
+    session = ExperienceIntakeSession(id="session-123")
+    repository.save_session(session)
+
+    with pytest.raises(ValueError, match="employer name is required"):
+        service.mark_role_reviewed("session-123")
+
+    ready_without_focus = ExperienceIntakeSession(
+        id="session-123",
+        employer_name="Acme Analytics",
+        job_title="Senior Data Engineer",
+        start_date="05/2021",
+        is_current_role=True,
+    )
+    repository.save_session(ready_without_focus)
+
+    with pytest.raises(ValueError, match="Role focus statement is required"):
+        service.mark_role_reviewed("session-123")
 
 
 def test_capture_source_text_updates_existing_session() -> None:

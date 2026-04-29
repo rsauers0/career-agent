@@ -11,6 +11,7 @@ from career_agent.domain.models import (
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceRoleStatus,
     ExperienceSourceEntry,
     IntakeAnswer,
     IntakeMessage,
@@ -217,6 +218,8 @@ def test_experience_intake_session_json_round_trip() -> None:
     session = ExperienceIntakeSession(
         id="session-123",
         status=ExperienceIntakeStatus.LOCKED,
+        role_status=ExperienceRoleStatus.REVIEWED,
+        role_focus_statement="I helped finance teams reduce manual reporting effort.",
         source_text="- Built reporting pipeline",
         source_entries=[source_entry],
         candidate_bullets=[candidate_bullet],
@@ -241,6 +244,8 @@ def test_experience_intake_session_json_round_trip() -> None:
         draft_experience_entry=draft_entry,
         accepted_experience_entry_id=draft_entry.id,
         locked_at="2026-01-01T00:00:00+00:00",
+        role_reviewed_at="2026-01-01T00:00:00+00:00",
+        role_review_notes=["User confirmed generated bullets are accurate."],
     )
 
     payload = session.model_dump_json()
@@ -248,6 +253,12 @@ def test_experience_intake_session_json_round_trip() -> None:
 
     assert restored == session
     assert restored.status == ExperienceIntakeStatus.LOCKED
+    assert restored.role_status == ExperienceRoleStatus.REVIEWED
+    assert restored.role_focus_statement == (
+        "I helped finance teams reduce manual reporting effort."
+    )
+    assert restored.role_reviewed_at is not None
+    assert restored.role_review_notes == ["User confirmed generated bullets are accurate."]
     assert restored.draft_experience_entry is not None
     assert restored.accepted_experience_entry_id == restored.draft_experience_entry.id
     assert restored.locked_at is not None
@@ -312,8 +323,32 @@ def test_experience_intake_session_defaults_to_draft_with_timestamps() -> None:
     session = ExperienceIntakeSession()
 
     assert session.status == ExperienceIntakeStatus.DRAFT
+    assert session.role_status == ExperienceRoleStatus.INPUT_REQUIRED
     assert session.created_at.tzinfo is not None
     assert session.updated_at.tzinfo is not None
+
+
+def test_experience_intake_session_normalizes_role_review_fields() -> None:
+    session = ExperienceIntakeSession(
+        role_focus_statement="  Helped finance teams reduce manual reporting.  ",
+        role_review_notes=["  Useful note.  ", "   "],
+    )
+
+    assert session.role_focus_statement == "Helped finance teams reduce manual reporting."
+    assert session.role_review_notes == ["Useful note."]
+
+
+def test_experience_intake_session_requires_review_timestamp_when_reviewed() -> None:
+    with pytest.raises(ValidationError, match="role_reviewed_at"):
+        ExperienceIntakeSession(role_status=ExperienceRoleStatus.REVIEWED)
+
+
+def test_experience_intake_session_rejects_review_timestamp_when_not_reviewed() -> None:
+    with pytest.raises(ValidationError, match="only valid"):
+        ExperienceIntakeSession(
+            role_status=ExperienceRoleStatus.REVIEW_REQUIRED,
+            role_reviewed_at="2026-01-01T00:00:00+00:00",
+        )
 
 
 def test_experience_intake_session_requires_profile_entry_id_when_locked() -> None:
