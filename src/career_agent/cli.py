@@ -8,6 +8,16 @@ from rich.console import Console
 from rich.table import Table
 
 from career_agent.config import get_settings
+from career_agent.experience_bullets.models import ExperienceBullet
+from career_agent.experience_bullets.repository import ExperienceBulletRepository
+from career_agent.experience_bullets.service import (
+    ExperienceBulletService,
+    SourceNotFoundError,
+    SourceRoleMismatchError,
+)
+from career_agent.experience_bullets.service import (
+    RoleNotFoundError as BulletRoleNotFoundError,
+)
 from career_agent.experience_roles.models import (
     EmploymentType,
     ExperienceRole,
@@ -33,6 +43,7 @@ app = typer.Typer(
 preferences_app = typer.Typer(help="Manage user preferences.")
 roles_app = typer.Typer(help="Manage experience roles.")
 sources_app = typer.Typer(help="Manage role source entries.")
+bullets_app = typer.Typer(help="Manage canonical experience bullets.")
 console = Console()
 
 
@@ -54,6 +65,11 @@ def roles_cli() -> None:
 @sources_app.callback()
 def sources_cli() -> None:
     """Commands for working with role source entries."""
+
+
+@bullets_app.callback()
+def bullets_cli() -> None:
+    """Commands for working with canonical experience bullets."""
 
 
 @app.command()
@@ -321,6 +337,78 @@ def delete_source(source_id: str = typer.Argument(..., help="Role source identif
     console.print("[green]Deleted role source.[/green]")
 
 
+@bullets_app.command("list")
+def list_bullets(
+    role_id: str | None = typer.Option(None, help="Optional role id to filter bullets."),
+) -> None:
+    """List saved experience bullets."""
+
+    service = build_experience_bullet_service()
+    bullets = service.list_bullets(role_id=role_id)
+    if not bullets:
+        console.print("[yellow]No experience bullets saved yet.[/yellow]")
+        return
+
+    render_experience_bullet_list(bullets)
+
+
+@bullets_app.command("show")
+def show_bullet(
+    bullet_id: str = typer.Argument(..., help="Experience bullet identifier."),
+) -> None:
+    """Show one saved experience bullet."""
+
+    service = build_experience_bullet_service()
+    bullet = service.get_bullet(bullet_id)
+    if bullet is None:
+        console.print(f"[yellow]No experience bullet found for id: {bullet_id}[/yellow]")
+        raise typer.Exit(1)
+
+    render_experience_bullet(bullet)
+
+
+@bullets_app.command("add")
+def add_bullet(
+    role_id: str = typer.Option(..., help="Existing experience role id."),
+    text: str = typer.Option(..., help="Experience bullet text."),
+    source_ids: list[str] = typer.Option(
+        [],
+        "--source-id",
+        help="Source id supporting this bullet. Can be provided more than once.",
+    ),
+) -> None:
+    """Add a canonical experience bullet for an existing role."""
+
+    service = build_experience_bullet_service()
+    try:
+        bullet = service.add_bullet(role_id=role_id, text=text, source_ids=source_ids)
+    except (BulletRoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save experience bullet.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved experience bullet.[/green]")
+    console.print(f"Bullet ID: {bullet.id}")
+
+
+@bullets_app.command("delete")
+def delete_bullet(
+    bullet_id: str = typer.Argument(..., help="Experience bullet identifier."),
+) -> None:
+    """Delete one saved experience bullet."""
+
+    service = build_experience_bullet_service()
+    if not service.delete_bullet(bullet_id):
+        console.print(f"[yellow]No experience bullet found for id: {bullet_id}[/yellow]")
+        raise typer.Exit(1)
+
+    console.print("[green]Deleted experience bullet.[/green]")
+
+
 def build_user_preferences_service() -> UserPreferencesService:
     """Build the user preferences service from configured settings."""
 
@@ -344,6 +432,16 @@ def build_role_source_service() -> RoleSourceService:
     source_repository = RoleSourceRepository(settings.data_dir)
     role_repository = ExperienceRoleRepository(settings.data_dir)
     return RoleSourceService(source_repository, role_repository)
+
+
+def build_experience_bullet_service() -> ExperienceBulletService:
+    """Build the experience bullet service from configured settings."""
+
+    settings = get_settings()
+    bullet_repository = ExperienceBulletRepository(settings.data_dir)
+    role_repository = ExperienceRoleRepository(settings.data_dir)
+    source_repository = RoleSourceRepository(settings.data_dir)
+    return ExperienceBulletService(bullet_repository, role_repository, source_repository)
 
 
 def render_user_preferences(preferences: UserPreferences) -> None:
@@ -469,6 +567,40 @@ def render_role_source(source: RoleSourceEntry) -> None:
     console.print(table)
 
 
+def render_experience_bullet_list(bullets: list[ExperienceBullet]) -> None:
+    """Render experience bullets as a compact CLI table."""
+
+    table = Table(title="Experience Bullets")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Role ID", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Preview")
+    for bullet in bullets:
+        table.add_row(
+            bullet.id,
+            bullet.role_id,
+            bullet.status.value,
+            preview_source_text(bullet.text),
+        )
+    console.print(table)
+
+
+def render_experience_bullet(bullet: ExperienceBullet) -> None:
+    """Render one experience bullet as a CLI table."""
+
+    table = Table(title="Experience Bullet")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("ID", bullet.id)
+    table.add_row("Role ID", bullet.role_id)
+    table.add_row("Source IDs", ", ".join(bullet.source_ids) or "-")
+    table.add_row("Status", bullet.status.value)
+    table.add_row("Created At", bullet.created_at.isoformat())
+    table.add_row("Updated At", bullet.updated_at.isoformat())
+    table.add_row("Text", bullet.text)
+    console.print(table)
+
+
 def preview_source_text(source_text: str, max_length: int = 80) -> str:
     """Return a one-line preview of submitted source text."""
 
@@ -481,6 +613,7 @@ def preview_source_text(source_text: str, max_length: int = 80) -> str:
 app.add_typer(preferences_app, name="preferences")
 app.add_typer(roles_app, name="roles")
 app.add_typer(sources_app, name="sources")
+app.add_typer(bullets_app, name="bullets")
 
 
 def main() -> None:

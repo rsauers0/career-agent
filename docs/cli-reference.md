@@ -12,6 +12,8 @@ uv run career-agent roles --help
 uv run career-agent roles save --help
 uv run career-agent sources --help
 uv run career-agent sources add --help
+uv run career-agent bullets --help
+uv run career-agent bullets add --help
 ```
 
 ## Health Check
@@ -162,6 +164,49 @@ Delete one saved source entry:
 
 ```bash
 uv run career-agent sources delete <source-id>
+```
+
+## Experience Bullets
+
+List all saved experience bullets:
+
+```bash
+uv run career-agent bullets list
+```
+
+List bullets for one role:
+
+```bash
+uv run career-agent bullets list --role-id <role-id>
+```
+
+Show one saved bullet:
+
+```bash
+uv run career-agent bullets show <bullet-id>
+```
+
+Add a draft canonical bullet:
+
+```bash
+uv run career-agent bullets add \
+  --role-id <role-id> \
+  --text "Automated reporting workflows, reducing manual reconciliation time."
+```
+
+Add a draft bullet with source traceability:
+
+```bash
+uv run career-agent bullets add \
+  --role-id <role-id> \
+  --text "Automated reporting workflows, reducing manual reconciliation time." \
+  --source-id <source-id>
+```
+
+Delete one saved bullet:
+
+```bash
+uv run career-agent bullets delete <bullet-id>
 ```
 
 ## Configuration

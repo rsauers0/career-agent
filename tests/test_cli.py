@@ -2,6 +2,8 @@ from typer.testing import CliRunner
 
 from career_agent.cli import app
 from career_agent.config import get_settings
+from career_agent.experience_bullets.models import ExperienceBullet
+from career_agent.experience_bullets.repository import ExperienceBulletRepository
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.models import RoleSourceEntry
@@ -603,5 +605,239 @@ def test_sources_delete_removes_saved_source(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "Deleted role source." in result.output
     assert repository.get("source-1") is None
+
+    get_settings.cache_clear()
+
+
+def test_bullets_list_reports_missing_bullets(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["bullets", "list"])
+
+    assert result.exit_code == 0
+    assert "No experience bullets saved yet." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_bullets_add_writes_bullet(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "bullets",
+            "add",
+            "--role-id",
+            "role-1",
+            "--text",
+            "Automated reporting workflows.",
+            "--source-id",
+            "source-1",
+        ],
+    )
+
+    bullets = ExperienceBulletRepository(tmp_path).list(role_id="role-1")
+
+    assert result.exit_code == 0
+    assert "Saved experience bullet." in result.output
+    assert "Bullet ID:" in result.output
+    assert len(bullets) == 1
+    assert bullets[0].text == "Automated reporting workflows."
+    assert bullets[0].source_ids == ["source-1"]
+
+    get_settings.cache_clear()
+
+
+def test_bullets_add_reports_missing_role(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "bullets",
+            "add",
+            "--role-id",
+            "missing-role",
+            "--text",
+            "Automated reporting workflows.",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Experience role does not exist: missing-role" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_bullets_add_reports_missing_source(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "bullets",
+            "add",
+            "--role-id",
+            "role-1",
+            "--text",
+            "Automated reporting workflows.",
+            "--source-id",
+            "missing-source",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Role source does not exist: missing-source" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_bullets_list_renders_saved_bullets(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceBulletRepository(tmp_path).save(
+        ExperienceBullet(
+            id="bullet-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+            text="Automated reporting workflows.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["bullets", "list"], env={"COLUMNS": "160"})
+
+    assert result.exit_code == 0
+    assert "Experience Bullets" in result.output
+    assert "bullet-1" in result.output
+    assert "role-1" in result.output
+    assert "Automated reporting workflows." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_bullets_list_filters_by_role_id(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = ExperienceBulletRepository(tmp_path)
+    repository.save(
+        ExperienceBullet(
+            id="bullet-1",
+            role_id="role-1",
+            text="Automated reporting workflows.",
+        )
+    )
+    repository.save(
+        ExperienceBullet(
+            id="bullet-2",
+            role_id="role-2",
+            text="Built a service trend dashboard.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["bullets", "list", "--role-id", "role-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "bullet-1" in result.output
+    assert "bullet-2" not in result.output
+
+    get_settings.cache_clear()
+
+
+def test_bullets_show_renders_saved_bullet(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceBulletRepository(tmp_path).save(
+        ExperienceBullet(
+            id="bullet-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+            text="Automated reporting workflows.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["bullets", "show", "bullet-1"])
+
+    assert result.exit_code == 0
+    assert "Experience Bullet" in result.output
+    assert "bullet-1" in result.output
+    assert "role-1" in result.output
+    assert "source-1" in result.output
+    assert "Automated reporting workflows." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_bullets_show_reports_missing_bullet(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["bullets", "show", "missing-bullet"])
+
+    assert result.exit_code != 0
+    assert "No experience bullet found for id: missing-bullet" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_bullets_delete_removes_saved_bullet(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = ExperienceBulletRepository(tmp_path)
+    repository.save(
+        ExperienceBullet(
+            id="bullet-1",
+            role_id="role-1",
+            text="Automated reporting workflows.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["bullets", "delete", "bullet-1"])
+
+    assert result.exit_code == 0
+    assert "Deleted experience bullet." in result.output
+    assert repository.get("bullet-1") is None
 
     get_settings.cache_clear()
