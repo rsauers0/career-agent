@@ -59,12 +59,23 @@ This establishes the project pattern without introducing TUI or LLM complexity t
 Build the role container before AI behavior:
 
 - role facts: employer, job title, location, employment type, start/end month-year, current-role flag
-- append-only source entries
-- candidate bullets
 - role status: input required, review required, reviewed, archived
-- tests for role date validation, source append behavior, bullet status behavior, and role review gates
+- tests for role date validation, repository ordering, service behavior, and CLI output
 
-### 3. Experience AI Workflow Harness
+### 3. Role Sources
+
+Build source material as a separate component:
+
+- source entries linked to experience roles by `role_id`
+- source text preserved exactly as submitted
+- source status: not analyzed, analyzed, archived
+- repository filtering by role id
+- service rule that source material can only be added for an existing role
+- CLI support for direct text input and UTF-8 file input
+
+Role Sources are related to Experience Roles, but they are not owned by the Experience Role repository. Keeping them separate preserves traceability and prevents raw source material from being mixed into structured role facts.
+
+### 4. Experience AI Workflow Harness
 
 Build as CLI/dev workflow first:
 
@@ -80,13 +91,13 @@ Build as CLI/dev workflow first:
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
 
-### 4. TUI
+### 5. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.
 
 The TUI should present the already-working workflow. It should not own workflow logic.
 
-### 5. Future API Option
+### 6. Future API Option
 
 FastAPI can be added later as another interface adapter.
 
@@ -117,16 +128,29 @@ Strong portfolio signals:
 - local-first persistence
 - deterministic services around AI proposals
 
-## Immediate Next Step
-
-Start with the smallest User Preferences loop:
+## Current Foundation Status
 
 ```text
-UserPreferences model
--> JSON save/load
--> service get/save
--> CLI show/save
--> tests
+User Preferences
+  -> model
+  -> repository
+  -> service
+  -> CLI
+  -> tests
+
+Experience Roles
+  -> model
+  -> repository
+  -> service
+  -> CLI
+  -> tests
+
+Role Sources
+  -> model
+  -> repository
+  -> service
+  -> CLI
+  -> tests
 ```
 
-No TUI changes should be made during this first loop.
+The immediate next foundation step is the Experience AI workflow harness. It should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.

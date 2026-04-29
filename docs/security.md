@@ -9,7 +9,7 @@ expectations. It is not a formal third-party security audit.
 
 ## Current Behavior
 
-- The current v2 foundation CLI reads configuration but does not yet write career data.
+- The current v2 foundation CLI reads configuration and writes local JSON career data.
 - The default data directory is a `.career-agent` directory under the current user's home directory.
 - No telemetry is implemented.
 - No account system is implemented.
@@ -39,13 +39,19 @@ initial storage shape is:
 <data_dir>/
   user_preferences/
     user_preferences.json
+  experience_roles/
+    experience_roles.json
+  role_sources/
+    role_sources.json
   snapshots/
     user_preferences/
+    experience_roles/
+    role_sources/
 ```
 
-Snapshot-on-overwrite behavior is planned for local JSON writes. When an
-existing JSON file is replaced, the previous version should be copied into the
-relevant `snapshots/` directory.
+Snapshot-on-overwrite behavior is implemented for local JSON writes. When an
+existing JSON file is replaced, the previous version is copied into the relevant
+`snapshots/` directory.
 
 ## Verification Commands
 

@@ -44,9 +44,7 @@ def test_experience_role_repository_builds_storage_paths(tmp_path) -> None:
     assert repository.roles_path == (
         tmp_path / EXPERIENCE_ROLES_DIRNAME / EXPERIENCE_ROLES_FILENAME
     )
-    assert repository.snapshots_dir == (
-        tmp_path / SNAPSHOTS_DIRNAME / EXPERIENCE_ROLES_DIRNAME
-    )
+    assert repository.snapshots_dir == (tmp_path / SNAPSHOTS_DIRNAME / EXPERIENCE_ROLES_DIRNAME)
 
 
 def test_experience_role_repository_list_returns_empty_when_missing(tmp_path) -> None:
@@ -161,8 +159,6 @@ def test_experience_role_repository_snapshots_existing_file_before_overwrite(
 
     snapshots = list(repository.snapshots_dir.glob(f"*-{EXPERIENCE_ROLES_FILENAME}"))
     assert len(snapshots) == 1
-    snapshotted_roles = ROLE_LIST_ADAPTER.validate_json(
-        snapshots[0].read_text(encoding="utf-8")
-    )
+    snapshotted_roles = ROLE_LIST_ADAPTER.validate_json(snapshots[0].read_text(encoding="utf-8"))
     assert snapshotted_roles == [first_role]
     assert repository.list() == [second_role, first_role]

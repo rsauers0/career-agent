@@ -83,9 +83,7 @@ class RoleSourceRepository:
         if not self.sources_path.exists():
             return []
 
-        return _SOURCE_LIST_ADAPTER.validate_json(
-            self.sources_path.read_text(encoding="utf-8")
-        )
+        return _SOURCE_LIST_ADAPTER.validate_json(self.sources_path.read_text(encoding="utf-8"))
 
     def _save_all(self, sources: list[RoleSourceEntry]) -> None:
         """Persist the complete source list to disk."""
