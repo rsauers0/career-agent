@@ -49,6 +49,17 @@ Role Sources are stored as:
       <timestamp>-role_sources.json
 ```
 
+Experience Bullets are stored as:
+
+```text
+<data_dir>/
+  experience_bullets/
+    experience_bullets.json
+  snapshots/
+    experience_bullets/
+      <timestamp>-experience_bullets.json
+```
+
 ## Snapshot Behavior
 
 When a managed JSON file already exists, saving creates a snapshot before overwriting the current file.

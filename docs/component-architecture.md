@@ -134,6 +134,35 @@ Examples of owned data:
 
 Role sources preserve submitted text exactly for traceability. They are separate from experience roles so the application can retain source evidence without mixing raw input into structured role facts.
 
+### Experience Bullets
+
+Purpose: stores durable resume-style bullets linked to an experience role.
+
+Current files:
+
+```text
+src/career_agent/experience_bullets/
+  models.py
+  repository.py
+  service.py
+```
+
+Current CLI group:
+
+```text
+not implemented yet
+```
+
+Examples of owned data:
+
+- role id
+- source ids used to support or derive the bullet
+- bullet text
+- lifecycle status
+- creation and update timestamps
+
+Experience bullets are canonical career data. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles. Bullets do not currently include tags or inferred classifications.
+
 ## Current Data Flow
 
 ```text

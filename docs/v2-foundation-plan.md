@@ -75,7 +75,19 @@ Build source material as a separate component:
 
 Role Sources are related to Experience Roles, but they are not owned by the Experience Role repository. Keeping them separate preserves traceability and prevents raw source material from being mixed into structured role facts.
 
-### 4. Experience AI Workflow Harness
+### 4. Experience Bullets
+
+Build durable resume-style bullet records as a separate component:
+
+- bullets linked to experience roles by `role_id`
+- optional source id traceability
+- bullet text
+- bullet lifecycle status: draft, active, archived
+- no tags or inferred classifications in the first pass
+
+Experience Bullets are canonical career data. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles.
+
+### 5. Experience AI Workflow Harness
 
 Build as CLI/dev workflow first:
 
@@ -91,13 +103,13 @@ Build as CLI/dev workflow first:
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
 
-### 5. TUI
+### 6. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.
 
 The TUI should present the already-working workflow. It should not own workflow logic.
 
-### 6. Future API Option
+### 7. Future API Option
 
 FastAPI can be added later as another interface adapter.
 
@@ -151,6 +163,12 @@ Role Sources
   -> service
   -> CLI
   -> tests
+
+Experience Bullets
+  -> model
+  -> repository
+  -> service
+  -> tests
 ```
 
-The immediate next foundation step is the Experience AI workflow harness. It should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.
+The immediate next foundation step is completing the Experience Bullets CLI and tests. After that, the Experience AI workflow harness should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.
