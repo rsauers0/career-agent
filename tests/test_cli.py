@@ -182,6 +182,8 @@ def test_roles_save_writes_past_role(monkeypatch, tmp_path) -> None:
             "Chicago, IL",
             "--employment-type",
             "full-time",
+            "--role-focus",
+            "Led internal reporting and automation improvements.",
         ],
     )
 
@@ -194,6 +196,7 @@ def test_roles_save_writes_past_role(monkeypatch, tmp_path) -> None:
     assert roles[0].employer_name == "Acme Analytics"
     assert roles[0].job_title == "Senior Systems Analyst"
     assert roles[0].location == "Chicago, IL"
+    assert roles[0].role_focus == "Led internal reporting and automation improvements."
     assert roles[0].is_current_role is False
 
     get_settings.cache_clear()
@@ -238,6 +241,7 @@ def test_roles_list_renders_saved_roles(monkeypatch, tmp_path) -> None:
             id="role-1",
             employer_name="Acme Analytics",
             job_title="Senior Systems Analyst",
+            role_focus="Led internal reporting and automation improvements.",
             start_date="05/2021",
             end_date="06/2024",
         )
@@ -265,6 +269,7 @@ def test_roles_show_renders_saved_role(monkeypatch, tmp_path) -> None:
             id="role-1",
             employer_name="Acme Analytics",
             job_title="Senior Systems Analyst",
+            role_focus="Led internal reporting and automation improvements.",
             start_date="05/2021",
             end_date="06/2024",
         )
@@ -277,6 +282,7 @@ def test_roles_show_renders_saved_role(monkeypatch, tmp_path) -> None:
     assert "Experience Role" in result.output
     assert "Acme Analytics" in result.output
     assert "Senior Systems Analyst" in result.output
+    assert "Led internal reporting and automation improvements." in result.output
 
     get_settings.cache_clear()
 

@@ -81,6 +81,13 @@ class ExperienceRole(BaseModel):
         default=None,
         description="Optional employment type.",
     )
+    role_focus: str | None = Field(
+        default=None,
+        description=(
+            "User-authored 1-2 sentence explanation of the role's primary focus. "
+            "Used as workflow context, not as a polished resume summary."
+        ),
+    )
     start_date: YearMonth = Field(
         description="Role start month and year.",
     )
@@ -114,7 +121,7 @@ class ExperienceRole(BaseModel):
             return value.strip()
         return value
 
-    @field_validator("location", mode="before")
+    @field_validator("location", "role_focus", mode="before")
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         """Trim optional text fields and treat blanks as unset."""

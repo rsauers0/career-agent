@@ -26,6 +26,7 @@ def test_experience_role_json_round_trip() -> None:
         job_title="Senior Systems Analyst",
         location="Chicago, IL",
         employment_type=EmploymentType.FULL_TIME,
+        role_focus="Led internal reporting and automation improvements.",
         start_date="05/2021",
         end_date="06/2024",
         status=ExperienceRoleStatus.REVIEW_REQUIRED,
@@ -35,6 +36,7 @@ def test_experience_role_json_round_trip() -> None:
 
     assert restored == role
     assert restored.id
+    assert restored.role_focus == "Led internal reporting and automation improvements."
     assert restored.start_date == YearMonth(year=2021, month=5)
     assert restored.end_date == YearMonth(year=2024, month=6)
 
@@ -44,6 +46,7 @@ def test_experience_role_normalizes_text_fields() -> None:
         employer_name="  Acme Analytics  ",
         job_title="  Senior Systems Analyst  ",
         location="   ",
+        role_focus="  Led internal reporting and automation improvements.  ",
         start_date="05/2021",
         is_current_role=True,
     )
@@ -51,6 +54,19 @@ def test_experience_role_normalizes_text_fields() -> None:
     assert role.employer_name == "Acme Analytics"
     assert role.job_title == "Senior Systems Analyst"
     assert role.location is None
+    assert role.role_focus == "Led internal reporting and automation improvements."
+
+
+def test_experience_role_treats_blank_role_focus_as_unset() -> None:
+    role = ExperienceRole(
+        employer_name="Acme Analytics",
+        job_title="Senior Systems Analyst",
+        role_focus="   ",
+        start_date="05/2021",
+        is_current_role=True,
+    )
+
+    assert role.role_focus is None
 
 
 def test_experience_role_defaults_to_input_required() -> None:

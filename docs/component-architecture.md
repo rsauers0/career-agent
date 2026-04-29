@@ -99,11 +99,12 @@ Examples of owned data:
 - job title
 - location
 - employment type
+- role focus
 - start and end month/year
 - current role flag
 - role status
 
-Experience roles intentionally do not own source material. They are the structured role container.
+Experience roles intentionally do not own source material. They are the structured role container. `role_focus` is user-authored context for the role's primary focus; it is not intended to be a polished resume summary.
 
 ### Role Sources
 

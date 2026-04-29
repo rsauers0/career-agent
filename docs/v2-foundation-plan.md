@@ -58,7 +58,7 @@ This establishes the project pattern without introducing TUI or LLM complexity t
 
 Build the role container before AI behavior:
 
-- role facts: employer, job title, location, employment type, start/end month-year, current-role flag
+- role facts: employer, job title, location, employment type, role focus, start/end month-year, current-role flag
 - role status: input required, review required, reviewed, archived
 - tests for role date validation, repository ordering, service behavior, and CLI output
 

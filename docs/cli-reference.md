@@ -87,7 +87,8 @@ uv run career-agent roles save \
   --start-date "05/2021" \
   --end-date "06/2024" \
   --location "Chicago, IL" \
-  --employment-type full-time
+  --employment-type full-time \
+  --role-focus "Led internal reporting and automation improvements."
 ```
 
 Save a current experience role:
@@ -97,7 +98,8 @@ uv run career-agent roles save \
   --employer-name "Current Co" \
   --job-title "Platform Engineer" \
   --start-date "02/2024" \
-  --current
+  --current \
+  --role-focus "Focused on platform reliability, automation, and team enablement."
 ```
 
 Update an existing role by passing its id:

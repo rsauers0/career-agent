@@ -192,6 +192,10 @@ def save_role(
         None,
         help="Optional employment type.",
     ),
+    role_focus: str | None = typer.Option(
+        None,
+        help="Optional 1-2 sentence user-authored description of the role's primary focus.",
+    ),
     status: ExperienceRoleStatus = typer.Option(
         ExperienceRoleStatus.INPUT_REQUIRED,
         help="Role workflow status.",
@@ -205,6 +209,7 @@ def save_role(
             "job_title": job_title,
             "location": location,
             "employment_type": employment_type,
+            "role_focus": role_focus,
             "start_date": start_date,
             "end_date": end_date,
             "is_current_role": current,
@@ -411,6 +416,7 @@ def render_experience_role(role: ExperienceRole) -> None:
     table.add_row("Job Title", role.job_title)
     table.add_row("Location", role.location or "-")
     table.add_row("Employment Type", role.employment_type.value if role.employment_type else "-")
+    table.add_row("Role Focus", role.role_focus or "-")
     table.add_row("Dates", format_role_dates(role))
     table.add_row("Current Role", "Yes" if role.is_current_role else "No")
     table.add_row("Status", role.status.value)
