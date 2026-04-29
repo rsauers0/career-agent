@@ -20,7 +20,7 @@ def test_user_preferences_repository_builds_storage_paths(tmp_path) -> None:
 def test_user_preferences_repository_saves_preferences_json(tmp_path) -> None:
     repository = UserPreferencesRepository(tmp_path)
     preferences = UserPreferences(
-        full_name="Randy Example",
+        full_name="John Doe",
         base_location="Aurora, IL 60504",
         preferred_work_arrangements=[WorkArrangement.REMOTE],
         work_authorization=True,
@@ -43,7 +43,7 @@ def test_user_preferences_repository_load_returns_none_when_missing(tmp_path) ->
 def test_user_preferences_repository_loads_saved_preferences(tmp_path) -> None:
     repository = UserPreferencesRepository(tmp_path)
     preferences = UserPreferences(
-        full_name="Randy Example",
+        full_name="John Doe",
         base_location="Aurora, IL 60504",
         preferred_work_arrangements=[WorkArrangement.REMOTE],
         work_authorization=True,
@@ -59,14 +59,14 @@ def test_user_preferences_repository_snapshots_existing_file_before_overwrite(
 ) -> None:
     repository = UserPreferencesRepository(tmp_path)
     first_preferences = UserPreferences(
-        full_name="Randy Example",
+        full_name="John Doe",
         base_location="Aurora, IL 60504",
         preferred_work_arrangements=[WorkArrangement.REMOTE],
         work_authorization=True,
         requires_work_sponsorship=False,
     )
     second_preferences = UserPreferences(
-        full_name="Randy Updated",
+        full_name="John Updated",
         base_location="Chicago, IL 60601",
         preferred_work_arrangements=[WorkArrangement.HYBRID],
         work_authorization=True,
