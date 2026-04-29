@@ -1,8 +1,9 @@
 import pytest
 
+from career_agent.errors import RoleNotFoundError
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.role_sources.models import RoleSourceEntry
-from career_agent.role_sources.service import RoleNotFoundError, RoleSourceService
+from career_agent.role_sources.service import RoleSourceService
 
 
 class FakeExperienceRoleRepository:

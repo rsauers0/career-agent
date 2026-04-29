@@ -8,16 +8,10 @@ from rich.console import Console
 from rich.table import Table
 
 from career_agent.config import get_settings
+from career_agent.errors import RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError
 from career_agent.experience_bullets.models import ExperienceBullet
 from career_agent.experience_bullets.repository import ExperienceBulletRepository
-from career_agent.experience_bullets.service import (
-    ExperienceBulletService,
-    SourceNotFoundError,
-    SourceRoleMismatchError,
-)
-from career_agent.experience_bullets.service import (
-    RoleNotFoundError as BulletRoleNotFoundError,
-)
+from career_agent.experience_bullets.service import ExperienceBulletService
 from career_agent.experience_roles.models import (
     EmploymentType,
     ExperienceRole,
@@ -27,7 +21,7 @@ from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.experience_roles.service import ExperienceRoleService
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
-from career_agent.role_sources.service import RoleNotFoundError, RoleSourceService
+from career_agent.role_sources.service import RoleSourceService
 from career_agent.user_preferences.models import (
     CommuteDistanceUnit,
     UserPreferences,
@@ -382,7 +376,7 @@ def add_bullet(
     service = build_experience_bullet_service()
     try:
         bullet = service.add_bullet(role_id=role_id, text=text, source_ids=source_ids)
-    except (BulletRoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError) as exc:
+    except (RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
     except ValidationError as exc:

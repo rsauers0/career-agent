@@ -1,12 +1,9 @@
 from __future__ import annotations
 
+from career_agent.errors import RoleNotFoundError
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
-
-
-class RoleNotFoundError(Exception):
-    """Raised when source material is added for a missing role."""
 
 
 class RoleSourceService:

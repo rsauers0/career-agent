@@ -1,21 +1,10 @@
 from __future__ import annotations
 
+from career_agent.errors import RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError
 from career_agent.experience_bullets.models import ExperienceBullet
 from career_agent.experience_bullets.repository import ExperienceBulletRepository
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.repository import RoleSourceRepository
-
-
-class RoleNotFoundError(Exception):
-    """Raised when a bullet references a missing role."""
-
-
-class SourceNotFoundError(Exception):
-    """Raised when a bullet references a missing source."""
-
-
-class SourceRoleMismatchError(Exception):
-    """Raised when a bullet references a source from another role."""
 
 
 class ExperienceBulletService:
