@@ -675,6 +675,16 @@ class CareerAgentTUI(App[None]):
         color: #fff8ed;
     }
 
+    .status-input_required {
+        background: #4d5960;
+        color: #f4efe6;
+    }
+
+    .status-review_required {
+        background: #b88746;
+        color: #101820;
+    }
+
     .status-needs_review {
         background: #b88746;
         color: #101820;
@@ -686,6 +696,11 @@ class CareerAgentTUI(App[None]):
     }
 
     .status-removed {
+        background: #9c4f42;
+        color: #fff8ed;
+    }
+
+    .status-archived {
         background: #9c4f42;
         color: #fff8ed;
     }

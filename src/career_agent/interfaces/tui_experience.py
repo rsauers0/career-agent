@@ -19,6 +19,7 @@ from career_agent.domain.models import (
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceRoleStatus,
     ExperienceSourceEntry,
     YearMonth,
 )
@@ -63,6 +64,12 @@ def format_intake_status(status: object) -> str:
     """Format an intake workflow status for display."""
 
     return str(status).replace("_", " ").title()
+
+
+def format_role_status(status: ExperienceRoleStatus) -> str:
+    """Format a user-facing role review status for display."""
+
+    return status.value.replace("_", " ").title()
 
 
 def format_intake_session_title(session: ExperienceIntakeSession) -> str:
@@ -224,10 +231,14 @@ class ExperienceSessionCard(Static):
         )
         yield Static(format_intake_session_title(self.session), classes="card-title")
         yield Static(
-            format_intake_status(self.session.status),
-            classes=f"status-pill intake-status status-{self.session.status.value}",
+            format_role_status(self.session.role_status),
+            classes=f"status-pill role-status status-{self.session.role_status.value}",
         )
         yield Static(f"Updated: {format_updated_at(self.session)}", classes="status-detail")
+        yield Static(
+            f"Workflow: {format_intake_status(self.session.status)}",
+            classes="status-detail",
+        )
         yield Static(
             f"{format_year_month(self.session.start_date)} - {end_date}",
             classes="status-detail",
@@ -436,7 +447,11 @@ class ExperienceSessionDetailScreen(Screen[None]):
                 )
                 yield Static(format_intake_session_title(session), id="screen-title")
                 yield Static(
-                    f"Status: {format_intake_status(session.status)}",
+                    f"Role Status: {format_role_status(session.role_status)}",
+                    classes="status-detail",
+                )
+                yield Static(
+                    f"Workflow: {format_intake_status(session.status)}",
                     classes="status-detail",
                 )
                 yield Static(f"Updated: {format_updated_at(session)}", classes="status-detail")
@@ -487,6 +502,16 @@ class ExperienceSessionDetailScreen(Screen[None]):
                         yield Static("No draft generated.", classes="read-only-panel")
                     else:
                         yield ExperienceEntryDetail(session.draft_experience_entry)
+
+                    yield Static("Role Review Notes", classes="section-title")
+                    yield Static(
+                        format_string_list(
+                            session.role_review_notes,
+                            empty_message="No role review notes saved.",
+                        ),
+                        classes="read-only-panel",
+                        markup=False,
+                    )
         yield Footer()
 
     def action_back(self) -> None:
@@ -850,6 +875,32 @@ class AddExperienceScreen(Screen[None]):
                             classes="read-only-panel",
                         )
 
+                    yield Static("Role Review", classes="section-title")
+                    if session is None:
+                        yield Static(
+                            "Save role details before reviewing this role.",
+                            classes="read-only-panel",
+                        )
+                    else:
+                        yield Static(
+                            (
+                                f"Current role status: {format_role_status(session.role_status)}\n"
+                                "Mark the role reviewed when the guided assistant has captured "
+                                "role focus and the role details, source entries, and generated "
+                                "bullets are accurate enough for downstream career profile and "
+                                "job analysis."
+                            ),
+                            classes="read-only-panel",
+                            markup=False,
+                        )
+                        with Horizontal(classes="experience-action-row"):
+                            yield Button(
+                                "Mark Role Reviewed",
+                                id="mark-role-reviewed",
+                                variant="primary",
+                                disabled=session.role_status is ExperienceRoleStatus.REVIEWED,
+                            )
+
                     yield Static("Assistant", classes="section-title")
                     yield Static(
                         (
@@ -891,6 +942,8 @@ class AddExperienceScreen(Screen[None]):
             self._add_source_entry()
         elif event.button.id == "analyze-source-entries":
             self._analyze_source_entries()
+        elif event.button.id == "mark-role-reviewed":
+            self._mark_role_reviewed()
         elif event.button.id == "delete-experience" and self.session_id is not None:
             self.app.push_screen(
                 DeleteExperienceSessionScreen(self.service, self.session_id),
@@ -973,7 +1026,7 @@ class AddExperienceScreen(Screen[None]):
 
         if self._role_details_have_unsaved_changes():
             self._set_message(
-                "Save role details before adding a source entry.",
+                "Save role details and role focus before adding a source entry.",
                 kind="error",
             )
             return False
@@ -1014,6 +1067,28 @@ class AddExperienceScreen(Screen[None]):
             "success",
         )
         self._initial_form_state = self._current_form_state(source_text=None)
+        self.refresh(recompose=True)
+        return True
+
+    def _mark_role_reviewed(self) -> bool:
+        if self.session_id is None:
+            self._set_message("Save role details before reviewing this role.", kind="error")
+            return False
+
+        if self._has_unsaved_changes():
+            self._set_message(
+                "Save role details, role focus, and source text before reviewing this role.",
+                kind="error",
+            )
+            return False
+
+        try:
+            self.service.mark_role_reviewed(self.session_id)
+        except (ValueError, ValidationError) as exc:
+            self._set_message(str(exc), kind="error")
+            return False
+
+        self._form_message = ("Marked role reviewed.", "success")
         self.refresh(recompose=True)
         return True
 

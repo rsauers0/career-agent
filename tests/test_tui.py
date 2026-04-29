@@ -17,6 +17,7 @@ from career_agent.domain.models import (
     ExperienceEntry,
     ExperienceIntakeSession,
     ExperienceIntakeStatus,
+    ExperienceRoleStatus,
     IntakeAnswer,
     IntakeQuestion,
     UserPreferences,
@@ -40,6 +41,7 @@ from career_agent.interfaces.tui_experience import (
     build_question_answer_blocks,
     format_intake_session_title,
     format_intake_status,
+    format_role_status,
     is_experience_session_editable,
     sort_experience_sessions,
 )
@@ -111,6 +113,10 @@ def test_required_label_adds_red_required_marker() -> None:
 
 def test_format_intake_status_formats_status_values() -> None:
     assert format_intake_status(ExperienceIntakeStatus.DRAFT_GENERATED) == "Draft Generated"
+
+
+def test_format_role_status_formats_user_facing_status_values() -> None:
+    assert format_role_status(ExperienceRoleStatus.REVIEW_REQUIRED) == "Review Required"
 
 
 def test_format_intake_session_title_uses_best_available_role_context() -> None:
@@ -594,7 +600,7 @@ def test_new_role_screen_saves_role_details_then_adds_source_entry() -> None:
                 app.screen.query_one(
                     "#experience-source-text", TextArea
                 ).text = "- Built reporting automation"
-                await pilot.click("#add-source-entry")
+                app.screen._add_source_entry()
                 await pilot.pause()
 
                 message = app.screen.query_one("#experience-form-message", Static)
@@ -615,6 +621,99 @@ def test_new_role_screen_saves_role_details_then_adds_source_entry() -> None:
     assert employment_type == "full-time"
     assert source_text == "- Built reporting automation"
     assert is_current_role is True
+
+
+def test_edit_role_screen_marks_ready_role_reviewed() -> None:
+    async def run_test() -> tuple[str, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            experience_service = ExperienceIntakeService(
+                experience_repository,
+                FakeExperienceIntakeAssistant(),
+            )
+            session = experience_service.create_session()
+            session = experience_service.capture_role_details(
+                session.id,
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                start_date="05/2021",
+                is_current_role=True,
+            )
+            session = experience_service.save_role_focus_statement(
+                session.id,
+                "I helped finance teams reduce manual reporting.",
+            )
+            session = experience_service.add_source_entry(
+                session.id,
+                "- Built reporting automation",
+            )
+            session = experience_service.analyze_pending_source_entries(session.id)
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=experience_service,
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click(f"#edit-experience-session-{session.id}")
+                await pilot.pause()
+                app.screen._mark_role_reviewed()
+                await pilot.pause()
+
+                message = app.screen.query_one("#experience-form-message", Static)
+                updated = experience_repository.load_session(session.id)
+                assert updated is not None
+                return str(message.render()), updated.role_status.value
+
+    message, role_status = asyncio.run(run_test())
+
+    assert message == "Marked role reviewed."
+    assert role_status == "reviewed"
+
+
+def test_edit_role_screen_shows_review_validation_message() -> None:
+    async def run_test() -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            profile_service = ProfileService(FileProfileRepository(data_dir))
+            experience_repository = FileExperienceIntakeRepository(data_dir)
+            experience_service = ExperienceIntakeService(experience_repository)
+            session = experience_service.create_session()
+            session = experience_service.capture_role_details(
+                session.id,
+                employer_name="Acme Analytics",
+                job_title="Senior Data Engineer",
+                start_date="05/2021",
+                is_current_role=True,
+            )
+            app = CareerAgentTUI(
+                settings=Settings(data_dir=data_dir),
+                profile_service=profile_service,
+                experience_intake_service=experience_service,
+            )
+
+            async with app.run_test(size=(160, 100)) as pilot:
+                app.action_open_career_profile()
+                await pilot.pause()
+                await pilot.click("#open-experience-intake")
+                await pilot.pause()
+                await pilot.click(f"#edit-experience-session-{session.id}")
+                await pilot.pause()
+                app.screen._mark_role_reviewed()
+                await pilot.pause()
+
+                message = app.screen.query_one("#experience-form-message", Static)
+                return str(message.render())
+
+    message = asyncio.run(run_test())
+
+    assert message == "Role focus statement is required before role review."
 
 
 def test_add_experience_back_refreshes_experience_list() -> None:
@@ -909,7 +1008,7 @@ def test_add_source_entry_then_back_does_not_prompt_for_saved_source() -> None:
                 app.screen.query_one(
                     "#experience-source-text", TextArea
                 ).text = "- Built reporting automation"
-                await pilot.click("#add-source-entry")
+                app.screen._add_source_entry()
                 await pilot.pause()
 
                 app.screen.action_back()
