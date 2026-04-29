@@ -1,22 +1,21 @@
 # Security And Privacy Posture
 
-Career Agent is designed as a local-first application. Current profile and
-preference workflows store data locally as JSON files. LLM-assisted workflows
-are intended to be opt-in and user-configured.
+Career Agent is designed as a local-first application. The `v2-foundation`
+branch is rebuilding the application foundation before reintroducing broader
+TUI, workflow, and LLM-assisted features.
 
 This document describes the current security posture and intended privacy
 expectations. It is not a formal third-party security audit.
 
 ## Current Behavior
 
-- Career profile and preference data is stored under the configured local data directory.
+- The current v2 foundation CLI reads configuration but does not yet write career data.
 - The default data directory is a `.career-agent` directory under the current user's home directory.
 - No telemetry is implemented.
 - No account system is implemented.
-- No hosted application service is required to use the current CLI or TUI workflows.
-- Current profile and preference workflows do not send career data to external services.
-- OpenAI-compatible LLM adapter calls can be triggered through the `experience questions` and `experience draft` CLI commands.
-- Optional LLM endpoint settings may be configured for LLM-assisted workflows, but they are not used by profile or preference workflows.
+- No hosted application service is required to use the current CLI.
+- Current workflows do not send career data to external services.
+- No LLM calls are implemented in the current v2 foundation code.
 - No telemetry or background network calls are implemented.
 
 ## Future Networked Features
@@ -33,25 +32,20 @@ enabled and triggered a workflow that requires it.
 
 ## Local Data
 
-Current storage shape:
+The v2 foundation branch will use local JSON persistence first. The intended
+initial storage shape is:
 
 ```text
 <data_dir>/
-  profile/
+  user_preferences/
     user_preferences.json
-    career_profile.json
-  intake/
-    experience/
-      <session_id>.json
   snapshots/
-    profile/
-    intake/
-      experience/
+    user_preferences/
 ```
 
-Profile and experience intake writes use snapshot-on-overwrite behavior. When an
-existing JSON file is replaced, the previous version is copied into the relevant
-`snapshots/` directory.
+Snapshot-on-overwrite behavior is planned for local JSON writes. When an
+existing JSON file is replaced, the previous version should be copied into the
+relevant `snapshots/` directory.
 
 ## Verification Commands
 
