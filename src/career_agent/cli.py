@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
 from career_agent.config import get_settings
-from career_agent.user_preferences.models import UserPreferences
+from career_agent.user_preferences.models import (
+    CommuteDistanceUnit,
+    UserPreferences,
+    WorkArrangement,
+)
 from career_agent.user_preferences.repository import UserPreferencesRepository
 from career_agent.user_preferences.service import UserPreferencesService
 
@@ -47,6 +52,74 @@ def show_preferences() -> None:
         return
 
     render_user_preferences(preferences)
+
+
+@preferences_app.command("save")
+def save_preferences(
+    full_name: str = typer.Option(..., help="User's preferred display name."),
+    base_location: str = typer.Option(..., help="User's home/base location."),
+    work_arrangements: list[WorkArrangement] = typer.Option(
+        ...,
+        "--work-arrangement",
+        help="Preferred work arrangement. Can be provided more than once.",
+    ),
+    work_authorization: bool = typer.Option(
+        ...,
+        "--work-authorization/--no-work-authorization",
+        help="Whether the user is legally authorized to work.",
+    ),
+    requires_work_sponsorship: bool = typer.Option(
+        ...,
+        "--requires-work-sponsorship/--no-requires-work-sponsorship",
+        help="Whether the user requires employer sponsorship.",
+    ),
+    time_zone: str | None = typer.Option(None, help="Optional IANA time zone."),
+    target_job_titles: list[str] = typer.Option(
+        [],
+        "--target-job-title",
+        help="Target job title. Can be provided more than once.",
+    ),
+    preferred_locations: list[str] = typer.Option(
+        [],
+        "--preferred-location",
+        help="Preferred location. Can be provided more than once.",
+    ),
+    desired_salary_min: int | None = typer.Option(None, help="Minimum desired salary."),
+    salary_currency: str = typer.Option("USD", help="Three-letter salary currency code."),
+    max_commute_distance: int | None = typer.Option(None, help="Maximum commute distance."),
+    commute_distance_unit: CommuteDistanceUnit = typer.Option(
+        CommuteDistanceUnit.MILES,
+        help="Commute distance unit.",
+    ),
+    max_commute_time: int | None = typer.Option(None, help="Maximum commute time in minutes."),
+) -> None:
+    """Save user preferences from explicit CLI options."""
+
+    try:
+        preferences = UserPreferences(
+            full_name=full_name,
+            base_location=base_location,
+            time_zone=time_zone,
+            target_job_titles=target_job_titles,
+            preferred_locations=preferred_locations,
+            preferred_work_arrangements=work_arrangements,
+            desired_salary_min=desired_salary_min,
+            salary_currency=salary_currency,
+            max_commute_distance=max_commute_distance,
+            commute_distance_unit=commute_distance_unit,
+            max_commute_time=max_commute_time,
+            work_authorization=work_authorization,
+            requires_work_sponsorship=requires_work_sponsorship,
+        )
+    except ValidationError as exc:
+        console.print("[red]Could not save user preferences.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    service = build_user_preferences_service()
+    service.save_preferences(preferences)
+    console.print("[green]Saved user preferences.[/green]")
 
 
 def build_user_preferences_service() -> UserPreferencesService:
