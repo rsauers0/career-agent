@@ -171,4 +171,4 @@ Experience Bullets
   -> tests
 ```
 
-The immediate next foundation step is completing the Experience Bullets CLI and tests. After that, the Experience AI workflow harness should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.
+The immediate next foundation step is the Experience AI workflow harness. It should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.

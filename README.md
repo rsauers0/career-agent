@@ -13,12 +13,13 @@ Current scope:
 - keep the project runnable through a minimal Typer CLI
 - keep configuration loading through `pydantic-settings`
 - rebuild one component at a time
-- maintain component boundaries for User Preferences, Experience Roles, and Role Sources
+- maintain component boundaries for User Preferences, Experience Roles, Role Sources, and Experience Bullets
 - use JSON persistence first
 - defer TUI and LLM workflow integration until the underlying services are clear and tested
 
 See [docs/v2-foundation-plan.md](docs/v2-foundation-plan.md) for the rebuild plan.
 See [docs/component-architecture.md](docs/component-architecture.md) for the current component architecture.
+See [docs/diagrams.md](docs/diagrams.md) for Mermaid diagrams of the current architecture and guardrail model.
 See [docs/cli-reference.md](docs/cli-reference.md) for current CLI examples.
 See [docs/storage.md](docs/storage.md) for the current local JSON storage shape.
 
@@ -61,6 +62,12 @@ List saved role sources:
 uv run career-agent sources list
 ```
 
+List saved experience bullets:
+
+```bash
+uv run career-agent bullets list
+```
+
 Run tests:
 
 ```bash
@@ -96,9 +103,10 @@ The rebuild sequence is:
 1. User Preferences model, JSON repository, service, CLI, and tests.
 2. Experience Role model, JSON repository, service, CLI, and tests.
 3. Role Source model, JSON repository, service, CLI, and tests.
-4. Experience AI workflow harness through CLI/dev commands.
-5. TUI presentation once the workflow is stable.
-6. Optional FastAPI interface later, using the same application services.
+4. Experience Bullet model, JSON repository, service, CLI, and tests.
+5. Experience AI workflow harness through CLI/dev commands.
+6. TUI presentation once the workflow is stable.
+7. Optional FastAPI interface later, using the same application services.
 
 The intended architecture remains:
 

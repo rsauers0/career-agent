@@ -149,8 +149,8 @@ src/career_agent/experience_bullets/
 
 Current CLI group:
 
-```text
-not implemented yet
+```bash
+career-agent bullets
 ```
 
 Examples of owned data:
