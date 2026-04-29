@@ -18,6 +18,8 @@ Current scope:
 - defer TUI and LLM workflow integration until the underlying services are clear and tested
 
 See [docs/v2-foundation-plan.md](docs/v2-foundation-plan.md) for the rebuild plan.
+See [docs/cli-reference.md](docs/cli-reference.md) for current CLI examples.
+See [docs/storage.md](docs/storage.md) for the current local JSON storage shape.
 
 ## Install
 
@@ -38,6 +40,12 @@ Run the current CLI health check:
 
 ```bash
 uv run career-agent doctor
+```
+
+Show saved user preferences:
+
+```bash
+uv run career-agent preferences show
 ```
 
 Run tests:

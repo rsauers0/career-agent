@@ -10,7 +10,7 @@ from career_agent.user_preferences.models import (
 
 def build_preferences() -> UserPreferences:
     return UserPreferences(
-        full_name="Randy Example",
+        full_name="John Doe",
         base_location="Aurora, IL 60504",
         time_zone="America/Chicago",
         target_job_titles=["Senior Systems Analyst", "Platform Engineer"],
@@ -36,7 +36,7 @@ def test_user_preferences_json_round_trip() -> None:
 
 def test_user_preferences_normalizes_text_fields() -> None:
     preferences = UserPreferences(
-        full_name="  Randy Example  ",
+        full_name="  John Doe  ",
         base_location="  Aurora, IL 60504  ",
         time_zone="   ",
         target_job_titles=["  Senior Systems Analyst  ", "  "],
@@ -47,7 +47,7 @@ def test_user_preferences_normalizes_text_fields() -> None:
         requires_work_sponsorship=False,
     )
 
-    assert preferences.full_name == "Randy Example"
+    assert preferences.full_name == "John Doe"
     assert preferences.base_location == "Aurora, IL 60504"
     assert preferences.time_zone is None
     assert preferences.target_job_titles == ["Senior Systems Analyst"]
@@ -68,7 +68,7 @@ def test_user_preferences_requires_core_fields() -> None:
 
     with pytest.raises(ValidationError):
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="",
             preferred_work_arrangements=[WorkArrangement.REMOTE],
             work_authorization=True,
@@ -79,7 +79,7 @@ def test_user_preferences_requires_core_fields() -> None:
 def test_user_preferences_requires_work_arrangement() -> None:
     with pytest.raises(ValidationError):
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="Aurora, IL 60504",
             preferred_work_arrangements=[],
             work_authorization=True,
@@ -90,7 +90,7 @@ def test_user_preferences_requires_work_arrangement() -> None:
 def test_user_preferences_rejects_invalid_time_zone() -> None:
     with pytest.raises(ValidationError, match="valid IANA"):
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="Aurora, IL 60504",
             time_zone="Not/A_Zone",
             preferred_work_arrangements=[WorkArrangement.REMOTE],
@@ -102,7 +102,7 @@ def test_user_preferences_rejects_invalid_time_zone() -> None:
 def test_user_preferences_rejects_negative_numbers() -> None:
     with pytest.raises(ValidationError):
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="Aurora, IL 60504",
             preferred_work_arrangements=[WorkArrangement.REMOTE],
             desired_salary_min=-1,
@@ -112,7 +112,7 @@ def test_user_preferences_rejects_negative_numbers() -> None:
 
     with pytest.raises(ValidationError):
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="Aurora, IL 60504",
             preferred_work_arrangements=[WorkArrangement.REMOTE],
             max_commute_distance=-1,
@@ -122,7 +122,7 @@ def test_user_preferences_rejects_negative_numbers() -> None:
 
     with pytest.raises(ValidationError):
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="Aurora, IL 60504",
             preferred_work_arrangements=[WorkArrangement.REMOTE],
             max_commute_time=-1,
@@ -134,7 +134,7 @@ def test_user_preferences_rejects_negative_numbers() -> None:
 def test_user_preferences_rejects_invalid_salary_currency() -> None:
     with pytest.raises(ValidationError, match="salary_currency"):
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="Aurora, IL 60504",
             preferred_work_arrangements=[WorkArrangement.REMOTE],
             salary_currency="US1",

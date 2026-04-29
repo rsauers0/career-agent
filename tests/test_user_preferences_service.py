@@ -15,7 +15,7 @@ class FakeUserPreferencesRepository:
 
 def build_preferences() -> UserPreferences:
     return UserPreferences(
-        full_name="Randy Example",
+        full_name="John Doe",
         base_location="Aurora, IL 60504",
         preferred_work_arrangements=[WorkArrangement.REMOTE],
         work_authorization=True,

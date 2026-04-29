@@ -35,7 +35,7 @@ def test_preferences_show_renders_saved_preferences(monkeypatch, tmp_path) -> No
     repository = UserPreferencesRepository(tmp_path)
     repository.save(
         UserPreferences(
-            full_name="Randy Example",
+            full_name="John Doe",
             base_location="Aurora, IL 60504",
             preferred_work_arrangements=[WorkArrangement.REMOTE],
             work_authorization=True,
@@ -48,7 +48,7 @@ def test_preferences_show_renders_saved_preferences(monkeypatch, tmp_path) -> No
 
     assert result.exit_code == 0
     assert "User Preferences" in result.output
-    assert "Randy Example" in result.output
+    assert "John Doe" in result.output
     assert "Aurora, IL 60504" in result.output
     assert "remote" in result.output
 
@@ -66,7 +66,7 @@ def test_preferences_save_writes_preferences(monkeypatch, tmp_path) -> None:
             "preferences",
             "save",
             "--full-name",
-            "Randy Example",
+            "John Doe",
             "--base-location",
             "Aurora, IL 60504",
             "--work-arrangement",
@@ -96,7 +96,7 @@ def test_preferences_save_writes_preferences(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "Saved user preferences." in result.output
     assert preferences is not None
-    assert preferences.full_name == "Randy Example"
+    assert preferences.full_name == "John Doe"
     assert preferences.base_location == "Aurora, IL 60504"
     assert preferences.preferred_work_arrangements == [
         WorkArrangement.REMOTE,
@@ -125,7 +125,7 @@ def test_preferences_save_reports_validation_error(monkeypatch, tmp_path) -> Non
             "preferences",
             "save",
             "--full-name",
-            "Randy Example",
+            "John Doe",
             "--base-location",
             "Aurora, IL 60504",
             "--work-arrangement",
