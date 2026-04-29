@@ -21,6 +21,8 @@ This map reflects the files currently tracked in Git.
     cli-reference.md                   # CLI command examples for scripting and debugging
     implementation-plan.md             # living implementation plan and roadmap
     security.md                        # security and privacy posture
+    workflows/
+      experience-role.md               # role-level experience workflow diagrams
 
   src/career_agent/
     __init__.py                        # package marker
@@ -45,6 +47,7 @@ This map reflects the files currently tracked in Git.
       llm.py                           # OpenAI-compatible LLM assistant adapters
       prompts/
         __init__.py                    # prompt template package marker
+        experience_candidate_bullets.v1.md  # prompt for candidate bullet proposals
         experience_draft_entry.v1.md   # prompt for drafting experience entries
         experience_follow_up_questions.v1.md  # prompt for intake questions
       repositories.py                  # file-backed JSON persistence and snapshots

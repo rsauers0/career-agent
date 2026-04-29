@@ -17,10 +17,10 @@ Implemented:
 - OpenAI-compatible LLM adapter for current experience question/draft commands
 
 Planned next:
-- migrate the Experience TUI from one source text field to append-only source entries
-- add candidate bullet review controls in the TUI
-- analyze new source entries against existing candidate bullets
-- generate final experience entries only after active candidate bullets are reviewed
+- add role focus and clarification-question steps to the Experience workflow
+- evolve source analysis from one-shot bullet generation to patch-style LLM proposals
+- add role-level review for experience entries
+- add bullet-scoped conversational revision through validated application actions
 - expand Career Profile readiness and job analysis workflows
 
 ## Install And Run The TUI
@@ -82,7 +82,7 @@ Current Experience workflow:
 - Save the intake session locally.
 - Review, edit, or delete unlocked intake sessions.
 
-The Experience workflow is being refactored toward append-only source entries and reviewed candidate bullets. Until that TUI migration is complete, some lower-level workflow steps remain available through the CLI.
+The Experience workflow is being refactored toward a guided role-level review process backed by append-only source entries, clarification questions, candidate bullet proposals, and deterministic application actions. Some lower-level workflow steps remain available through the CLI while the TUI workflow matures.
 
 ## CLI Reference
 
@@ -99,6 +99,7 @@ Career Agent is being built around:
 - Typer CLI support for development, scripting, and workflow validation
 
 See [docs/architecture.md](docs/architecture.md) for the current layer map and file responsibilities.
+See [docs/workflows/experience-role.md](docs/workflows/experience-role.md) for the planned role-level experience workflow and data flow diagrams.
 See [docs/implementation-plan.md](docs/implementation-plan.md) for the living roadmap.
 See [docs/security.md](docs/security.md) for the current security and privacy posture.
 

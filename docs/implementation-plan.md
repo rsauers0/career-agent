@@ -53,18 +53,23 @@ Design goals:
 - preserve inputs, outputs, prompt versions, model metadata, transcripts, and evaluation results for debugging and improvement
 - support future DSPy-style prompt optimization from retained workflow and evaluation data
 
-Experience intake should be built as a sequence of narrow transitions:
-- role facts + append-only source entries -> candidate bullets
-- pending source entries + existing candidate bullets -> bullet updates or new candidate bullets
-- candidate bullet edits -> `needs_review`
-- user-reviewed candidate bullets -> final draft `ExperienceEntry`
-- locked draft -> canonical `CareerProfile`
+Experience intake should be built as a guided role-level workflow rather than a one-shot bullet generator:
+- role facts are captured through deterministic form inputs
+- the saved role becomes the durable workflow container
+- the assistant guides the user through role focus, source collection, clarification, bullet generation, and review
+- append-only source entries provide traceable evidence
+- clarification questions should be generated before initial bullets when source material is ambiguous
+- candidate bullets are editable role-level components, not the primary finalization gate
+- the role, not each individual bullet, becomes reviewed when the user confirms the role accurately represents their experience
+- reviewed roles become the trusted input for future job analysis, resume tailoring, and document generation
 
 The experience workflow should specifically help users reframe duty-list resume bullets into accomplishment-focused entries. Strong outputs should emphasize business impact, measurable outcomes where available, and defensible subjective accomplishments when hard metrics are unavailable. The guided process should teach better resume and cover-letter writing rather than simply storing vague or noisy source text.
 
 Experience source entries are evidence, not final bullets. They should be append-only after submission so later workflow analysis can trace which source material produced or changed a candidate bullet. If a user has new information later, they add a new source entry rather than editing an old one.
 
-Generated candidate bullets should remain editable. A bullet is considered usable only after the user marks it as reviewed. Any material LLM or user edit resets the bullet to `needs_review`. Removed bullets stay retained for traceability but should not feed final experience generation or downstream job analysis.
+Candidate bullets should remain editable and evidence-backed. Bullet-level statuses should support local workflow needs such as active, needs attention, or removed, but the main downstream gate should be role-level review. Any material LLM or user edit should move the role back to a needs-review state. Removed bullets stay retained for traceability but should not feed final experience generation or downstream job analysis.
+
+LLM outputs should be treated as proposals, not direct mutations. The model should return structured Pydantic-validated responses such as clarification questions, bullet patch proposals, evaluation results, or tool/action requests. Application services should validate and apply those proposals through deterministic methods. The LLM should never edit persisted files directly.
 
 ## Completed
 
@@ -211,20 +216,24 @@ Completed scope:
 - service helpers added for appending sources, marking sources analyzed, replacing candidate bullets, reviewing bullets, removing bullets, and editing bullets
 
 Remaining initial scope:
-- move TUI experience source capture from one legacy source text field toward append-only source entries
-- add LLM workflow that analyzes pending source entries against existing candidate bullets
-- add TUI review controls for candidate bullets before final entry generation
+- replace the current one-shot candidate bullet generation schema with a patch-style proposal schema for creates, updates, unchanged bullets, and quality warnings
+- add pre-bullet clarification question generation after source collection and before initial bullet generation
+- add a role focus statement captured through the guided assistant flow
+- add role-level review state and make reviewed roles the trusted downstream input
+- add bullet-scoped conversational revision where the LLM proposes tool/action calls and the application service applies validated changes
+- add deterministic query/tool interfaces for retrieving role-level skills, tools, domains, bullets, and source evidence
 - store prompt/model metadata and evaluation results as workflow steps are added
-- keep locked sessions archived for development traceability and future eval/prompt improvement
-- add editable TUI review flow for generated drafts before locking entries
+- keep reviewed or archived sessions retained for development traceability and future eval/prompt improvement
 
 ### Career Profile Authoring
-Treat `CareerProfile` as the locked, structured result of guided workflows rather than a large manual data-entry form.
+Treat `CareerProfile` as user-level intent plus reviewed role data rather than a flattened summary of everything the user has done.
 
 Initial direction:
-- locked `ExperienceEntry` records become the foundation of `CareerProfile`
-- skills, tools, technologies, achievements, and career themes should be derived or refined from locked experience data where possible
-- users should review and lock derived profile components before they become canonical
+- the user-level profile should capture broad intent, such as what kind of work the user wants next and any narrative positioning notes
+- role records should remain the primary source for skills, tools, technologies, domains, projects, and achievements
+- profile-level skills/tools/domains should be derived views or query results, not duplicated canonical data that can drift from role evidence
+- "notable achievement" is contextual and should usually be selected during job analysis from reviewed role data rather than stored globally
+- downstream LLM workflows should retrieve relevant reviewed role data through deterministic application tools instead of relying on lossy profile summaries
 - high-level profile screens should focus on review, correction, and narrative direction rather than asking the user to manually brain-dump everything
 
 ### Experience Management
@@ -249,11 +258,82 @@ Initial scope:
 - create and resume intake sessions for one role at a time
 - capture role facts directly: company, job title, optional location, employment type, start date, end date or current role
 - capture append-only source entries for a specific job/role, not an entire resume dump
-- analyze new source entries against existing candidate bullets instead of reprocessing all prior source text
-- require all active candidate bullets to be reviewed before generating a final experience entry
-- support multiline source capture from files and intentional source-text appends
+- collect a short role focus statement in the user's own words after role details are saved
+- generate clarification questions before first-pass bullets when source material needs more context
+- analyze new source entries against existing role context and candidate bullets instead of reprocessing all prior source text
+- use candidate bullets as editable components inside a role-level review workflow
+- make role-level reviewed status the gate for downstream job analysis and tailoring
+- support multiline source capture from files and intentional source-text appends where CLI compatibility requires it
 - use guided LLM-assisted steps to clarify missing details and frame work as accomplishments
-- lock reviewed draft entries into canonical `CareerProfile`
+- keep reviewed roles editable; later changes should move the role back to needs review rather than making it immutable
+
+## Role-Level Experience Workflow
+
+The role workflow should be modeled as an application-owned state machine. The assistant guides the user, but the application owns valid state transitions.
+
+Recommended role states:
+- `role_details_incomplete`
+- `role_details_saved`
+- `role_focus_needed`
+- `collecting_sources`
+- `clarification_needed`
+- `ready_for_bullet_generation`
+- `reviewing_role`
+- `role_reviewed`
+- `archived`
+
+Guided workflow:
+1. User enters role details through deterministic form fields.
+2. User saves role details, creating or updating the durable role workflow container.
+3. Assistant asks for a short role focus statement in the user's own words.
+4. User adds append-only source entries.
+5. User indicates source collection is complete.
+6. Assistant generates clarification questions when useful before initial bullet generation.
+7. User answers clarification questions.
+8. Assistant proposes candidate bullet patches grounded in role facts, source entries, and clarification answers.
+9. User reviews the role through candidate bullets, notes, and revisions.
+10. User marks the role reviewed when it accurately represents their experience.
+11. Reviewed roles become eligible for downstream job analysis and tailoring.
+
+Role review is not a lock. A reviewed role remains editable. If the user changes role details, adds sources, revises bullets, or changes inferred role facts, the role should move back to a needs-review state.
+
+Bullet-level review can still exist as a local UI affordance, but it should not be the main canonical gate. The main gate is whether the role as a whole has been reviewed by the user.
+
+## LLM Tool And Evaluation Direction
+
+LLM-assisted steps should return structured proposals and tool/action requests rather than free-form instructions that mutate data directly.
+
+Examples of future application-owned actions:
+- `add_source_entry`
+- `save_role_focus_statement`
+- `create_candidate_bullet`
+- `update_candidate_bullet`
+- `remove_candidate_bullet`
+- `add_bullet_review_note`
+- `mark_role_reviewed`
+- `retrieve_roles_by_skill`
+- `retrieve_role_evidence`
+
+The assistant may recommend these actions, but application services execute them after validation. This keeps file writes and workflow transitions deterministic.
+
+Source analysis should evolve from returning only a bullet list to returning a patch proposal:
+- creates
+- updates
+- unchanged bullets
+- possible duplicates
+- quality warnings
+- unsupported claim warnings
+- suggested clarification questions
+
+Evaluation should be integrated into the workflow, not bolted on later. Candidate bullets and role summaries should be checked for:
+- grounding in source entries and role metadata
+- accomplishment framing
+- unsupported claims
+- duplicated content
+- inflated or non-credible language
+- missing impact, scale, tools, audience, or outcome when the source suggests they may exist
+
+These evaluations should be retained with prompt versions, model metadata, source references, and user corrections so the project can support future prompt optimization and DSPy-style experiments.
 
 ## Later
 
@@ -262,7 +342,7 @@ Expand the first intake workflow into a full collaborative authoring loop.
 
 Likely additions:
 - transcript summarization or cleanup to reduce local storage footprint
-- retained eval datasets from locked/rejected drafts
+- retained eval datasets from reviewed roles, removed bullets, and user corrections
 - prompt version tracking and evaluation history
 - optional DSPy experiments once enough workflow examples exist
 
