@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from pydantic import ValidationError
 from rich.console import Console
@@ -13,6 +15,9 @@ from career_agent.experience_roles.models import (
 )
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.experience_roles.service import ExperienceRoleService
+from career_agent.role_sources.models import RoleSourceEntry
+from career_agent.role_sources.repository import RoleSourceRepository
+from career_agent.role_sources.service import RoleNotFoundError, RoleSourceService
 from career_agent.user_preferences.models import (
     CommuteDistanceUnit,
     UserPreferences,
@@ -27,6 +32,7 @@ app = typer.Typer(
 )
 preferences_app = typer.Typer(help="Manage user preferences.")
 roles_app = typer.Typer(help="Manage experience roles.")
+sources_app = typer.Typer(help="Manage role source entries.")
 console = Console()
 
 
@@ -43,6 +49,11 @@ def preferences_cli() -> None:
 @roles_app.callback()
 def roles_cli() -> None:
     """Commands for working with experience roles."""
+
+
+@sources_app.callback()
+def sources_cli() -> None:
+    """Commands for working with role source entries."""
 
 
 @app.command()
@@ -226,6 +237,85 @@ def delete_role(role_id: str = typer.Argument(..., help="Experience role identif
     console.print("[green]Deleted experience role.[/green]")
 
 
+@sources_app.command("list")
+def list_sources(
+    role_id: str | None = typer.Option(None, help="Optional role id to filter sources."),
+) -> None:
+    """List saved role source entries."""
+
+    service = build_role_source_service()
+    sources = service.list_sources(role_id=role_id)
+    if not sources:
+        console.print("[yellow]No role sources saved yet.[/yellow]")
+        return
+
+    render_role_source_list(sources)
+
+
+@sources_app.command("show")
+def show_source(source_id: str = typer.Argument(..., help="Role source identifier.")) -> None:
+    """Show one saved role source entry."""
+
+    service = build_role_source_service()
+    source = service.get_source(source_id)
+    if source is None:
+        console.print(f"[yellow]No role source found for id: {source_id}[/yellow]")
+        raise typer.Exit(1)
+
+    render_role_source(source)
+
+
+@sources_app.command("add")
+def add_source(
+    role_id: str = typer.Option(..., help="Existing experience role id."),
+    source_text: str | None = typer.Option(None, help="Source text to save."),
+    from_file: Path | None = typer.Option(
+        None,
+        "--from-file",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to a UTF-8 text file containing source material.",
+    ),
+) -> None:
+    """Add source material for an existing experience role."""
+
+    if (source_text is None) == (from_file is None):
+        console.print("[red]Provide exactly one of --source-text or --from-file.[/red]")
+        raise typer.Exit(1)
+
+    if from_file is not None:
+        source_text = from_file.read_text(encoding="utf-8")
+
+    service = build_role_source_service()
+    try:
+        source = service.add_source(role_id=role_id, source_text=source_text or "")
+    except RoleNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save role source.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved role source.[/green]")
+    console.print(f"Source ID: {source.id}")
+
+
+@sources_app.command("delete")
+def delete_source(source_id: str = typer.Argument(..., help="Role source identifier.")) -> None:
+    """Delete one saved role source entry."""
+
+    service = build_role_source_service()
+    if not service.delete_source(source_id):
+        console.print(f"[yellow]No role source found for id: {source_id}[/yellow]")
+        raise typer.Exit(1)
+
+    console.print("[green]Deleted role source.[/green]")
+
+
 def build_user_preferences_service() -> UserPreferencesService:
     """Build the user preferences service from configured settings."""
 
@@ -240,6 +330,15 @@ def build_experience_role_service() -> ExperienceRoleService:
     settings = get_settings()
     repository = ExperienceRoleRepository(settings.data_dir)
     return ExperienceRoleService(repository)
+
+
+def build_role_source_service() -> RoleSourceService:
+    """Build the role source service from configured settings."""
+
+    settings = get_settings()
+    source_repository = RoleSourceRepository(settings.data_dir)
+    role_repository = ExperienceRoleRepository(settings.data_dir)
+    return RoleSourceService(source_repository, role_repository)
 
 
 def render_user_preferences(preferences: UserPreferences) -> None:
@@ -332,8 +431,50 @@ def format_role_dates(role: ExperienceRole) -> str:
     return f"{start_date} - {end_date}"
 
 
+def render_role_source_list(sources: list[RoleSourceEntry]) -> None:
+    """Render role source entries as a compact CLI table."""
+
+    table = Table(title="Role Sources")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Role ID", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Preview")
+    for source in sources:
+        table.add_row(
+            source.id,
+            source.role_id,
+            source.status.value,
+            preview_source_text(source.source_text),
+        )
+    console.print(table)
+
+
+def render_role_source(source: RoleSourceEntry) -> None:
+    """Render one role source entry as a CLI table."""
+
+    table = Table(title="Role Source")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("ID", source.id)
+    table.add_row("Role ID", source.role_id)
+    table.add_row("Status", source.status.value)
+    table.add_row("Created At", source.created_at.isoformat())
+    table.add_row("Source Text", source.source_text)
+    console.print(table)
+
+
+def preview_source_text(source_text: str, max_length: int = 80) -> str:
+    """Return a one-line preview of submitted source text."""
+
+    preview = " ".join(source_text.split())
+    if len(preview) <= max_length:
+        return preview
+    return f"{preview[: max_length - 3]}..."
+
+
 app.add_typer(preferences_app, name="preferences")
 app.add_typer(roles_app, name="roles")
+app.add_typer(sources_app, name="sources")
 
 
 def main() -> None:

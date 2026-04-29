@@ -10,6 +10,8 @@ uv run career-agent preferences --help
 uv run career-agent preferences save --help
 uv run career-agent roles --help
 uv run career-agent roles save --help
+uv run career-agent sources --help
+uv run career-agent sources add --help
 ```
 
 ## Health Check
@@ -114,6 +116,50 @@ Delete one saved experience role:
 
 ```bash
 uv run career-agent roles delete <role-id>
+```
+
+## Role Sources
+
+List all saved role sources:
+
+```bash
+uv run career-agent sources list
+```
+
+List sources for one role:
+
+```bash
+uv run career-agent sources list --role-id <role-id>
+```
+
+Show one saved source entry:
+
+```bash
+uv run career-agent sources show <source-id>
+```
+
+Add source material directly from the command line:
+
+```bash
+uv run career-agent sources add \
+  --role-id <role-id> \
+  --source-text "- Led a reporting automation project."
+```
+
+Add multiline source material from a text file:
+
+```bash
+uv run career-agent sources add \
+  --role-id <role-id> \
+  --from-file source-notes.txt
+```
+
+`sources add` requires exactly one source input: either `--source-text` or `--from-file`.
+
+Delete one saved source entry:
+
+```bash
+uv run career-agent sources delete <source-id>
 ```
 
 ## Configuration
