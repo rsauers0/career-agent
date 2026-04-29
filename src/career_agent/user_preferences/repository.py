@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 
+from career_agent.storage import SNAPSHOTS_DIRNAME, timestamp_for_snapshot
 from career_agent.user_preferences.models import UserPreferences
 
 USER_PREFERENCES_DIRNAME = "user_preferences"
 USER_PREFERENCES_FILENAME = "user_preferences.json"
-SNAPSHOTS_DIRNAME = "snapshots"
 
 
 class UserPreferencesRepository:
@@ -63,11 +62,6 @@ class UserPreferencesRepository:
 
         self.snapshots_dir.mkdir(parents=True, exist_ok=True)
         snapshot_path = self.snapshots_dir / (
-            f"{self._timestamp_for_snapshot()}-{USER_PREFERENCES_FILENAME}"
+            f"{timestamp_for_snapshot()}-{USER_PREFERENCES_FILENAME}"
         )
         shutil.copy2(self.preferences_path, snapshot_path)
-
-    def _timestamp_for_snapshot(self) -> str:
-        """Return a UTC timestamp suitable for snapshot filenames."""
-
-        return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")

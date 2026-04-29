@@ -7,9 +7,9 @@ from career_agent.experience_bullets.models import (
 from career_agent.experience_bullets.repository import (
     EXPERIENCE_BULLETS_DIRNAME,
     EXPERIENCE_BULLETS_FILENAME,
-    SNAPSHOTS_DIRNAME,
     ExperienceBulletRepository,
 )
+from career_agent.storage import SNAPSHOTS_DIRNAME
 
 BULLET_LIST_ADAPTER = TypeAdapter(list[ExperienceBullet])
 

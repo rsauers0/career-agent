@@ -1,6 +1,6 @@
+from career_agent.storage import SNAPSHOTS_DIRNAME
 from career_agent.user_preferences.models import UserPreferences, WorkArrangement
 from career_agent.user_preferences.repository import (
-    SNAPSHOTS_DIRNAME,
     USER_PREFERENCES_DIRNAME,
     USER_PREFERENCES_FILENAME,
     UserPreferencesRepository,

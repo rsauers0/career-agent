@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import shutil
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import TypeAdapter
 
 from career_agent.experience_roles.models import ExperienceRole
+from career_agent.storage import SNAPSHOTS_DIRNAME, timestamp_for_snapshot
 
 EXPERIENCE_ROLES_DIRNAME = "experience_roles"
 EXPERIENCE_ROLES_FILENAME = "experience_roles.json"
-SNAPSHOTS_DIRNAME = "snapshots"
 
 _ROLE_LIST_ADAPTER = TypeAdapter(list[ExperienceRole])
 
@@ -96,14 +96,9 @@ class ExperienceRoleRepository:
 
         self.snapshots_dir.mkdir(parents=True, exist_ok=True)
         snapshot_path = self.snapshots_dir / (
-            f"{self._timestamp_for_snapshot()}-{EXPERIENCE_ROLES_FILENAME}"
+            f"{timestamp_for_snapshot()}-{EXPERIENCE_ROLES_FILENAME}"
         )
         shutil.copy2(self.roles_path, snapshot_path)
-
-    def _timestamp_for_snapshot(self) -> str:
-        """Return a UTC timestamp suitable for snapshot filenames."""
-
-        return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
     def _role_sort_key(self, role: ExperienceRole) -> tuple[int, int, int, datetime]:
         """Return a key that puts current and most recent roles first."""

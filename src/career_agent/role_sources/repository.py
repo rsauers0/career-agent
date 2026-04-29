@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import TypeAdapter
 
 from career_agent.role_sources.models import RoleSourceEntry
+from career_agent.storage import SNAPSHOTS_DIRNAME, timestamp_for_snapshot
 
 ROLE_SOURCES_DIRNAME = "role_sources"
 ROLE_SOURCES_FILENAME = "role_sources.json"
-SNAPSHOTS_DIRNAME = "snapshots"
 
 _SOURCE_LIST_ADAPTER = TypeAdapter(list[RoleSourceEntry])
 
@@ -102,12 +101,5 @@ class RoleSourceRepository:
             return
 
         self.snapshots_dir.mkdir(parents=True, exist_ok=True)
-        snapshot_path = self.snapshots_dir / (
-            f"{self._timestamp_for_snapshot()}-{ROLE_SOURCES_FILENAME}"
-        )
+        snapshot_path = self.snapshots_dir / (f"{timestamp_for_snapshot()}-{ROLE_SOURCES_FILENAME}")
         shutil.copy2(self.sources_path, snapshot_path)
-
-    def _timestamp_for_snapshot(self) -> str:
-        """Return a UTC timestamp suitable for snapshot filenames."""
-
-        return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")

@@ -8,9 +8,9 @@ from career_agent.experience_roles.models import (
 from career_agent.experience_roles.repository import (
     EXPERIENCE_ROLES_DIRNAME,
     EXPERIENCE_ROLES_FILENAME,
-    SNAPSHOTS_DIRNAME,
     ExperienceRoleRepository,
 )
+from career_agent.storage import SNAPSHOTS_DIRNAME
 
 ROLE_LIST_ADAPTER = TypeAdapter(list[ExperienceRole])
 

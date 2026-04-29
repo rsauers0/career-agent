@@ -4,9 +4,9 @@ from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.role_sources.repository import (
     ROLE_SOURCES_DIRNAME,
     ROLE_SOURCES_FILENAME,
-    SNAPSHOTS_DIRNAME,
     RoleSourceRepository,
 )
+from career_agent.storage import SNAPSHOTS_DIRNAME
 
 SOURCE_LIST_ADAPTER = TypeAdapter(list[RoleSourceEntry])
 
