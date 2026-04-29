@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+from career_agent.<component>.models import <Model>
+from career_agent.<component>.repository import <Repository>
+
+
+class <Service>:
+    """Application behavior for <component>."""
+
+    def __init__(self, repository: <Repository>) -> None:
+        self.repository = repository
+
+    def get(self) -> <Model> | None:
+        """Return saved <component> data if it exists."""
+
+        return self.repository.load()
+
+    def save(self, model: <Model>) -> None:
+        """Validate and persist <component> data."""
+
+        self.repository.save(model)

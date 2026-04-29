@@ -1,0 +1,30 @@
+from career_agent.<component>.models import <Model>
+from career_agent.<component>.service import <Service>
+
+
+class FakeRepository:
+    def __init__(self) -> None:
+        self.model: <Model> | None = None
+
+    def load(self) -> <Model> | None:
+        return self.model
+
+    def save(self, model: <Model>) -> None:
+        self.model = model
+
+
+def test_service_returns_none_when_missing() -> None:
+    repository = FakeRepository()
+    service = <Service>(repository)
+
+    assert service.get() is None
+
+
+def test_service_saves_and_returns_model() -> None:
+    repository = FakeRepository()
+    service = <Service>(repository)
+    model = <Model>(...)
+
+    service.save(model)
+
+    assert service.get() == model

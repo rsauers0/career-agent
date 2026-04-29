@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class ExampleModel(BaseModel):
+    """Describe what this component data represents."""
+
+    example_field: str = Field(
+        min_length=1,
+        description="Describe the field in user/domain terms.",
+    )

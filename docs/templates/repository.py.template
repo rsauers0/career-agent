@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from career_agent.<component>.models import <Model>
+
+<COMPONENT>_DIRNAME = "<component>"
+<COMPONENT>_FILENAME = "<component>.json"
+
+
+class <Repository>:
+    """File-backed storage boundary for <component>."""
+
+    def __init__(self, data_dir: Path) -> None:
+        self.data_dir = data_dir
+
+    @property
+    def storage_dir(self) -> Path:
+        """Return the directory that stores <component> data."""
+
+        return self.data_dir / <COMPONENT>_DIRNAME
+
+    @property
+    def storage_path(self) -> Path:
+        """Return the JSON file path for <component>."""
+
+        return self.storage_dir / <COMPONENT>_FILENAME
+
+    def load(self) -> <Model> | None:
+        """Load <component> data from disk if it exists."""
+
+        if not self.storage_path.exists():
+            return None
+
+        return <Model>.model_validate_json(
+            self.storage_path.read_text(encoding="utf-8")
+        )
+
+    def save(self, model: <Model>) -> None:
+        """Persist <component> data to disk."""
+
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.storage_path.write_text(
+            model.model_dump_json(indent=2),
+            encoding="utf-8",
+        )

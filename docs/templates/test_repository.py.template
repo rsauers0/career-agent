@@ -1,0 +1,17 @@
+from career_agent.<component>.models import <Model>
+from career_agent.<component>.repository import <Repository>
+
+
+def test_repository_load_returns_none_when_missing(tmp_path) -> None:
+    repository = <Repository>(tmp_path)
+
+    assert repository.load() is None
+
+
+def test_repository_saves_and_loads_model(tmp_path) -> None:
+    repository = <Repository>(tmp_path)
+    model = <Model>(...)
+
+    repository.save(model)
+
+    assert repository.load() == model
