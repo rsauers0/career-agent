@@ -6,6 +6,13 @@ from rich.console import Console
 from rich.table import Table
 
 from career_agent.config import get_settings
+from career_agent.experience_roles.models import (
+    EmploymentType,
+    ExperienceRole,
+    ExperienceRoleStatus,
+)
+from career_agent.experience_roles.repository import ExperienceRoleRepository
+from career_agent.experience_roles.service import ExperienceRoleService
 from career_agent.user_preferences.models import (
     CommuteDistanceUnit,
     UserPreferences,
@@ -19,6 +26,7 @@ app = typer.Typer(
     help="Career Agent: local-first career workflow tooling.",
 )
 preferences_app = typer.Typer(help="Manage user preferences.")
+roles_app = typer.Typer(help="Manage experience roles.")
 console = Console()
 
 
@@ -30,6 +38,11 @@ def cli() -> None:
 @preferences_app.callback()
 def preferences_cli() -> None:
     """Commands for working with user preferences."""
+
+
+@roles_app.callback()
+def roles_cli() -> None:
+    """Commands for working with experience roles."""
 
 
 @app.command()
@@ -122,12 +135,111 @@ def save_preferences(
     console.print("[green]Saved user preferences.[/green]")
 
 
+@roles_app.command("list")
+def list_roles() -> None:
+    """List saved experience roles."""
+
+    service = build_experience_role_service()
+    roles = service.list_roles()
+    if not roles:
+        console.print("[yellow]No experience roles saved yet.[/yellow]")
+        return
+
+    render_experience_role_list(roles)
+
+
+@roles_app.command("show")
+def show_role(role_id: str = typer.Argument(..., help="Experience role identifier.")) -> None:
+    """Show one saved experience role."""
+
+    service = build_experience_role_service()
+    role = service.get_role(role_id)
+    if role is None:
+        console.print(f"[yellow]No experience role found for id: {role_id}[/yellow]")
+        raise typer.Exit(1)
+
+    render_experience_role(role)
+
+
+@roles_app.command("save")
+def save_role(
+    employer_name: str = typer.Option(..., help="Employer, client, or organization name."),
+    job_title: str = typer.Option(..., help="Role title held by the user."),
+    start_date: str = typer.Option(..., help="Role start month/year, such as 05/2021."),
+    role_id: str | None = typer.Option(None, help="Existing role id to update."),
+    end_date: str | None = typer.Option(
+        None,
+        help="Role end month/year, such as 06/2024. Omit for current roles.",
+    ),
+    current: bool = typer.Option(
+        False,
+        "--current",
+        help="Mark this as a current role. Current roles cannot have an end date.",
+    ),
+    location: str | None = typer.Option(None, help="Optional role location."),
+    employment_type: EmploymentType | None = typer.Option(
+        None,
+        help="Optional employment type.",
+    ),
+    status: ExperienceRoleStatus = typer.Option(
+        ExperienceRoleStatus.INPUT_REQUIRED,
+        help="Role workflow status.",
+    ),
+) -> None:
+    """Save an experience role from explicit CLI options."""
+
+    try:
+        role_data = {
+            "employer_name": employer_name,
+            "job_title": job_title,
+            "location": location,
+            "employment_type": employment_type,
+            "start_date": start_date,
+            "end_date": end_date,
+            "is_current_role": current,
+            "status": status,
+        }
+        if role_id is not None:
+            role_data["id"] = role_id
+        role = ExperienceRole(**role_data)
+    except ValidationError as exc:
+        console.print("[red]Could not save experience role.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    service = build_experience_role_service()
+    service.save_role(role)
+    console.print("[green]Saved experience role.[/green]")
+    console.print(f"Role ID: {role.id}")
+
+
+@roles_app.command("delete")
+def delete_role(role_id: str = typer.Argument(..., help="Experience role identifier.")) -> None:
+    """Delete one saved experience role."""
+
+    service = build_experience_role_service()
+    if not service.delete_role(role_id):
+        console.print(f"[yellow]No experience role found for id: {role_id}[/yellow]")
+        raise typer.Exit(1)
+
+    console.print("[green]Deleted experience role.[/green]")
+
+
 def build_user_preferences_service() -> UserPreferencesService:
     """Build the user preferences service from configured settings."""
 
     settings = get_settings()
     repository = UserPreferencesRepository(settings.data_dir)
     return UserPreferencesService(repository)
+
+
+def build_experience_role_service() -> ExperienceRoleService:
+    """Build the experience role service from configured settings."""
+
+    settings = get_settings()
+    repository = ExperienceRoleRepository(settings.data_dir)
+    return ExperienceRoleService(repository)
 
 
 def render_user_preferences(preferences: UserPreferences) -> None:
@@ -169,7 +281,59 @@ def render_user_preferences(preferences: UserPreferences) -> None:
     console.print(table)
 
 
+def render_experience_role_list(roles: list[ExperienceRole]) -> None:
+    """Render experience roles as a compact CLI table."""
+
+    table = Table(title="Experience Roles")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Employer", no_wrap=True)
+    table.add_column("Job Title", no_wrap=True)
+    table.add_column("Dates", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    for role in roles:
+        table.add_row(
+            role.id,
+            role.employer_name,
+            role.job_title,
+            format_role_dates(role),
+            role.status.value,
+        )
+    console.print(table)
+
+
+def render_experience_role(role: ExperienceRole) -> None:
+    """Render one experience role as a CLI table."""
+
+    table = Table(title="Experience Role")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("ID", role.id)
+    table.add_row("Employer", role.employer_name)
+    table.add_row("Job Title", role.job_title)
+    table.add_row("Location", role.location or "-")
+    table.add_row("Employment Type", role.employment_type.value if role.employment_type else "-")
+    table.add_row("Dates", format_role_dates(role))
+    table.add_row("Current Role", "Yes" if role.is_current_role else "No")
+    table.add_row("Status", role.status.value)
+    table.add_row("Created At", role.created_at.isoformat())
+    table.add_row("Updated At", role.updated_at.isoformat())
+    console.print(table)
+
+
+def format_role_dates(role: ExperienceRole) -> str:
+    """Format role dates for display."""
+
+    start_date = f"{role.start_date.month:02d}/{role.start_date.year}"
+    if role.is_current_role:
+        return f"{start_date} - Present"
+    if role.end_date is None:
+        return start_date
+    end_date = f"{role.end_date.month:02d}/{role.end_date.year}"
+    return f"{start_date} - {end_date}"
+
+
 app.add_typer(preferences_app, name="preferences")
+app.add_typer(roles_app, name="roles")
 
 
 def main() -> None:

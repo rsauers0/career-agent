@@ -2,6 +2,8 @@ from typer.testing import CliRunner
 
 from career_agent.cli import app
 from career_agent.config import get_settings
+from career_agent.experience_roles.models import ExperienceRole
+from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.user_preferences.models import UserPreferences, WorkArrangement
 from career_agent.user_preferences.repository import UserPreferencesRepository
 
@@ -139,5 +141,176 @@ def test_preferences_save_reports_validation_error(monkeypatch, tmp_path) -> Non
 
     assert result.exit_code != 0
     assert "time_zone must be a valid IANA time zone identifier." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_roles_list_reports_missing_roles(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["roles", "list"], env={"COLUMNS": "160"})
+
+    assert result.exit_code == 0
+    assert "No experience roles saved yet." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_roles_save_writes_past_role(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "roles",
+            "save",
+            "--employer-name",
+            "Acme Analytics",
+            "--job-title",
+            "Senior Systems Analyst",
+            "--start-date",
+            "05/2021",
+            "--end-date",
+            "06/2024",
+            "--location",
+            "Chicago, IL",
+            "--employment-type",
+            "full-time",
+        ],
+    )
+
+    roles = ExperienceRoleRepository(tmp_path).list()
+
+    assert result.exit_code == 0
+    assert "Saved experience role." in result.output
+    assert "Role ID:" in result.output
+    assert len(roles) == 1
+    assert roles[0].employer_name == "Acme Analytics"
+    assert roles[0].job_title == "Senior Systems Analyst"
+    assert roles[0].location == "Chicago, IL"
+    assert roles[0].is_current_role is False
+
+    get_settings.cache_clear()
+
+
+def test_roles_save_writes_current_role(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "roles",
+            "save",
+            "--employer-name",
+            "Current Co",
+            "--job-title",
+            "Platform Engineer",
+            "--start-date",
+            "02/2024",
+            "--current",
+        ],
+    )
+
+    roles = ExperienceRoleRepository(tmp_path).list()
+
+    assert result.exit_code == 0
+    assert len(roles) == 1
+    assert roles[0].is_current_role is True
+    assert roles[0].end_date is None
+
+    get_settings.cache_clear()
+
+
+def test_roles_list_renders_saved_roles(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = ExperienceRoleRepository(tmp_path)
+    repository.save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["roles", "list"], env={"COLUMNS": "160"})
+
+    assert result.exit_code == 0
+    assert "Experience Roles" in result.output
+    assert "role-1" in result.output
+    assert "Senior Systems Analyst" in result.output
+    assert "Acme Analytics" in result.output
+    assert "05/2021 - 06/2024" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_roles_show_renders_saved_role(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = ExperienceRoleRepository(tmp_path)
+    repository.save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["roles", "show", "role-1"])
+
+    assert result.exit_code == 0
+    assert "Experience Role" in result.output
+    assert "Acme Analytics" in result.output
+    assert "Senior Systems Analyst" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_roles_show_reports_missing_role(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["roles", "show", "missing-role"])
+
+    assert result.exit_code != 0
+    assert "No experience role found for id: missing-role" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_roles_delete_removes_saved_role(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = ExperienceRoleRepository(tmp_path)
+    repository.save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["roles", "delete", "role-1"])
+
+    assert result.exit_code == 0
+    assert "Deleted experience role." in result.output
+    assert repository.get("role-1") is None
 
     get_settings.cache_clear()

@@ -8,6 +8,8 @@ For complete option details, use Typer's built-in help:
 uv run career-agent --help
 uv run career-agent preferences --help
 uv run career-agent preferences save --help
+uv run career-agent roles --help
+uv run career-agent roles save --help
 ```
 
 ## Health Check
@@ -58,6 +60,60 @@ uv run career-agent preferences save \
   --max-commute-time 45 \
   --work-authorization \
   --no-requires-work-sponsorship
+```
+
+## Experience Roles
+
+List saved experience roles:
+
+```bash
+uv run career-agent roles list
+```
+
+Show one saved experience role:
+
+```bash
+uv run career-agent roles show <role-id>
+```
+
+Save a past experience role:
+
+```bash
+uv run career-agent roles save \
+  --employer-name "Acme Analytics" \
+  --job-title "Senior Systems Analyst" \
+  --start-date "05/2021" \
+  --end-date "06/2024" \
+  --location "Chicago, IL" \
+  --employment-type full-time
+```
+
+Save a current experience role:
+
+```bash
+uv run career-agent roles save \
+  --employer-name "Current Co" \
+  --job-title "Platform Engineer" \
+  --start-date "02/2024" \
+  --current
+```
+
+Update an existing role by passing its id:
+
+```bash
+uv run career-agent roles save \
+  --role-id "<role-id>" \
+  --employer-name "Acme Analytics" \
+  --job-title "Senior Systems Analyst" \
+  --start-date "05/2021" \
+  --end-date "07/2025" \
+  --status review_required
+```
+
+Delete one saved experience role:
+
+```bash
+uv run career-agent roles delete <role-id>
 ```
 
 ## Configuration
