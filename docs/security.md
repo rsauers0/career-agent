@@ -33,7 +33,7 @@ enabled and triggered a workflow that requires it.
 ## Local Data
 
 The v2 foundation branch will use local JSON persistence first. The intended
-initial storage shape is:
+storage shape is:
 
 ```text
 <data_dir>/
@@ -43,15 +43,27 @@ initial storage shape is:
     experience_roles.json
   role_sources/
     role_sources.json
+  experience_bullets/
+    experience_bullets.json
+  source_analysis/
+    analysis_runs.json
+    clarification_questions.json
+    clarification_messages.json
   snapshots/
     user_preferences/
     experience_roles/
     role_sources/
+    experience_bullets/
+    source_analysis/
 ```
 
 Snapshot-on-overwrite behavior is implemented for local JSON writes. When an
 existing JSON file is replaced, the previous version is copied into the relevant
 `snapshots/` directory.
+
+Source Analysis data is workflow evidence. It may include clarification
+questions and message history entered during analysis, so it should be treated
+as career-sensitive local data.
 
 ## Verification Commands
 

@@ -291,6 +291,10 @@ uv run career-agent source-analysis messages list --question-id <question-id>
 
 `questions add` and `messages add` require exactly one text input: either `--text` or `--from-file`.
 
+Clarification messages are appended one message at a time. Adding a message does
+not resolve a question automatically; use `questions resolve` or
+`questions skip` for explicit status transitions.
+
 ## Configuration
 
 Use `CAREER_AGENT_DATA_DIR` to direct local JSON data to a specific directory:

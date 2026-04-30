@@ -19,7 +19,7 @@ flowchart LR
     RoleSources -->|"source_ids"| SourceAnalysis
     ExperienceRoles -->|"role_id"| ExperienceBullets
     RoleSources -. "source_ids" .-> ExperienceBullets
-    SourceAnalysis -. "future proposals" .-> ExperienceBullets
+    SourceAnalysis -. "future clarification context" .-> ExperienceBullets
 
     UserPreferences -. "future job matching context" .-> ExperienceRoles
 ```
@@ -64,6 +64,29 @@ flowchart TD
     Role -->|"role_id"| Bullet
     Source -. "traceability" .-> Bullet
 ```
+
+## Source Analysis Workflow
+
+Source Analysis stores workflow evidence for clarifying submitted role source material. It does not directly create canonical bullets.
+
+```mermaid
+flowchart TD
+    Role["Experience Role<br/>structured role facts"]
+    Sources["Role Sources<br/>one or more source_ids"]
+    Run["SourceAnalysisRun<br/>role_id, source_ids, status"]
+    Question["SourceClarificationQuestion<br/>analysis_run_id, status"]
+    Messages["SourceClarificationMessages<br/>one row per assistant/user/system turn"]
+    Resolve["resolve_question / skip_question<br/>explicit approval transition"]
+
+    Role -->|"must exist"| Run
+    Sources -->|"must exist and match role_id"| Run
+    Run -->|"creates"| Question
+    Question -->|"append one message at a time"| Messages
+    Messages -. "evidence for closure" .-> Resolve
+    Resolve -->|"updates status"| Question
+```
+
+The important guardrail is that adding messages does not close a question. A future LLM workflow may decide it is ready to close a question, but it must call an explicit transition that can later include eval approval.
 
 ## Canonical Data Vs Analysis Artifacts
 

@@ -115,6 +115,8 @@ Build as CLI/dev workflow first:
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
 
+Question resolution should remain explicit. A future LLM workflow may recommend that a clarification thread is complete, but the workflow should call a deterministic transition that can later include eval approval.
+
 ### 7. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.

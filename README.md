@@ -68,6 +68,12 @@ List saved experience bullets:
 uv run career-agent bullets list
 ```
 
+List saved source analysis runs:
+
+```bash
+uv run career-agent source-analysis runs list
+```
+
 Run tests:
 
 ```bash
@@ -104,9 +110,10 @@ The rebuild sequence is:
 2. Experience Role model, JSON repository, service, CLI, and tests.
 3. Role Source model, JSON repository, service, CLI, and tests.
 4. Experience Bullet model, JSON repository, service, CLI, and tests.
-5. Experience AI workflow harness through CLI/dev commands.
-6. TUI presentation once the workflow is stable.
-7. Optional FastAPI interface later, using the same application services.
+5. Source Analysis model, JSON repository, service, CLI, and tests.
+6. Experience AI workflow harness through CLI/dev commands.
+7. TUI presentation once the workflow is stable.
+8. Optional FastAPI interface later, using the same application services.
 
 The intended architecture remains:
 

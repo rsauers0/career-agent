@@ -193,6 +193,8 @@ Examples of owned data:
 
 Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and bullet proposal generation. Canonical data changes should still be applied through deterministic services.
 
+Clarification messages are append-only conversation turns. They do not resolve questions by themselves; question closure requires an explicit `resolve` or `skip` transition.
+
 ## Current Data Flow
 
 ```text
