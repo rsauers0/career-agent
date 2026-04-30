@@ -218,8 +218,8 @@ career-agent experience-workflow
 Examples of coordinated behavior:
 
 - select role sources with `not_analyzed` status
-- start Source Analysis runs through `SourceAnalysisService`
 - generate structured clarification question proposals
+- start Source Analysis runs through `SourceAnalysisService`
 - save generated question proposals through `SourceAnalysisService`
 
 Experience Workflow does not own persistence. It coordinates component services and should not write directly to JSON files.
@@ -227,6 +227,8 @@ Experience Workflow does not own persistence. It coordinates component services 
 Question generation is behind a small `SourceQuestionGenerator` protocol. The current implementation is deterministic and used for dev validation; a future LLM generator should plug into the same structured proposal contract.
 
 `LLMSourceQuestionGenerator` is available as the first LLM-backed implementation of that protocol. It uses `LLMClient`, expects JSON output, and validates that generated questions match the `GeneratedSourceQuestion` contract before returning them to the workflow.
+
+Experience Workflow checks for an existing active run before question generation. It then generates and validates question proposals before creating a Source Analysis run, so malformed LLM output does not leave behind an active run with no usable questions.
 
 Factory wiring selects the deterministic generator when no LLM base URL is configured. If an LLM base URL is configured, it selects the LLM-backed generator and requires an LLM model.
 
@@ -256,7 +258,7 @@ Examples of owned data:
 - `FakeLLMClient` for deterministic tests and dev validation
 - `OpenAICompatibleLLMClient` for opt-in chat completions integrations
 
-The LLM boundary is synchronous. The OpenAI-compatible client exists, but it is not wired into configuration or default workflows yet.
+The LLM boundary is synchronous. The OpenAI-compatible client is opt-in through configuration; deterministic local behavior remains the fallback when no LLM base URL is configured.
 
 ## Current Data Flow
 

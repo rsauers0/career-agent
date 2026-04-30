@@ -74,6 +74,7 @@ flowchart TD
     Role["Experience Role<br/>structured role facts"]
     Sources["Role Sources<br/>not_analyzed source_ids"]
     Workflow["ExperienceWorkflowService<br/>orchestrates services"]
+    ActiveRunGuard["Active Run Guard<br/>one active run per role"]
     Generator["SourceQuestionGenerator<br/>structured question proposals"]
     Run["SourceAnalysisRun<br/>role_id, source_ids, status"]
     Question["SourceClarificationQuestion<br/>analysis_run_id, status"]
@@ -82,9 +83,10 @@ flowchart TD
 
     Role -->|"role_id"| Workflow
     Sources -->|"select only not_analyzed"| Workflow
-    Workflow -->|"start run through SourceAnalysisService"| Run
+    Workflow -->|"ensure no active run"| ActiveRunGuard
     Workflow -->|"role + sources"| Generator
     Generator -->|"GeneratedSourceQuestion[]"| Workflow
+    Workflow -->|"start run after valid proposals"| Run
     Run -. "only one active run per role_id" .-> Role
     Workflow -->|"save questions through SourceAnalysisService"| Question
     Question -->|"append one message at a time"| Messages
@@ -93,6 +95,8 @@ flowchart TD
 ```
 
 The important guardrail is that adding messages does not close a question. A future LLM workflow may decide it is ready to close a question, but it must call an explicit transition that can later include eval approval.
+
+The workflow generates and validates clarification question proposals before it creates the analysis run. This prevents malformed LLM output from creating an active run that blocks later attempts.
 
 ## Canonical Data Vs Analysis Artifacts
 

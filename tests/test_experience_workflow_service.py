@@ -1,6 +1,10 @@
 import pytest
 
-from career_agent.errors import ActiveAnalysisRunExistsError, NoUnanalyzedSourcesError
+from career_agent.errors import (
+    ActiveAnalysisRunExistsError,
+    InvalidLLMOutputError,
+    NoUnanalyzedSourcesError,
+)
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.service import ExperienceRoleService
 from career_agent.experience_workflow.question_generator import GeneratedSourceQuestion
@@ -143,6 +147,7 @@ def test_experience_workflow_analyzes_only_unanalyzed_sources() -> None:
     run = service.analyze_sources("role-1")
 
     questions = analysis_repository.list_questions(run.id)
+    assert service.question_generator_name == "deterministic"
     assert run.role_id == "role-1"
     assert run.source_ids == ["source-1"]
     assert len(questions) == 2
@@ -171,6 +176,14 @@ def test_experience_workflow_rejects_role_without_unanalyzed_sources() -> None:
 
 
 def test_experience_workflow_rejects_when_active_run_exists_for_role() -> None:
+    class FailingIfCalledQuestionGenerator:
+        @property
+        def generator_name(self) -> str:
+            return "should-not-run"
+
+        def generate_questions(self, role, sources):
+            raise AssertionError("Question generator should not run when a role has an active run.")
+
     service, role_repository, source_repository, analysis_repository = build_service()
     role_repository.save(build_role())
     source_repository.save(build_source("source-1"))
@@ -181,6 +194,7 @@ def test_experience_workflow_rejects_when_active_run_exists_for_role() -> None:
             source_ids=["source-1"],
         )
     )
+    service.question_generator = FailingIfCalledQuestionGenerator()
 
     with pytest.raises(ActiveAnalysisRunExistsError, match="run-1"):
         service.analyze_sources("role-1")
@@ -188,6 +202,10 @@ def test_experience_workflow_rejects_when_active_run_exists_for_role() -> None:
 
 def test_experience_workflow_uses_injected_question_generator() -> None:
     class FakeQuestionGenerator:
+        @property
+        def generator_name(self) -> str:
+            return "fake"
+
         def generate_questions(self, role, sources):
             return [
                 GeneratedSourceQuestion(
@@ -212,5 +230,33 @@ def test_experience_workflow_uses_injected_question_generator() -> None:
 
     questions = analysis_repository.list_questions(run.id)
     assert len(questions) == 1
+    assert service.question_generator_name == "fake"
     assert questions[0].question_text == "What should be clarified for Senior Systems Analyst?"
     assert questions[0].relevant_source_ids == ["source-1"]
+
+
+def test_experience_workflow_does_not_start_run_when_question_generation_fails() -> None:
+    class FailingQuestionGenerator:
+        @property
+        def generator_name(self) -> str:
+            return "failing"
+
+        def generate_questions(self, role, sources):
+            raise InvalidLLMOutputError("LLM response must be valid JSON.")
+
+    role_repository = FakeExperienceRoleRepository()
+    source_repository = FakeRoleSourceRepository()
+    analysis_repository = FakeSourceAnalysisRepository()
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    service = ExperienceWorkflowService(
+        ExperienceRoleService(role_repository),
+        RoleSourceService(source_repository, role_repository),
+        SourceAnalysisService(analysis_repository, role_repository, source_repository),
+        question_generator=FailingQuestionGenerator(),
+    )
+
+    with pytest.raises(InvalidLLMOutputError, match="valid JSON"):
+        service.analyze_sources("role-1")
+
+    assert analysis_repository.list_runs(role_id="role-1") == []

@@ -1183,12 +1183,16 @@ def test_source_analysis_questions_add_reports_source_outside_run(
 def test_source_analysis_questions_list_renders_saved_questions(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    question_text = (
+        "What measurable impact did this automation have across the full organization, "
+        "including time saved, users affected, systems retired, and final unique detail?"
+    )
     SourceAnalysisRepository(tmp_path).save_question(
         SourceClarificationQuestion(
             id="question-1",
             analysis_run_id="run-1",
-            question_text="What measurable impact did this automation have?",
-            relevant_source_ids=["source-1"],
+            question_text=question_text,
+            relevant_source_ids=["source-1", "source-2"],
         )
     )
     runner = CliRunner()
@@ -1201,10 +1205,13 @@ def test_source_analysis_questions_list_renders_saved_questions(monkeypatch, tmp
 
     assert result.exit_code == 0
     assert "Source Clarification Questions" in result.output
+    assert "Question 1" in result.output
     assert "question-1" in result.output
     assert "run-1" in result.output
     assert "source-1" in result.output
+    assert "source-2" in result.output
     assert "What measurable impact" in result.output
+    assert "final unique detail" in result.output
 
     get_settings.cache_clear()
 
@@ -1473,6 +1480,7 @@ def test_experience_workflow_analyze_sources_starts_run_and_questions(
 
     assert result.exit_code == 0
     assert "Started experience source analysis." in result.output
+    assert "Question Generator: deterministic" in result.output
     assert "Run ID:" in result.output
     assert "Question IDs:" in result.output
     assert len(runs) == 1
@@ -1516,6 +1524,7 @@ def test_experience_workflow_analyze_sources_reports_no_unanalyzed_sources(
     )
 
     assert result.exit_code != 0
+    assert "Question Generator: deterministic" in result.output
     assert "No unanalyzed sources found for role: role-1" in result.output
 
     get_settings.cache_clear()

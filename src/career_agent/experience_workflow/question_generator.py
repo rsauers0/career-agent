@@ -46,6 +46,10 @@ class GeneratedSourceQuestion(BaseModel):
 class SourceQuestionGenerator(Protocol):
     """Generates structured source clarification question proposals."""
 
+    @property
+    def generator_name(self) -> str:
+        """Return a short display name for this generator."""
+
     def generate_questions(
         self,
         role: ExperienceRole,
@@ -56,6 +60,12 @@ class SourceQuestionGenerator(Protocol):
 
 class DeterministicSourceQuestionGenerator:
     """Deterministic source question generator for dev workflow validation."""
+
+    @property
+    def generator_name(self) -> str:
+        """Return a short display name for this generator."""
+
+        return "deterministic"
 
     def generate_questions(
         self,
@@ -100,6 +110,12 @@ class LLMSourceQuestionGenerator:
         self.model = model
         self.temperature = temperature
 
+    @property
+    def generator_name(self) -> str:
+        """Return a short display name for this generator."""
+
+        return "llm"
+
     def generate_questions(
         self,
         role: ExperienceRole,
@@ -121,8 +137,9 @@ class LLMSourceQuestionGenerator:
     def _parse_questions(self, content: str) -> list[GeneratedSourceQuestion]:
         """Parse raw LLM response content into generated question proposals."""
 
+        normalized_content = self._normalize_json_content(content)
         try:
-            payload = json.loads(content)
+            payload = json.loads(normalized_content)
         except json.JSONDecodeError as exc:
             msg = "LLM response must be valid JSON."
             raise InvalidLLMOutputError(msg) from exc
@@ -135,6 +152,16 @@ class LLMSourceQuestionGenerator:
         except ValidationError as exc:
             msg = "LLM response does not match the source question contract."
             raise InvalidLLMOutputError(msg) from exc
+
+    def _normalize_json_content(self, content: str) -> str:
+        """Normalize common model JSON wrappers before strict JSON parsing."""
+
+        normalized = content.strip()
+        lines = normalized.splitlines()
+        if len(lines) >= 3 and lines[0].strip().lower() in {"```", "```json"}:
+            if lines[-1].strip() == "```":
+                return "\n".join(lines[1:-1]).strip()
+        return normalized
 
     def _validate_questions(
         self,
@@ -160,7 +187,8 @@ class LLMSourceQuestionGenerator:
         return (
             "You generate concise clarification questions for career source analysis. "
             "Return only JSON. The JSON must be an object with a 'questions' array. "
-            "Each item must contain 'question_text' and 'relevant_source_ids'."
+            "Each item must contain 'question_text' and 'relevant_source_ids'. "
+            "Do not wrap the JSON in Markdown code fences."
         )
 
     def _build_user_prompt(self, role: ExperienceRole, sources: list[RoleSourceEntry]) -> str:

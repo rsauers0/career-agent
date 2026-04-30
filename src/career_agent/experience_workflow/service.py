@@ -27,6 +27,12 @@ class ExperienceWorkflowService:
         self.analysis_service = analysis_service
         self.question_generator = question_generator or DeterministicSourceQuestionGenerator()
 
+    @property
+    def question_generator_name(self) -> str:
+        """Return the display name for the configured question generator."""
+
+        return self.question_generator.generator_name
+
     def analyze_sources(self, role_id: str) -> SourceAnalysisRun:
         """Start source analysis for unanalyzed source entries on one role."""
 
@@ -44,11 +50,13 @@ class ExperienceWorkflowService:
             msg = f"No unanalyzed sources found for role: {role_id}"
             raise NoUnanalyzedSourcesError(msg)
 
+        self.analysis_service.ensure_no_active_run_for_role(role_id)
+        generated_questions = self.question_generator.generate_questions(role, unanalyzed_sources)
         run = self.analysis_service.start_run(
             role_id=role_id,
             source_ids=[source.id for source in unanalyzed_sources],
         )
-        for question in self.question_generator.generate_questions(role, unanalyzed_sources):
+        for question in generated_questions:
             self.analysis_service.add_question(
                 analysis_run_id=run.id,
                 question_text=question.question_text,

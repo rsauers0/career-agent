@@ -5,7 +5,9 @@ from pathlib import Path
 import typer
 from pydantic import ValidationError
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from career_agent.config import get_settings
 from career_agent.errors import (
@@ -665,10 +667,11 @@ def add_source_analysis_message(
 def analyze_experience_sources(
     role_id: str = typer.Option(..., help="Existing experience role id."),
 ) -> None:
-    """Start deterministic source analysis for unanalyzed role sources."""
+    """Start source analysis for unanalyzed role sources."""
 
     try:
         service = build_experience_workflow_service()
+        console.print(f"Question Generator: {service.question_generator_name}")
         run = service.analyze_sources(role_id)
     except (
         ActiveAnalysisRunExistsError,
@@ -933,23 +936,23 @@ def render_source_analysis_run_list(runs: list[SourceAnalysisRun]) -> None:
 def render_source_clarification_question_list(
     questions: list[SourceClarificationQuestion],
 ) -> None:
-    """Render clarification questions as a compact CLI table."""
+    """Render clarification questions as separated readable CLI blocks."""
 
-    table = Table(title="Source Clarification Questions")
-    table.add_column("ID", no_wrap=True)
-    table.add_column("Run ID", no_wrap=True)
-    table.add_column("Status", no_wrap=True)
-    table.add_column("Relevant Source IDs")
-    table.add_column("Preview")
-    for question in questions:
-        table.add_row(
-            question.id,
-            question.analysis_run_id,
-            question.status.value,
-            ", ".join(question.relevant_source_ids) or "-",
-            preview_source_text(question.question_text),
+    console.print("[bold]Source Clarification Questions[/bold]")
+    for index, question in enumerate(questions, start=1):
+        question_details = Table.grid(expand=True, padding=(0, 2))
+        question_details.add_column(no_wrap=True, style="bold")
+        question_details.add_column(ratio=1)
+        relevant_source_ids = "\n".join(question.relevant_source_ids) or "-"
+        question_details.add_row("Question", question.question_text)
+        question_details.add_row("ID", question.id)
+        question_details.add_row("Run ID", question.analysis_run_id)
+        question_details.add_row("Status", question.status.value)
+        question_details.add_row(
+            "Relevant Source IDs",
+            Text(relevant_source_ids, no_wrap=True, overflow="crop"),
         )
-    console.print(table)
+        console.print(Panel(question_details, title=f"Question {index}", expand=True))
 
 
 def render_source_clarification_message_list(

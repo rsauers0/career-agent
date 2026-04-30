@@ -308,9 +308,9 @@ Start deterministic source analysis for one experience role's unanalyzed sources
 uv run career-agent experience-workflow analyze-sources --role-id <role-id>
 ```
 
-This command currently creates a Source Analysis run and deterministic
-development-placeholder clarification questions through the source question
-generator boundary. It only includes role sources with `not_analyzed` status and
+This command creates clarification questions through the source question
+generator boundary, then starts a Source Analysis run after the generated
+questions are valid. It only includes role sources with `not_analyzed` status and
 does not mark those sources as analyzed.
 
 If `CAREER_AGENT_LLM_BASE_URL` is configured, this command uses the LLM-backed

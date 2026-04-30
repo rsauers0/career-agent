@@ -54,6 +54,7 @@ def test_deterministic_source_question_generator_uses_role_and_sources() -> None
     )
 
     assert len(questions) == 2
+    assert generator.generator_name == "deterministic"
     assert questions[0].question_text.startswith("DEV PLACEHOLDER:")
     assert "Senior Systems Analyst at Acme Analytics" in questions[0].question_text
     assert questions[0].relevant_source_ids == ["source-1", "source-2"]
@@ -77,6 +78,7 @@ def test_llm_source_question_generator_parses_wrapped_question_json() -> None:
 
     questions = generator.generate_questions(role=build_role(), sources=[build_source("source-1")])
 
+    assert generator.generator_name == "llm"
     assert questions == [
         GeneratedSourceQuestion(
             question_text="What measurable impact did this work have?",
@@ -107,6 +109,30 @@ def test_llm_source_question_generator_parses_question_list_json() -> None:
 
     assert len(questions) == 1
     assert questions[0].question_text == "What tools should be captured?"
+    assert questions[0].relevant_source_ids == ["source-1"]
+
+
+def test_llm_source_question_generator_parses_fenced_question_json() -> None:
+    client = FakeLLMClient(
+        response_content="""
+        ```json
+        {
+          "questions": [
+            {
+              "question_text": "What outcomes should be clarified?",
+              "relevant_source_ids": ["source-1"]
+            }
+          ]
+        }
+        ```
+        """
+    )
+    generator = LLMSourceQuestionGenerator(client)
+
+    questions = generator.generate_questions(role=build_role(), sources=[build_source("source-1")])
+
+    assert len(questions) == 1
+    assert questions[0].question_text == "What outcomes should be clarified?"
     assert questions[0].relevant_source_ids == ["source-1"]
 
 

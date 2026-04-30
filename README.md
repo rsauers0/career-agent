@@ -74,7 +74,7 @@ List saved source analysis runs:
 uv run career-agent source-analysis runs list
 ```
 
-Run deterministic source analysis for unanalyzed role sources:
+Run source analysis for unanalyzed role sources:
 
 ```bash
 uv run career-agent experience-workflow analyze-sources --role-id <role-id>

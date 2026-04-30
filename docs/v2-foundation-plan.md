@@ -131,6 +131,8 @@ Source question generation should use a structured proposal boundary. The curren
 
 The first LLM-backed source question generator should use the same boundary. It should call `LLMClient`, parse JSON, and reject malformed or ungrounded output before questions are saved.
 
+The workflow should check for an existing active run before question generation, then generate valid question proposals before creating the Source Analysis run. A failed generator should not leave an active run behind.
+
 ### 7. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.
