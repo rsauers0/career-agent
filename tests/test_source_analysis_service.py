@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from career_agent.errors import (
+    ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
     RoleNotFoundError,
@@ -14,6 +15,7 @@ from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
     SourceAnalysisRun,
+    SourceAnalysisStatus,
     SourceClarificationMessage,
     SourceClarificationQuestion,
     SourceClarificationQuestionStatus,
@@ -135,6 +137,51 @@ def test_source_analysis_service_starts_run_for_existing_role_and_sources() -> N
     assert run.source_ids == ["source-1", "source-2"]
     assert service.get_run(run.id) == run
     assert service.list_runs(role_id="role-1") == [run]
+
+
+def test_source_analysis_service_rejects_second_active_run_for_same_role() -> None:
+    service, _analysis_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    active_run = service.start_run(role_id="role-1", source_ids=["source-1"])
+
+    with pytest.raises(ActiveAnalysisRunExistsError, match=active_run.id):
+        service.start_run(role_id="role-1", source_ids=["source-2"])
+
+
+def test_source_analysis_service_allows_active_runs_for_different_roles() -> None:
+    service, _analysis_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role(role_id="role-1"))
+    role_repository.save(build_role(role_id="role-2"))
+    source_repository.save(build_source(source_id="source-1", role_id="role-1"))
+    source_repository.save(build_source(source_id="source-2", role_id="role-2"))
+
+    first_run = service.start_run(role_id="role-1", source_ids=["source-1"])
+    second_run = service.start_run(role_id="role-2", source_ids=["source-2"])
+
+    assert first_run.role_id == "role-1"
+    assert second_run.role_id == "role-2"
+
+
+def test_source_analysis_service_allows_new_run_after_prior_run_completed() -> None:
+    service, analysis_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+            status=SourceAnalysisStatus.COMPLETED,
+        )
+    )
+
+    run = service.start_run(role_id="role-1", source_ids=["source-2"])
+
+    assert run.role_id == "role-1"
+    assert run.source_ids == ["source-2"]
 
 
 def test_source_analysis_service_rejects_run_for_missing_role() -> None:

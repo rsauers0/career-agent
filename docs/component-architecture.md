@@ -195,6 +195,8 @@ Source Analysis is not canonical career data. It is workflow evidence that suppo
 
 Clarification messages are append-only conversation turns. They do not resolve questions by themselves; question closure requires an explicit `resolve` or `skip` transition.
 
+Only one active Source Analysis run may exist for a single experience role at a time. Separate roles may have active analysis runs simultaneously.
+
 ## Current Data Flow
 
 ```text

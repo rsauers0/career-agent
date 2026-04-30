@@ -100,6 +100,8 @@ Build analysis artifacts before the full AI workflow harness:
 
 Source Analysis is workflow evidence, not canonical career data. It gives the future LLM harness a deterministic place to store questions, user responses, and traceability without mixing that material into roles, sources, or bullets.
 
+Only one active Source Analysis run should exist per experience role. This prevents a user from starting a second analysis session for the same role before the existing one has been completed or archived.
+
 ### 6. Experience AI Workflow Harness
 
 Build as CLI/dev workflow first:

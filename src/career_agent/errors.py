@@ -21,6 +21,10 @@ class AnalysisRunNotFoundError(CareerAgentError):
     """Raised when a referenced source analysis run does not exist."""
 
 
+class ActiveAnalysisRunExistsError(CareerAgentError):
+    """Raised when an active source analysis run already exists for a role."""
+
+
 class ClarificationQuestionNotFoundError(CareerAgentError):
     """Raised when a referenced clarification question does not exist."""
 

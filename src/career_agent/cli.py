@@ -9,6 +9,7 @@ from rich.table import Table
 
 from career_agent.config import get_settings
 from career_agent.errors import (
+    ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
     RoleNotFoundError,
@@ -471,7 +472,12 @@ def start_source_analysis_run(
     service = build_source_analysis_service()
     try:
         run = service.start_run(role_id=role_id, source_ids=source_ids)
-    except (RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError) as exc:
+    except (
+        ActiveAnalysisRunExistsError,
+        RoleNotFoundError,
+        SourceNotFoundError,
+        SourceRoleMismatchError,
+    ) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
     except ValidationError as exc:

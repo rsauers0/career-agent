@@ -11,6 +11,7 @@ from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
     SourceAnalysisRun,
+    SourceAnalysisStatus,
     SourceClarificationMessage,
     SourceClarificationQuestion,
     SourceClarificationQuestionStatus,
@@ -933,6 +934,61 @@ def test_source_analysis_runs_start_reports_source_role_mismatch(monkeypatch, tm
 
     assert result.exit_code != 0
     assert "Role source source-1 does not belong to role: role-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_runs_start_reports_existing_active_run(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-2",
+            role_id="role-1",
+            source_text="- Built a service trend dashboard.",
+        )
+    )
+    SourceAnalysisRepository(tmp_path).save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+            status=SourceAnalysisStatus.ACTIVE,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "runs",
+            "start",
+            "--role-id",
+            "role-1",
+            "--source-id",
+            "source-2",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Active source analysis run already exists for role role-1: run-1" in result.output
 
     get_settings.cache_clear()
 

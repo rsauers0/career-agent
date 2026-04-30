@@ -80,6 +80,7 @@ flowchart TD
 
     Role -->|"must exist"| Run
     Sources -->|"must exist and match role_id"| Run
+    Run -. "only one active run per role_id" .-> Role
     Run -->|"creates"| Question
     Question -->|"append one message at a time"| Messages
     Messages -. "evidence for closure" .-> Resolve

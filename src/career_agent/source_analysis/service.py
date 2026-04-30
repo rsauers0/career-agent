@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from career_agent.errors import (
+    ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
     RoleNotFoundError,
@@ -15,6 +16,7 @@ from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
     SourceAnalysisRun,
+    SourceAnalysisStatus,
     SourceClarificationMessage,
     SourceClarificationQuestion,
     SourceClarificationQuestionStatus,
@@ -58,6 +60,7 @@ class SourceAnalysisService:
     def start_run(self, role_id: str, source_ids: list[str]) -> SourceAnalysisRun:
         """Create a source analysis run for an existing role and valid sources."""
 
+        self._validate_no_active_run_for_role(role_id)
         self._validate_role_and_sources(role_id=role_id, source_ids=source_ids)
         run = SourceAnalysisRun(role_id=role_id, source_ids=source_ids)
         self.analysis_repository.save_run(run)
@@ -116,6 +119,14 @@ class SourceAnalysisService:
             question_id=question_id,
             status=SourceClarificationQuestionStatus.SKIPPED,
         )
+
+    def _validate_no_active_run_for_role(self, role_id: str) -> None:
+        """Validate that a role does not already have an active analysis run."""
+
+        for run in self.analysis_repository.list_runs(role_id=role_id):
+            if run.status == SourceAnalysisStatus.ACTIVE:
+                msg = f"Active source analysis run already exists for role {role_id}: {run.id}"
+                raise ActiveAnalysisRunExistsError(msg)
 
     def _validate_role_and_sources(self, role_id: str, source_ids: list[str]) -> None:
         """Validate that role and source references are internally consistent."""

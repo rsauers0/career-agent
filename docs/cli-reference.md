@@ -223,6 +223,9 @@ uv run career-agent source-analysis runs start \
   --source-id <source-id>
 ```
 
+Only one active source analysis run can exist for a single role at a time. Complete
+or archive the active run before starting another run for that same role.
+
 List source analysis runs:
 
 ```bash
