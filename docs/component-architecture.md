@@ -163,6 +163,33 @@ Examples of owned data:
 
 Experience bullets are canonical career data. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles. Bullets do not currently include tags or inferred classifications.
 
+### Source Analysis
+
+Purpose: stores workflow artifacts created while analyzing submitted role source material.
+
+Current files:
+
+```text
+src/career_agent/source_analysis/
+  models.py
+```
+
+Current CLI group:
+
+```text
+not implemented yet
+```
+
+Examples of owned data:
+
+- source analysis runs linked to an experience role
+- source ids included in each analysis run
+- clarification questions generated during analysis
+- clarification message threads attached to a question
+- question and analysis lifecycle statuses
+
+Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and bullet proposal generation. Canonical data changes should still be applied through deterministic services.
+
 ## Current Data Flow
 
 ```text

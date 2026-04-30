@@ -87,29 +87,41 @@ Build durable resume-style bullet records as a separate component:
 
 Experience Bullets are canonical career data. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles.
 
-### 5. Experience AI Workflow Harness
+### 5. Source Analysis
+
+Build analysis artifacts before the full AI workflow harness:
+
+- analysis runs linked to one experience role by `role_id`
+- each analysis run must include at least one `source_id`
+- clarification questions linked to an analysis run
+- optional relevant source ids for question traceability
+- message threads linked to clarification questions
+- analysis and question lifecycle statuses
+
+Source Analysis is workflow evidence, not canonical career data. It gives the future LLM harness a deterministic place to store questions, user responses, and traceability without mixing that material into roles, sources, or bullets.
+
+### 6. Experience AI Workflow Harness
 
 Build as CLI/dev workflow first:
 
 - start or resume an experience role workflow
 - capture assistant/user transcript
-- capture role focus through assistant interaction
-- add source material
-- generate clarification questions
-- capture answers
+- use Source Analysis to create clarification questions
+- capture clarification messages
+- resolve or skip questions when enough evidence exists
 - generate candidate bullet proposals
 - apply bullet proposals through service methods
 - mark role reviewed only when validation passes
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
 
-### 6. TUI
+### 7. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.
 
 The TUI should present the already-working workflow. It should not own workflow logic.
 
-### 7. Future API Option
+### 8. Future API Option
 
 FastAPI can be added later as another interface adapter.
 
@@ -169,6 +181,10 @@ Experience Bullets
   -> repository
   -> service
   -> tests
+
+Source Analysis
+  -> model
+  -> tests
 ```
 
-The immediate next foundation step is the Experience AI workflow harness. It should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.
+The immediate next foundation step is Source Analysis persistence and service behavior. After that, the Experience AI workflow harness should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.

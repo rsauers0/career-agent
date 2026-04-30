@@ -11,11 +11,15 @@ flowchart LR
     UserPreferences["User Preferences<br/>Search and matching preferences"]
     ExperienceRoles["Experience Roles<br/>Structured role facts"]
     RoleSources["Role Sources<br/>Raw submitted evidence"]
+    SourceAnalysis["Source Analysis<br/>Runs, questions, messages"]
     ExperienceBullets["Experience Bullets<br/>Canonical career bullets"]
 
     ExperienceRoles -->|"role_id"| RoleSources
+    ExperienceRoles -->|"role_id"| SourceAnalysis
+    RoleSources -->|"source_ids"| SourceAnalysis
     ExperienceRoles -->|"role_id"| ExperienceBullets
     RoleSources -. "source_ids" .-> ExperienceBullets
+    SourceAnalysis -. "future proposals" .-> ExperienceBullets
 
     UserPreferences -. "future job matching context" .-> ExperienceRoles
 ```
@@ -70,7 +74,7 @@ flowchart LR
     RawEvidence["Raw Evidence<br/>role_sources"]
     RoleFacts["Structured Role Facts<br/>experience_roles"]
     LLMWorkflow["Future LLM Workflow<br/>questions, proposals, evals"]
-    AnalysisArtifacts["Analysis Artifacts<br/>runs, transcripts, eval results,<br/>failed proposals"]
+    AnalysisArtifacts["Analysis Artifacts<br/>source_analysis,<br/>eval results, failed proposals"]
     Services["Deterministic Services<br/>validate and apply changes"]
     CanonicalBullets["Canonical Bullets<br/>experience_bullets"]
 

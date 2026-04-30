@@ -13,7 +13,7 @@ Current scope:
 - keep the project runnable through a minimal Typer CLI
 - keep configuration loading through `pydantic-settings`
 - rebuild one component at a time
-- maintain component boundaries for User Preferences, Experience Roles, Role Sources, and Experience Bullets
+- maintain component boundaries for User Preferences, Experience Roles, Role Sources, Experience Bullets, and Source Analysis
 - use JSON persistence first
 - defer TUI and LLM workflow integration until the underlying services are clear and tested
 
