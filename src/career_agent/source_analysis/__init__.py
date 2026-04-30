@@ -9,11 +9,13 @@ from career_agent.source_analysis.models import (
     SourceClarificationQuestionStatus,
 )
 from career_agent.source_analysis.repository import SourceAnalysisRepository
+from career_agent.source_analysis.service import SourceAnalysisService
 
 __all__ = [
     "ClarificationMessageAuthor",
     "SourceAnalysisRun",
     "SourceAnalysisRepository",
+    "SourceAnalysisService",
     "SourceAnalysisStatus",
     "SourceClarificationMessage",
     "SourceClarificationQuestion",

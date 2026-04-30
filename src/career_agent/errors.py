@@ -15,3 +15,15 @@ class SourceNotFoundError(CareerAgentError):
 
 class SourceRoleMismatchError(CareerAgentError):
     """Raised when a source does not belong to the expected role."""
+
+
+class AnalysisRunNotFoundError(CareerAgentError):
+    """Raised when a referenced source analysis run does not exist."""
+
+
+class ClarificationQuestionNotFoundError(CareerAgentError):
+    """Raised when a referenced clarification question does not exist."""
+
+
+class SourceNotInAnalysisRunError(CareerAgentError):
+    """Raised when a source is not part of the expected analysis run."""

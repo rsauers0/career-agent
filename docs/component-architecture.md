@@ -173,6 +173,7 @@ Current files:
 src/career_agent/source_analysis/
   models.py
   repository.py
+  service.py
 ```
 
 Current CLI group:
