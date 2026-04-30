@@ -8,7 +8,14 @@ from rich.console import Console
 from rich.table import Table
 
 from career_agent.config import get_settings
-from career_agent.errors import RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError
+from career_agent.errors import (
+    AnalysisRunNotFoundError,
+    ClarificationQuestionNotFoundError,
+    RoleNotFoundError,
+    SourceNotFoundError,
+    SourceNotInAnalysisRunError,
+    SourceRoleMismatchError,
+)
 from career_agent.experience_bullets.models import ExperienceBullet
 from career_agent.experience_bullets.repository import ExperienceBulletRepository
 from career_agent.experience_bullets.service import ExperienceBulletService
@@ -22,6 +29,14 @@ from career_agent.experience_roles.service import ExperienceRoleService
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.role_sources.service import RoleSourceService
+from career_agent.source_analysis.models import (
+    ClarificationMessageAuthor,
+    SourceAnalysisRun,
+    SourceClarificationMessage,
+    SourceClarificationQuestion,
+)
+from career_agent.source_analysis.repository import SourceAnalysisRepository
+from career_agent.source_analysis.service import SourceAnalysisService
 from career_agent.user_preferences.models import (
     CommuteDistanceUnit,
     UserPreferences,
@@ -38,6 +53,10 @@ preferences_app = typer.Typer(help="Manage user preferences.")
 roles_app = typer.Typer(help="Manage experience roles.")
 sources_app = typer.Typer(help="Manage role source entries.")
 bullets_app = typer.Typer(help="Manage canonical experience bullets.")
+source_analysis_app = typer.Typer(help="Manage source analysis workflow artifacts.")
+analysis_runs_app = typer.Typer(help="Manage source analysis runs.")
+analysis_questions_app = typer.Typer(help="Manage source clarification questions.")
+analysis_messages_app = typer.Typer(help="Manage source clarification messages.")
 console = Console()
 
 
@@ -64,6 +83,26 @@ def sources_cli() -> None:
 @bullets_app.callback()
 def bullets_cli() -> None:
     """Commands for working with canonical experience bullets."""
+
+
+@source_analysis_app.callback()
+def source_analysis_cli() -> None:
+    """Commands for working with source analysis workflow artifacts."""
+
+
+@analysis_runs_app.callback()
+def analysis_runs_cli() -> None:
+    """Commands for working with source analysis runs."""
+
+
+@analysis_questions_app.callback()
+def analysis_questions_cli() -> None:
+    """Commands for working with source clarification questions."""
+
+
+@analysis_messages_app.callback()
+def analysis_messages_cli() -> None:
+    """Commands for working with source clarification messages."""
 
 
 @app.command()
@@ -403,6 +442,207 @@ def delete_bullet(
     console.print("[green]Deleted experience bullet.[/green]")
 
 
+@analysis_runs_app.command("list")
+def list_source_analysis_runs(
+    role_id: str | None = typer.Option(None, help="Optional role id to filter runs."),
+) -> None:
+    """List saved source analysis runs."""
+
+    service = build_source_analysis_service()
+    runs = service.list_runs(role_id=role_id)
+    if not runs:
+        console.print("[yellow]No source analysis runs saved yet.[/yellow]")
+        return
+
+    render_source_analysis_run_list(runs)
+
+
+@analysis_runs_app.command("start")
+def start_source_analysis_run(
+    role_id: str = typer.Option(..., help="Existing experience role id."),
+    source_ids: list[str] = typer.Option(
+        ...,
+        "--source-id",
+        help="Source id included in this run. Can be provided more than once.",
+    ),
+) -> None:
+    """Start a source analysis run for an experience role."""
+
+    service = build_source_analysis_service()
+    try:
+        run = service.start_run(role_id=role_id, source_ids=source_ids)
+    except (RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not start source analysis run.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Started source analysis run.[/green]")
+    console.print(f"Run ID: {run.id}")
+
+
+@analysis_questions_app.command("list")
+def list_source_analysis_questions(
+    run_id: str = typer.Option(..., help="Source analysis run id."),
+) -> None:
+    """List clarification questions for a source analysis run."""
+
+    service = build_source_analysis_service()
+    questions = service.list_questions(run_id)
+    if not questions:
+        console.print("[yellow]No clarification questions saved yet.[/yellow]")
+        return
+
+    render_source_clarification_question_list(questions)
+
+
+@analysis_questions_app.command("add")
+def add_source_analysis_question(
+    run_id: str = typer.Option(..., help="Existing source analysis run id."),
+    text: str | None = typer.Option(None, help="Clarification question text."),
+    from_file: Path | None = typer.Option(
+        None,
+        "--from-file",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to a UTF-8 text file containing clarification question text.",
+    ),
+    relevant_source_ids: list[str] = typer.Option(
+        [],
+        "--relevant-source-id",
+        help="Source id relevant to this question. Can be provided more than once.",
+    ),
+) -> None:
+    """Add a clarification question to an existing source analysis run."""
+
+    if (text is None) == (from_file is None):
+        console.print("[red]Provide exactly one of --text or --from-file.[/red]")
+        raise typer.Exit(1)
+
+    if from_file is not None:
+        text = from_file.read_text(encoding="utf-8")
+
+    service = build_source_analysis_service()
+    try:
+        question = service.add_question(
+            analysis_run_id=run_id,
+            question_text=text or "",
+            relevant_source_ids=relevant_source_ids,
+        )
+    except (AnalysisRunNotFoundError, SourceNotInAnalysisRunError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save clarification question.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved clarification question.[/green]")
+    console.print(f"Question ID: {question.id}")
+
+
+@analysis_questions_app.command("resolve")
+def resolve_source_analysis_question(
+    question_id: str = typer.Argument(..., help="Clarification question identifier."),
+) -> None:
+    """Mark a clarification question as resolved."""
+
+    service = build_source_analysis_service()
+    try:
+        question = service.resolve_question(question_id)
+    except ClarificationQuestionNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Resolved clarification question.[/green]")
+    console.print(f"Question ID: {question.id}")
+
+
+@analysis_questions_app.command("skip")
+def skip_source_analysis_question(
+    question_id: str = typer.Argument(..., help="Clarification question identifier."),
+) -> None:
+    """Mark a clarification question as skipped."""
+
+    service = build_source_analysis_service()
+    try:
+        question = service.skip_question(question_id)
+    except ClarificationQuestionNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Skipped clarification question.[/green]")
+    console.print(f"Question ID: {question.id}")
+
+
+@analysis_messages_app.command("list")
+def list_source_analysis_messages(
+    question_id: str = typer.Option(..., help="Clarification question id."),
+) -> None:
+    """List messages for a source clarification question."""
+
+    service = build_source_analysis_service()
+    messages = service.list_messages(question_id)
+    if not messages:
+        console.print("[yellow]No clarification messages saved yet.[/yellow]")
+        return
+
+    render_source_clarification_message_list(messages)
+
+
+@analysis_messages_app.command("add")
+def add_source_analysis_message(
+    question_id: str = typer.Option(..., help="Existing clarification question id."),
+    author: ClarificationMessageAuthor = typer.Option(
+        ...,
+        help="Message author: assistant, user, or system.",
+    ),
+    text: str | None = typer.Option(None, help="Clarification message text."),
+    from_file: Path | None = typer.Option(
+        None,
+        "--from-file",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to a UTF-8 text file containing clarification message text.",
+    ),
+) -> None:
+    """Append one message to a clarification question thread."""
+
+    if (text is None) == (from_file is None):
+        console.print("[red]Provide exactly one of --text or --from-file.[/red]")
+        raise typer.Exit(1)
+
+    if from_file is not None:
+        text = from_file.read_text(encoding="utf-8")
+
+    service = build_source_analysis_service()
+    try:
+        message = service.add_message(
+            question_id=question_id,
+            author=author,
+            message_text=text or "",
+        )
+    except ClarificationQuestionNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save clarification message.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved clarification message.[/green]")
+    console.print(f"Message ID: {message.id}")
+
+
 def build_user_preferences_service() -> UserPreferencesService:
     """Build the user preferences service from configured settings."""
 
@@ -436,6 +676,16 @@ def build_experience_bullet_service() -> ExperienceBulletService:
     role_repository = ExperienceRoleRepository(settings.data_dir)
     source_repository = RoleSourceRepository(settings.data_dir)
     return ExperienceBulletService(bullet_repository, role_repository, source_repository)
+
+
+def build_source_analysis_service() -> SourceAnalysisService:
+    """Build the source analysis service from configured settings."""
+
+    settings = get_settings()
+    analysis_repository = SourceAnalysisRepository(settings.data_dir)
+    role_repository = ExperienceRoleRepository(settings.data_dir)
+    source_repository = RoleSourceRepository(settings.data_dir)
+    return SourceAnalysisService(analysis_repository, role_repository, source_repository)
 
 
 def render_user_preferences(preferences: UserPreferences) -> None:
@@ -595,6 +845,66 @@ def render_experience_bullet(bullet: ExperienceBullet) -> None:
     console.print(table)
 
 
+def render_source_analysis_run_list(runs: list[SourceAnalysisRun]) -> None:
+    """Render source analysis runs as a compact CLI table."""
+
+    table = Table(title="Source Analysis Runs")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Role ID", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Source IDs")
+    for run in runs:
+        table.add_row(
+            run.id,
+            run.role_id,
+            run.status.value,
+            ", ".join(run.source_ids),
+        )
+    console.print(table)
+
+
+def render_source_clarification_question_list(
+    questions: list[SourceClarificationQuestion],
+) -> None:
+    """Render clarification questions as a compact CLI table."""
+
+    table = Table(title="Source Clarification Questions")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Run ID", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Relevant Source IDs")
+    table.add_column("Preview")
+    for question in questions:
+        table.add_row(
+            question.id,
+            question.analysis_run_id,
+            question.status.value,
+            ", ".join(question.relevant_source_ids) or "-",
+            preview_source_text(question.question_text),
+        )
+    console.print(table)
+
+
+def render_source_clarification_message_list(
+    messages: list[SourceClarificationMessage],
+) -> None:
+    """Render clarification messages as a compact CLI table."""
+
+    table = Table(title="Source Clarification Messages")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Question ID", no_wrap=True)
+    table.add_column("Author", no_wrap=True)
+    table.add_column("Preview")
+    for message in messages:
+        table.add_row(
+            message.id,
+            message.question_id,
+            message.author.value,
+            preview_source_text(message.message_text),
+        )
+    console.print(table)
+
+
 def preview_source_text(source_text: str, max_length: int = 80) -> str:
     """Return a one-line preview of submitted source text."""
 
@@ -608,6 +918,10 @@ app.add_typer(preferences_app, name="preferences")
 app.add_typer(roles_app, name="roles")
 app.add_typer(sources_app, name="sources")
 app.add_typer(bullets_app, name="bullets")
+source_analysis_app.add_typer(analysis_runs_app, name="runs")
+source_analysis_app.add_typer(analysis_questions_app, name="questions")
+source_analysis_app.add_typer(analysis_messages_app, name="messages")
+app.add_typer(source_analysis_app, name="source-analysis")
 
 
 def main() -> None:

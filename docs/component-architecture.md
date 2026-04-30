@@ -178,8 +178,8 @@ src/career_agent/source_analysis/
 
 Current CLI group:
 
-```text
-not implemented yet
+```bash
+career-agent source-analysis
 ```
 
 Examples of owned data:

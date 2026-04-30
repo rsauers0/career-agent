@@ -8,6 +8,14 @@ from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
+from career_agent.source_analysis.models import (
+    ClarificationMessageAuthor,
+    SourceAnalysisRun,
+    SourceClarificationMessage,
+    SourceClarificationQuestion,
+    SourceClarificationQuestionStatus,
+)
+from career_agent.source_analysis.repository import SourceAnalysisRepository
 from career_agent.user_preferences.models import UserPreferences, WorkArrangement
 from career_agent.user_preferences.repository import UserPreferencesRepository
 
@@ -839,5 +847,526 @@ def test_bullets_delete_removes_saved_bullet(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "Deleted experience bullet." in result.output
     assert repository.get("bullet-1") is None
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_runs_start_writes_run(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "runs",
+            "start",
+            "--role-id",
+            "role-1",
+            "--source-id",
+            "source-1",
+        ],
+    )
+
+    runs = SourceAnalysisRepository(tmp_path).list_runs(role_id="role-1")
+
+    assert result.exit_code == 0
+    assert "Started source analysis run." in result.output
+    assert "Run ID:" in result.output
+    assert len(runs) == 1
+    assert runs[0].role_id == "role-1"
+    assert runs[0].source_ids == ["source-1"]
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_runs_start_reports_source_role_mismatch(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-2",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "runs",
+            "start",
+            "--role-id",
+            "role-1",
+            "--source-id",
+            "source-1",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Role source source-1 does not belong to role: role-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_runs_list_renders_saved_runs(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["source-analysis", "runs", "list", "--role-id", "role-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Source Analysis Runs" in result.output
+    assert "run-1" in result.output
+    assert "role-1" in result.output
+    assert "source-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_questions_add_writes_question(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "questions",
+            "add",
+            "--run-id",
+            "run-1",
+            "--text",
+            "What measurable impact did this automation have?",
+            "--relevant-source-id",
+            "source-1",
+        ],
+    )
+
+    questions = repository.list_questions("run-1")
+
+    assert result.exit_code == 0
+    assert "Saved clarification question." in result.output
+    assert "Question ID:" in result.output
+    assert len(questions) == 1
+    assert questions[0].question_text == "What measurable impact did this automation have?"
+    assert questions[0].relevant_source_ids == ["source-1"]
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_questions_add_writes_question_from_file(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    question_file = tmp_path / "question.txt"
+    question_file.write_text(
+        "What measurable impact did this automation have?",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "questions",
+            "add",
+            "--run-id",
+            "run-1",
+            "--from-file",
+            str(question_file),
+        ],
+    )
+
+    questions = repository.list_questions("run-1")
+
+    assert result.exit_code == 0
+    assert len(questions) == 1
+    assert questions[0].question_text == "What measurable impact did this automation have?"
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_questions_add_requires_exactly_one_text_input(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    question_file = tmp_path / "question.txt"
+    question_file.write_text("What measurable impact?", encoding="utf-8")
+    runner = CliRunner()
+
+    missing_input_result = runner.invoke(
+        app,
+        ["source-analysis", "questions", "add", "--run-id", "run-1"],
+    )
+    duplicate_input_result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "questions",
+            "add",
+            "--run-id",
+            "run-1",
+            "--text",
+            "What measurable impact?",
+            "--from-file",
+            str(question_file),
+        ],
+    )
+
+    assert missing_input_result.exit_code != 0
+    assert "Provide exactly one of --text or --from-file." in missing_input_result.output
+    assert duplicate_input_result.exit_code != 0
+    assert "Provide exactly one of --text or --from-file." in duplicate_input_result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_questions_add_reports_source_outside_run(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "questions",
+            "add",
+            "--run-id",
+            "run-1",
+            "--text",
+            "What measurable impact did this automation have?",
+            "--relevant-source-id",
+            "source-2",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Source source-2 is not part of analysis run: run-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_questions_list_renders_saved_questions(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+            relevant_source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["source-analysis", "questions", "list", "--run-id", "run-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Source Clarification Questions" in result.output
+    assert "question-1" in result.output
+    assert "run-1" in result.output
+    assert "source-1" in result.output
+    assert "What measurable impact" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_questions_resolve_updates_status(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["source-analysis", "questions", "resolve", "question-1"],
+    )
+
+    questions = repository.list_questions("run-1")
+
+    assert result.exit_code == 0
+    assert "Resolved clarification question." in result.output
+    assert questions[0].status == SourceClarificationQuestionStatus.RESOLVED
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_questions_skip_updates_status(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["source-analysis", "questions", "skip", "question-1"],
+    )
+
+    questions = repository.list_questions("run-1")
+
+    assert result.exit_code == 0
+    assert "Skipped clarification question." in result.output
+    assert questions[0].status == SourceClarificationQuestionStatus.SKIPPED
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_messages_add_writes_message(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "messages",
+            "add",
+            "--question-id",
+            "question-1",
+            "--author",
+            "user",
+            "--text",
+            "It reduced weekly reporting time from 6 hours to 2.",
+        ],
+    )
+
+    messages = repository.list_messages("question-1")
+
+    assert result.exit_code == 0
+    assert "Saved clarification message." in result.output
+    assert "Message ID:" in result.output
+    assert len(messages) == 1
+    assert messages[0].author == ClarificationMessageAuthor.USER
+    assert messages[0].message_text == "It reduced weekly reporting time from 6 hours to 2."
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_messages_add_writes_message_from_file(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+        )
+    )
+    message_file = tmp_path / "message.txt"
+    message_file.write_text(
+        "It reduced weekly reporting time from 6 hours to 2.",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "messages",
+            "add",
+            "--question-id",
+            "question-1",
+            "--author",
+            "user",
+            "--from-file",
+            str(message_file),
+        ],
+    )
+
+    messages = repository.list_messages("question-1")
+
+    assert result.exit_code == 0
+    assert len(messages) == 1
+    assert messages[0].message_text == "It reduced weekly reporting time from 6 hours to 2."
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_messages_add_requires_exactly_one_text_input(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+        )
+    )
+    message_file = tmp_path / "message.txt"
+    message_file.write_text("It reduced weekly reporting time.", encoding="utf-8")
+    runner = CliRunner()
+
+    missing_input_result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "messages",
+            "add",
+            "--question-id",
+            "question-1",
+            "--author",
+            "user",
+        ],
+    )
+    duplicate_input_result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "messages",
+            "add",
+            "--question-id",
+            "question-1",
+            "--author",
+            "user",
+            "--text",
+            "It reduced weekly reporting time.",
+            "--from-file",
+            str(message_file),
+        ],
+    )
+
+    assert missing_input_result.exit_code != 0
+    assert "Provide exactly one of --text or --from-file." in missing_input_result.output
+    assert duplicate_input_result.exit_code != 0
+    assert "Provide exactly one of --text or --from-file." in duplicate_input_result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_messages_list_renders_saved_messages(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_message(
+        SourceClarificationMessage(
+            id="message-1",
+            question_id="question-1",
+            author=ClarificationMessageAuthor.USER,
+            message_text="It reduced weekly reporting time from 6 hours to 2.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["source-analysis", "messages", "list", "--question-id", "question-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Source Clarification Messages" in result.output
+    assert "message-1" in result.output
+    assert "question-1" in result.output
+    assert "user" in result.output
+    assert "It reduced weekly reporting time" in result.output
 
     get_settings.cache_clear()

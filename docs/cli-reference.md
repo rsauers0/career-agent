@@ -14,6 +14,10 @@ uv run career-agent sources --help
 uv run career-agent sources add --help
 uv run career-agent bullets --help
 uv run career-agent bullets add --help
+uv run career-agent source-analysis --help
+uv run career-agent source-analysis runs start --help
+uv run career-agent source-analysis questions add --help
+uv run career-agent source-analysis messages add --help
 ```
 
 ## Health Check
@@ -208,6 +212,84 @@ Delete one saved bullet:
 ```bash
 uv run career-agent bullets delete <bullet-id>
 ```
+
+## Source Analysis
+
+Start a source analysis run for one role and one or more source entries:
+
+```bash
+uv run career-agent source-analysis runs start \
+  --role-id <role-id> \
+  --source-id <source-id>
+```
+
+List source analysis runs:
+
+```bash
+uv run career-agent source-analysis runs list
+```
+
+List source analysis runs for one role:
+
+```bash
+uv run career-agent source-analysis runs list --role-id <role-id>
+```
+
+Add a clarification question:
+
+```bash
+uv run career-agent source-analysis questions add \
+  --run-id <run-id> \
+  --text "What measurable impact did this work have?" \
+  --relevant-source-id <source-id>
+```
+
+Add a clarification question from a UTF-8 text file:
+
+```bash
+uv run career-agent source-analysis questions add \
+  --run-id <run-id> \
+  --from-file question.txt
+```
+
+List clarification questions for a run:
+
+```bash
+uv run career-agent source-analysis questions list --run-id <run-id>
+```
+
+Resolve or skip a clarification question:
+
+```bash
+uv run career-agent source-analysis questions resolve <question-id>
+uv run career-agent source-analysis questions skip <question-id>
+```
+
+Append one clarification message:
+
+```bash
+uv run career-agent source-analysis messages add \
+  --question-id <question-id> \
+  --author user \
+  --text "It reduced weekly reporting time from 6 hours to 2."
+```
+
+Append one clarification message from a UTF-8 text file:
+
+```bash
+uv run career-agent source-analysis messages add \
+  --question-id <question-id> \
+  --author user \
+  --from-file answer.txt
+```
+
+List clarification messages for a question:
+
+```bash
+uv run career-agent source-analysis messages list --question-id <question-id>
+```
+
+`questions add` and `messages add` require exactly one text input: either `--text` or `--from-file`.
 
 ## Configuration
 
