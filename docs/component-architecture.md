@@ -205,6 +205,7 @@ Current files:
 
 ```text
 src/career_agent/experience_workflow/
+  question_generator.py
   service.py
 ```
 
@@ -218,9 +219,12 @@ Examples of coordinated behavior:
 
 - select role sources with `not_analyzed` status
 - start Source Analysis runs through `SourceAnalysisService`
-- create deterministic placeholder clarification questions for dev validation
+- generate structured clarification question proposals
+- save generated question proposals through `SourceAnalysisService`
 
 Experience Workflow does not own persistence. It coordinates component services and should not write directly to JSON files.
+
+Question generation is behind a small `SourceQuestionGenerator` protocol. The current implementation is deterministic and used for dev validation; a future LLM generator should plug into the same structured proposal contract.
 
 ## Current Data Flow
 

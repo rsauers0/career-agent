@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from career_agent.errors import NoUnanalyzedSourcesError
+from career_agent.errors import NoUnanalyzedSourcesError, RoleNotFoundError
+from career_agent.experience_roles.service import ExperienceRoleService
+from career_agent.experience_workflow.question_generator import (
+    DeterministicSourceQuestionGenerator,
+    SourceQuestionGenerator,
+)
 from career_agent.role_sources.models import RoleSourceStatus
 from career_agent.role_sources.service import RoleSourceService
 from career_agent.source_analysis.models import SourceAnalysisRun
@@ -12,14 +17,23 @@ class ExperienceWorkflowService:
 
     def __init__(
         self,
+        role_service: ExperienceRoleService,
         source_service: RoleSourceService,
         analysis_service: SourceAnalysisService,
+        question_generator: SourceQuestionGenerator | None = None,
     ) -> None:
+        self.role_service = role_service
         self.source_service = source_service
         self.analysis_service = analysis_service
+        self.question_generator = question_generator or DeterministicSourceQuestionGenerator()
 
     def analyze_sources(self, role_id: str) -> SourceAnalysisRun:
         """Start source analysis for unanalyzed source entries on one role."""
+
+        role = self.role_service.get_role(role_id)
+        if role is None:
+            msg = f"Experience role does not exist: {role_id}"
+            raise RoleNotFoundError(msg)
 
         unanalyzed_sources = [
             source
@@ -34,20 +48,10 @@ class ExperienceWorkflowService:
             role_id=role_id,
             source_ids=[source.id for source in unanalyzed_sources],
         )
-        self.analysis_service.add_question(
-            analysis_run_id=run.id,
-            question_text=(
-                "DEV PLACEHOLDER: What measurable impact, outcome, or business value "
-                "should be clarified from this source material?"
-            ),
-            relevant_source_ids=run.source_ids,
-        )
-        self.analysis_service.add_question(
-            analysis_run_id=run.id,
-            question_text=(
-                "DEV PLACEHOLDER: Are there tools, technologies, stakeholders, "
-                "or scope details that should be captured before bullet generation?"
-            ),
-            relevant_source_ids=run.source_ids,
-        )
+        for question in self.question_generator.generate_questions(role, unanalyzed_sources):
+            self.analysis_service.add_question(
+                analysis_run_id=run.id,
+                question_text=question.question_text,
+                relevant_source_ids=question.relevant_source_ids,
+            )
         return run

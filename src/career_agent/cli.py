@@ -735,9 +735,10 @@ def build_source_analysis_service() -> SourceAnalysisService:
 def build_experience_workflow_service() -> ExperienceWorkflowService:
     """Build the experience workflow service from configured settings."""
 
+    role_service = build_experience_role_service()
     source_service = build_role_source_service()
     analysis_service = build_source_analysis_service()
-    return ExperienceWorkflowService(source_service, analysis_service)
+    return ExperienceWorkflowService(role_service, source_service, analysis_service)
 
 
 def render_user_preferences(preferences: UserPreferences) -> None:

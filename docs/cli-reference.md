@@ -309,8 +309,9 @@ uv run career-agent experience-workflow analyze-sources --role-id <role-id>
 ```
 
 This command currently creates a Source Analysis run and deterministic
-development-placeholder clarification questions. It only includes role sources
-with `not_analyzed` status and does not mark those sources as analyzed.
+development-placeholder clarification questions through the source question
+generator boundary. It only includes role sources with `not_analyzed` status and
+does not mark those sources as analyzed.
 
 ## Configuration
 

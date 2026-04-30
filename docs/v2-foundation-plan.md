@@ -121,6 +121,8 @@ Question resolution should remain explicit. A future LLM workflow may recommend 
 
 The initial deterministic harness starts source analysis for `not_analyzed` role sources only. Previously analyzed sources should not be re-ingested as raw source material; later workflow passes can use existing bullets as structured context instead.
 
+Source question generation should use a structured proposal boundary. The current deterministic generator returns `GeneratedSourceQuestion` values with question text and relevant source ids. A future LLM implementation should replace the generator, not the workflow orchestration.
+
 ### 7. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.

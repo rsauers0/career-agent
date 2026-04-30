@@ -74,6 +74,7 @@ flowchart TD
     Role["Experience Role<br/>structured role facts"]
     Sources["Role Sources<br/>not_analyzed source_ids"]
     Workflow["ExperienceWorkflowService<br/>orchestrates services"]
+    Generator["SourceQuestionGenerator<br/>structured question proposals"]
     Run["SourceAnalysisRun<br/>role_id, source_ids, status"]
     Question["SourceClarificationQuestion<br/>analysis_run_id, status"]
     Messages["SourceClarificationMessages<br/>one row per assistant/user/system turn"]
@@ -82,8 +83,10 @@ flowchart TD
     Role -->|"role_id"| Workflow
     Sources -->|"select only not_analyzed"| Workflow
     Workflow -->|"start run through SourceAnalysisService"| Run
+    Workflow -->|"role + sources"| Generator
+    Generator -->|"GeneratedSourceQuestion[]"| Workflow
     Run -. "only one active run per role_id" .-> Role
-    Run -->|"creates"| Question
+    Workflow -->|"save questions through SourceAnalysisService"| Question
     Question -->|"append one message at a time"| Messages
     Messages -. "evidence for closure" .-> Resolve
     Resolve -->|"updates status"| Question

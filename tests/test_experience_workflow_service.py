@@ -2,6 +2,8 @@ import pytest
 
 from career_agent.errors import ActiveAnalysisRunExistsError, NoUnanalyzedSourcesError
 from career_agent.experience_roles.models import ExperienceRole
+from career_agent.experience_roles.service import ExperienceRoleService
+from career_agent.experience_workflow.question_generator import GeneratedSourceQuestion
 from career_agent.experience_workflow.service import ExperienceWorkflowService
 from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.role_sources.service import RoleSourceService
@@ -116,13 +118,18 @@ def build_service() -> tuple[
     role_repository = FakeExperienceRoleRepository()
     source_repository = FakeRoleSourceRepository()
     analysis_repository = FakeSourceAnalysisRepository()
+    role_service = ExperienceRoleService(role_repository)
     source_service = RoleSourceService(source_repository, role_repository)
     analysis_service = SourceAnalysisService(
         analysis_repository,
         role_repository,
         source_repository,
     )
-    workflow_service = ExperienceWorkflowService(source_service, analysis_service)
+    workflow_service = ExperienceWorkflowService(
+        role_service,
+        source_service,
+        analysis_service,
+    )
     return workflow_service, role_repository, source_repository, analysis_repository
 
 
@@ -141,6 +148,7 @@ def test_experience_workflow_analyzes_only_unanalyzed_sources() -> None:
     assert len(questions) == 2
     assert questions[0].relevant_source_ids == ["source-1"]
     assert questions[0].question_text.startswith("DEV PLACEHOLDER:")
+    assert "Senior Systems Analyst at Acme Analytics" in questions[0].question_text
 
 
 def test_experience_workflow_does_not_mark_sources_analyzed() -> None:
@@ -176,3 +184,33 @@ def test_experience_workflow_rejects_when_active_run_exists_for_role() -> None:
 
     with pytest.raises(ActiveAnalysisRunExistsError, match="run-1"):
         service.analyze_sources("role-1")
+
+
+def test_experience_workflow_uses_injected_question_generator() -> None:
+    class FakeQuestionGenerator:
+        def generate_questions(self, role, sources):
+            return [
+                GeneratedSourceQuestion(
+                    question_text=f"What should be clarified for {role.job_title}?",
+                    relevant_source_ids=[source.id for source in sources],
+                )
+            ]
+
+    role_repository = FakeExperienceRoleRepository()
+    source_repository = FakeRoleSourceRepository()
+    analysis_repository = FakeSourceAnalysisRepository()
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    service = ExperienceWorkflowService(
+        ExperienceRoleService(role_repository),
+        RoleSourceService(source_repository, role_repository),
+        SourceAnalysisService(analysis_repository, role_repository, source_repository),
+        question_generator=FakeQuestionGenerator(),
+    )
+
+    run = service.analyze_sources("role-1")
+
+    questions = analysis_repository.list_questions(run.id)
+    assert len(questions) == 1
+    assert questions[0].question_text == "What should be clarified for Senior Systems Analyst?"
+    assert questions[0].relevant_source_ids == ["source-1"]
