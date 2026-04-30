@@ -125,6 +125,8 @@ The initial deterministic harness starts source analysis for `not_analyzed` role
 
 Source question generation should use a structured proposal boundary. The current deterministic generator returns `GeneratedSourceQuestion` values with question text and relevant source ids. A future LLM implementation should replace the generator, not the workflow orchestration.
 
+The first LLM-backed source question generator should use the same boundary. It should call `LLMClient`, parse JSON, and reject malformed or ungrounded output before questions are saved.
+
 ### 7. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.

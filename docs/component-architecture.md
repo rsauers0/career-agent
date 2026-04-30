@@ -226,6 +226,8 @@ Experience Workflow does not own persistence. It coordinates component services 
 
 Question generation is behind a small `SourceQuestionGenerator` protocol. The current implementation is deterministic and used for dev validation; a future LLM generator should plug into the same structured proposal contract.
 
+`LLMSourceQuestionGenerator` is available as the first LLM-backed implementation of that protocol. It uses `LLMClient`, expects JSON output, and validates that generated questions match the `GeneratedSourceQuestion` contract before returning them to the workflow.
+
 ### LLM Boundary
 
 Purpose: defines a provider-neutral completion boundary for future AI features.

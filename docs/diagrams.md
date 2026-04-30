@@ -123,12 +123,13 @@ The current LLM boundary is implemented without real network transport. Future m
 
 ```mermaid
 flowchart LR
-    WorkflowGenerator["Future LLM-backed generator"]
+    WorkflowGenerator["LLMSourceQuestionGenerator"]
     LLMClient["LLMClient protocol"]
     FakeClient["FakeLLMClient<br/>current test/dev implementation"]
     FutureClient["Future OpenAI-compatible client<br/>not implemented"]
     Request["LLMRequest"]
     Response["LLMResponse"]
+    Contract["GeneratedSourceQuestion[]<br/>validated JSON contract"]
 
     WorkflowGenerator --> Request
     WorkflowGenerator --> LLMClient
@@ -136,6 +137,7 @@ flowchart LR
     LLMClient -. "later" .-> FutureClient
     FakeClient --> Response
     FutureClient -. "later" .-> Response
+    Response --> Contract
 ```
 
 ## Current Storage Shape

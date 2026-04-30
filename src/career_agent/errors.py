@@ -21,6 +21,10 @@ class NoUnanalyzedSourcesError(CareerAgentError):
     """Raised when a workflow requires unanalyzed sources but none exist."""
 
 
+class InvalidLLMOutputError(CareerAgentError):
+    """Raised when LLM output fails required contract validation."""
+
+
 class AnalysisRunNotFoundError(CareerAgentError):
     """Raised when a referenced source analysis run does not exist."""
 
