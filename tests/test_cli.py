@@ -1409,12 +1409,16 @@ def test_source_analysis_messages_add_requires_exactly_one_text_input(
 def test_source_analysis_messages_list_renders_saved_messages(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    message_text = (
+        "It reduced weekly reporting time from 6 hours to 2, supported three teams, "
+        "and preserved this final answer detail."
+    )
     SourceAnalysisRepository(tmp_path).save_message(
         SourceClarificationMessage(
             id="message-1",
             question_id="question-1",
             author=ClarificationMessageAuthor.USER,
-            message_text="It reduced weekly reporting time from 6 hours to 2.",
+            message_text=message_text,
         )
     )
     runner = CliRunner()
@@ -1427,10 +1431,12 @@ def test_source_analysis_messages_list_renders_saved_messages(monkeypatch, tmp_p
 
     assert result.exit_code == 0
     assert "Source Clarification Messages" in result.output
+    assert "Message 1" in result.output
     assert "message-1" in result.output
     assert "question-1" in result.output
     assert "user" in result.output
     assert "It reduced weekly reporting time" in result.output
+    assert "final answer detail" in result.output
 
     get_settings.cache_clear()
 

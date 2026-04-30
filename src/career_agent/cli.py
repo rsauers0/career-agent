@@ -958,21 +958,24 @@ def render_source_clarification_question_list(
 def render_source_clarification_message_list(
     messages: list[SourceClarificationMessage],
 ) -> None:
-    """Render clarification messages as a compact CLI table."""
+    """Render clarification messages as separated readable CLI blocks."""
 
-    table = Table(title="Source Clarification Messages")
-    table.add_column("ID", no_wrap=True)
-    table.add_column("Question ID", no_wrap=True)
-    table.add_column("Author", no_wrap=True)
-    table.add_column("Preview")
-    for message in messages:
-        table.add_row(
-            message.id,
-            message.question_id,
-            message.author.value,
-            preview_source_text(message.message_text),
+    console.print("[bold]Source Clarification Messages[/bold]")
+    for index, message in enumerate(messages, start=1):
+        message_details = Table.grid(expand=True, padding=(0, 2))
+        message_details.add_column(no_wrap=True, style="bold")
+        message_details.add_column(ratio=1)
+        message_details.add_row("Message", message.message_text)
+        message_details.add_row("ID", message.id)
+        message_details.add_row("Question ID", message.question_id)
+        message_details.add_row("Author", message.author.value)
+        console.print(
+            Panel(
+                message_details,
+                title=f"Message {index}",
+                expand=True,
+            )
         )
-    console.print(table)
 
 
 def preview_source_text(source_text: str, max_length: int = 80) -> str:
