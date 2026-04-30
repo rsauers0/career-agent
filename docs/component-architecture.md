@@ -226,6 +226,33 @@ Experience Workflow does not own persistence. It coordinates component services 
 
 Question generation is behind a small `SourceQuestionGenerator` protocol. The current implementation is deterministic and used for dev validation; a future LLM generator should plug into the same structured proposal contract.
 
+### LLM Boundary
+
+Purpose: defines a provider-neutral completion boundary for future AI features.
+
+Current files:
+
+```text
+src/career_agent/llm/
+  models.py
+  client.py
+```
+
+Current CLI group:
+
+```text
+not applicable
+```
+
+Examples of owned data:
+
+- `LLMRequest`
+- `LLMResponse`
+- `LLMClient` protocol
+- `FakeLLMClient` for deterministic tests and dev validation
+
+No real networked LLM client is implemented yet. The current boundary is synchronous and transport-free.
+
 ## Current Data Flow
 
 ```text

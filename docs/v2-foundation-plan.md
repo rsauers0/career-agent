@@ -39,6 +39,8 @@ Each major component should be built in this order:
 7. LLM workflow
    Add AI behavior as structured proposals applied by deterministic services.
 
+The LLM boundary should be introduced before real model calls. The first slice is a synchronous, provider-neutral `LLMClient` protocol with request/response models and a fake client for tests. Real endpoint configuration and HTTP transport should be added later.
+
 ## Initial Component Order
 
 ### 1. User Preferences
@@ -200,6 +202,12 @@ Source Analysis
 Experience Workflow
   -> service
   -> CLI
+  -> tests
+
+LLM Boundary
+  -> request/response models
+  -> client protocol
+  -> fake client
   -> tests
 ```
 

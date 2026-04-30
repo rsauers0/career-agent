@@ -117,6 +117,27 @@ flowchart LR
 
 This is the core guardrail model: AI can reason and propose, but application services enforce boundaries before canonical data changes.
 
+## LLM Boundary
+
+The current LLM boundary is implemented without real network transport. Future model-backed generators should depend on this boundary instead of embedding provider calls directly in workflow services.
+
+```mermaid
+flowchart LR
+    WorkflowGenerator["Future LLM-backed generator"]
+    LLMClient["LLMClient protocol"]
+    FakeClient["FakeLLMClient<br/>current test/dev implementation"]
+    FutureClient["Future OpenAI-compatible client<br/>not implemented"]
+    Request["LLMRequest"]
+    Response["LLMResponse"]
+
+    WorkflowGenerator --> Request
+    WorkflowGenerator --> LLMClient
+    LLMClient --> FakeClient
+    LLMClient -. "later" .-> FutureClient
+    FakeClient --> Response
+    FutureClient -. "later" .-> Response
+```
+
 ## Current Storage Shape
 
 ```mermaid

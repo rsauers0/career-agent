@@ -16,6 +16,7 @@ expectations. It is not a formal third-party security audit.
 - No hosted application service is required to use the current CLI.
 - Current workflows do not send career data to external services.
 - No LLM calls are implemented in the current v2 foundation code.
+- The current LLM boundary includes a fake client only; no HTTP transport is implemented.
 - No telemetry or background network calls are implemented.
 
 ## Future Networked Features
