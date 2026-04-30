@@ -119,6 +119,8 @@ The TUI should not drive this design. The CLI/dev harness should make every stat
 
 Question resolution should remain explicit. A future LLM workflow may recommend that a clarification thread is complete, but the workflow should call a deterministic transition that can later include eval approval.
 
+The initial deterministic harness starts source analysis for `not_analyzed` role sources only. Previously analyzed sources should not be re-ingested as raw source material; later workflow passes can use existing bullets as structured context instead.
+
 ### 7. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.
@@ -189,6 +191,11 @@ Experience Bullets
 Source Analysis
   -> model
   -> repository
+  -> service
+  -> CLI
+  -> tests
+
+Experience Workflow
   -> service
   -> CLI
   -> tests

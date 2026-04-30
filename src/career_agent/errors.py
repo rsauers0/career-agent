@@ -17,6 +17,10 @@ class SourceRoleMismatchError(CareerAgentError):
     """Raised when a source does not belong to the expected role."""
 
 
+class NoUnanalyzedSourcesError(CareerAgentError):
+    """Raised when a workflow requires unanalyzed sources but none exist."""
+
+
 class AnalysisRunNotFoundError(CareerAgentError):
     """Raised when a referenced source analysis run does not exist."""
 

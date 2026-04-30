@@ -18,6 +18,8 @@ uv run career-agent source-analysis --help
 uv run career-agent source-analysis runs start --help
 uv run career-agent source-analysis questions add --help
 uv run career-agent source-analysis messages add --help
+uv run career-agent experience-workflow --help
+uv run career-agent experience-workflow analyze-sources --help
 ```
 
 ## Health Check
@@ -297,6 +299,18 @@ uv run career-agent source-analysis messages list --question-id <question-id>
 Clarification messages are appended one message at a time. Adding a message does
 not resolve a question automatically; use `questions resolve` or
 `questions skip` for explicit status transitions.
+
+## Experience Workflow
+
+Start deterministic source analysis for one experience role's unanalyzed sources:
+
+```bash
+uv run career-agent experience-workflow analyze-sources --role-id <role-id>
+```
+
+This command currently creates a Source Analysis run and deterministic
+development-placeholder clarification questions. It only includes role sources
+with `not_analyzed` status and does not mark those sources as analyzed.
 
 ## Configuration
 

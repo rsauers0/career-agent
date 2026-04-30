@@ -6,7 +6,7 @@ from career_agent.experience_bullets.models import ExperienceBullet
 from career_agent.experience_bullets.repository import ExperienceBulletRepository
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.repository import ExperienceRoleRepository
-from career_agent.role_sources.models import RoleSourceEntry
+from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
@@ -1424,5 +1424,94 @@ def test_source_analysis_messages_list_renders_saved_messages(monkeypatch, tmp_p
     assert "question-1" in result.output
     assert "user" in result.output
     assert "It reduced weekly reporting time" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_experience_workflow_analyze_sources_starts_run_and_questions(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-2",
+            role_id="role-1",
+            source_text="- Built a service trend dashboard.",
+            status=RoleSourceStatus.ANALYZED,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "analyze-sources", "--role-id", "role-1"],
+    )
+
+    analysis_repository = SourceAnalysisRepository(tmp_path)
+    runs = analysis_repository.list_runs(role_id="role-1")
+    questions = analysis_repository.list_questions(runs[0].id)
+
+    assert result.exit_code == 0
+    assert "Started experience source analysis." in result.output
+    assert "Run ID:" in result.output
+    assert "Question IDs:" in result.output
+    assert len(runs) == 1
+    assert runs[0].source_ids == ["source-1"]
+    assert len(questions) == 2
+    assert questions[0].question_text.startswith("DEV PLACEHOLDER:")
+
+    get_settings.cache_clear()
+
+
+def test_experience_workflow_analyze_sources_reports_no_unanalyzed_sources(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+            status=RoleSourceStatus.ANALYZED,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "analyze-sources", "--role-id", "role-1"],
+    )
+
+    assert result.exit_code != 0
+    assert "No unanalyzed sources found for role: role-1" in result.output
 
     get_settings.cache_clear()

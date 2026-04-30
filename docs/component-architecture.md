@@ -197,6 +197,31 @@ Clarification messages are append-only conversation turns. They do not resolve q
 
 Only one active Source Analysis run may exist for a single experience role at a time. Separate roles may have active analysis runs simultaneously.
 
+### Experience Workflow
+
+Purpose: orchestrates experience-related workflow steps across existing components.
+
+Current files:
+
+```text
+src/career_agent/experience_workflow/
+  service.py
+```
+
+Current CLI group:
+
+```bash
+career-agent experience-workflow
+```
+
+Examples of coordinated behavior:
+
+- select role sources with `not_analyzed` status
+- start Source Analysis runs through `SourceAnalysisService`
+- create deterministic placeholder clarification questions for dev validation
+
+Experience Workflow does not own persistence. It coordinates component services and should not write directly to JSON files.
+
 ## Current Data Flow
 
 ```text

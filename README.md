@@ -74,6 +74,12 @@ List saved source analysis runs:
 uv run career-agent source-analysis runs list
 ```
 
+Run deterministic source analysis for unanalyzed role sources:
+
+```bash
+uv run career-agent experience-workflow analyze-sources --role-id <role-id>
+```
+
 Run tests:
 
 ```bash
@@ -111,7 +117,7 @@ The rebuild sequence is:
 3. Role Source model, JSON repository, service, CLI, and tests.
 4. Experience Bullet model, JSON repository, service, CLI, and tests.
 5. Source Analysis model, JSON repository, service, CLI, and tests.
-6. Experience AI workflow harness through CLI/dev commands.
+6. Experience Workflow service, CLI/dev command, and tests.
 7. TUI presentation once the workflow is stable.
 8. Optional FastAPI interface later, using the same application services.
 

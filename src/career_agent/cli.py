@@ -12,6 +12,7 @@ from career_agent.errors import (
     ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
+    NoUnanalyzedSourcesError,
     RoleNotFoundError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
@@ -27,6 +28,7 @@ from career_agent.experience_roles.models import (
 )
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.experience_roles.service import ExperienceRoleService
+from career_agent.experience_workflow.service import ExperienceWorkflowService
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.role_sources.service import RoleSourceService
@@ -58,6 +60,7 @@ source_analysis_app = typer.Typer(help="Manage source analysis workflow artifact
 analysis_runs_app = typer.Typer(help="Manage source analysis runs.")
 analysis_questions_app = typer.Typer(help="Manage source clarification questions.")
 analysis_messages_app = typer.Typer(help="Manage source clarification messages.")
+experience_workflow_app = typer.Typer(help="Run experience workflow harness commands.")
 console = Console()
 
 
@@ -104,6 +107,11 @@ def analysis_questions_cli() -> None:
 @analysis_messages_app.callback()
 def analysis_messages_cli() -> None:
     """Commands for working with source clarification messages."""
+
+
+@experience_workflow_app.callback()
+def experience_workflow_cli() -> None:
+    """Commands for running experience workflow harnesses."""
 
 
 @app.command()
@@ -649,6 +657,36 @@ def add_source_analysis_message(
     console.print(f"Message ID: {message.id}")
 
 
+@experience_workflow_app.command("analyze-sources")
+def analyze_experience_sources(
+    role_id: str = typer.Option(..., help="Existing experience role id."),
+) -> None:
+    """Start deterministic source analysis for unanalyzed role sources."""
+
+    service = build_experience_workflow_service()
+    try:
+        run = service.analyze_sources(role_id)
+    except (
+        ActiveAnalysisRunExistsError,
+        NoUnanalyzedSourcesError,
+        RoleNotFoundError,
+        SourceNotFoundError,
+        SourceRoleMismatchError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not analyze role sources.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    questions = build_source_analysis_service().list_questions(run.id)
+    console.print("[green]Started experience source analysis.[/green]")
+    console.print(f"Run ID: {run.id}")
+    console.print(f"Question IDs: {', '.join(question.id for question in questions)}")
+
+
 def build_user_preferences_service() -> UserPreferencesService:
     """Build the user preferences service from configured settings."""
 
@@ -692,6 +730,14 @@ def build_source_analysis_service() -> SourceAnalysisService:
     role_repository = ExperienceRoleRepository(settings.data_dir)
     source_repository = RoleSourceRepository(settings.data_dir)
     return SourceAnalysisService(analysis_repository, role_repository, source_repository)
+
+
+def build_experience_workflow_service() -> ExperienceWorkflowService:
+    """Build the experience workflow service from configured settings."""
+
+    source_service = build_role_source_service()
+    analysis_service = build_source_analysis_service()
+    return ExperienceWorkflowService(source_service, analysis_service)
 
 
 def render_user_preferences(preferences: UserPreferences) -> None:
@@ -924,6 +970,7 @@ app.add_typer(preferences_app, name="preferences")
 app.add_typer(roles_app, name="roles")
 app.add_typer(sources_app, name="sources")
 app.add_typer(bullets_app, name="bullets")
+app.add_typer(experience_workflow_app, name="experience-workflow")
 source_analysis_app.add_typer(analysis_runs_app, name="runs")
 source_analysis_app.add_typer(analysis_questions_app, name="questions")
 source_analysis_app.add_typer(analysis_messages_app, name="messages")
