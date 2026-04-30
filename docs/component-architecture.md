@@ -252,8 +252,9 @@ Examples of owned data:
 - `LLMResponse`
 - `LLMClient` protocol
 - `FakeLLMClient` for deterministic tests and dev validation
+- `OpenAICompatibleLLMClient` for opt-in chat completions integrations
 
-No real networked LLM client is implemented yet. The current boundary is synchronous and transport-free.
+The LLM boundary is synchronous. The OpenAI-compatible client exists, but it is not wired into configuration or default workflows yet.
 
 ## Current Data Flow
 

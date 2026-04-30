@@ -41,6 +41,8 @@ Each major component should be built in this order:
 
 The LLM boundary should be introduced before real model calls. The first slice is a synchronous, provider-neutral `LLMClient` protocol with request/response models and a fake client for tests. Real endpoint configuration and HTTP transport should be added later.
 
+The OpenAI-compatible client should remain opt-in until configuration and workflow wiring are added. Tests should use mocked HTTP transport and should not make real network calls.
+
 ## Initial Component Order
 
 ### 1. User Preferences
@@ -210,6 +212,7 @@ LLM Boundary
   -> request/response models
   -> client protocol
   -> fake client
+  -> OpenAI-compatible client
   -> tests
 ```
 

@@ -25,6 +25,10 @@ class InvalidLLMOutputError(CareerAgentError):
     """Raised when LLM output fails required contract validation."""
 
 
+class LLMClientError(CareerAgentError):
+    """Raised when an LLM client cannot complete a request."""
+
+
 class AnalysisRunNotFoundError(CareerAgentError):
     """Raised when a referenced source analysis run does not exist."""
 

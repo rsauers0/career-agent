@@ -5,6 +5,7 @@ description = "A local-first Python application for structured career workflow t
 readme = "README.md"
 requires-python = "~=3.13.0"
 dependencies = [
+    "httpx>=0.28.1",
     "pydantic>=2.11.4",
     "pydantic-settings>=2.9.1",
     "rich>=14.0.0",

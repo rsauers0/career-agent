@@ -125,8 +125,8 @@ The current LLM boundary is implemented without real network transport. Future m
 flowchart LR
     WorkflowGenerator["LLMSourceQuestionGenerator"]
     LLMClient["LLMClient protocol"]
-    FakeClient["FakeLLMClient<br/>current test/dev implementation"]
-    FutureClient["Future OpenAI-compatible client<br/>not implemented"]
+    FakeClient["FakeLLMClient<br/>test/dev implementation"]
+    OpenAIClient["OpenAICompatibleLLMClient<br/>opt-in, not wired by default"]
     Request["LLMRequest"]
     Response["LLMResponse"]
     Contract["GeneratedSourceQuestion[]<br/>validated JSON contract"]
@@ -134,9 +134,9 @@ flowchart LR
     WorkflowGenerator --> Request
     WorkflowGenerator --> LLMClient
     LLMClient --> FakeClient
-    LLMClient -. "later" .-> FutureClient
+    LLMClient --> OpenAIClient
     FakeClient --> Response
-    FutureClient -. "later" .-> Response
+    OpenAIClient --> Response
     Response --> Contract
 ```
 

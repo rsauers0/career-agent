@@ -15,8 +15,8 @@ expectations. It is not a formal third-party security audit.
 - No account system is implemented.
 - No hosted application service is required to use the current CLI.
 - Current workflows do not send career data to external services.
-- No LLM calls are implemented in the current v2 foundation code.
-- The current LLM boundary includes a fake client only; no HTTP transport is implemented.
+- No default workflow sends career data to an LLM endpoint.
+- An OpenAI-compatible LLM client exists, but it is not wired into configuration or default workflows yet.
 - LLM-backed generators currently rely on the fake client in tests/dev and validate
   structured output before workflow data is saved.
 - No telemetry or background network calls are implemented.
