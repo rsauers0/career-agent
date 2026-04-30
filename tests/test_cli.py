@@ -1434,6 +1434,8 @@ def test_experience_workflow_analyze_sources_starts_run_and_questions(
 ) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
+    monkeypatch.setenv("CAREER_AGENT_LLM_EXTRACTION_BASE_URL", "")
     ExperienceRoleRepository(tmp_path).save(
         ExperienceRole(
             id="role-1",
@@ -1487,6 +1489,8 @@ def test_experience_workflow_analyze_sources_reports_no_unanalyzed_sources(
 ) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
+    monkeypatch.setenv("CAREER_AGENT_LLM_EXTRACTION_BASE_URL", "")
     ExperienceRoleRepository(tmp_path).save(
         ExperienceRole(
             id="role-1",
@@ -1513,5 +1517,43 @@ def test_experience_workflow_analyze_sources_reports_no_unanalyzed_sources(
 
     assert result.exit_code != 0
     assert "No unanalyzed sources found for role: role-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_experience_workflow_analyze_sources_reports_incomplete_llm_config(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("CAREER_AGENT_LLM_MODEL", "")
+    monkeypatch.setenv("CAREER_AGENT_LLM_EXTRACTION_MODEL", "")
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "analyze-sources", "--role-id", "role-1"],
+    )
+
+    assert result.exit_code != 0
+    assert "CAREER_AGENT_LLM_MODEL" in result.output
 
     get_settings.cache_clear()

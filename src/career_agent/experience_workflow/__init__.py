@@ -1,5 +1,6 @@
 """Experience workflow orchestration."""
 
+from career_agent.experience_workflow.factory import build_source_question_generator
 from career_agent.experience_workflow.question_generator import (
     DeterministicSourceQuestionGenerator,
     GeneratedSourceQuestion,
@@ -14,4 +15,5 @@ __all__ = [
     "GeneratedSourceQuestion",
     "LLMSourceQuestionGenerator",
     "SourceQuestionGenerator",
+    "build_source_question_generator",
 ]

@@ -228,6 +228,8 @@ Question generation is behind a small `SourceQuestionGenerator` protocol. The cu
 
 `LLMSourceQuestionGenerator` is available as the first LLM-backed implementation of that protocol. It uses `LLMClient`, expects JSON output, and validates that generated questions match the `GeneratedSourceQuestion` contract before returning them to the workflow.
 
+Factory wiring selects the deterministic generator when no LLM base URL is configured. If an LLM base URL is configured, it selects the LLM-backed generator and requires an LLM model.
+
 ### LLM Boundary
 
 Purpose: defines a provider-neutral completion boundary for future AI features.

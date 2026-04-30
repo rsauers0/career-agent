@@ -313,6 +313,10 @@ development-placeholder clarification questions through the source question
 generator boundary. It only includes role sources with `not_analyzed` status and
 does not mark those sources as analyzed.
 
+If `CAREER_AGENT_LLM_BASE_URL` is configured, this command uses the LLM-backed
+source question generator. If it is unset, it uses deterministic local question
+generation.
+
 ## Configuration
 
 Use `CAREER_AGENT_DATA_DIR` to direct local JSON data to a specific directory:

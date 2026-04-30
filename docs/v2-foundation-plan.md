@@ -43,6 +43,8 @@ The LLM boundary should be introduced before real model calls. The first slice i
 
 The OpenAI-compatible client should remain opt-in until configuration and workflow wiring are added. Tests should use mocked HTTP transport and should not make real network calls.
 
+Workflow wiring should default to deterministic local behavior when no LLM base URL is configured. Setting an LLM base URL opts supported workflows into the OpenAI-compatible client and requires a model.
+
 ## Initial Component Order
 
 ### 1. User Preferences

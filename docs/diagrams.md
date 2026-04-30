@@ -124,13 +124,17 @@ The current LLM boundary is implemented without real network transport. Future m
 ```mermaid
 flowchart LR
     WorkflowGenerator["LLMSourceQuestionGenerator"]
+    Factory["Generator Factory<br/>base URL set = LLM<br/>base URL unset = deterministic"]
+    Deterministic["DeterministicSourceQuestionGenerator"]
     LLMClient["LLMClient protocol"]
     FakeClient["FakeLLMClient<br/>test/dev implementation"]
-    OpenAIClient["OpenAICompatibleLLMClient<br/>opt-in, not wired by default"]
+    OpenAIClient["OpenAICompatibleLLMClient<br/>opt-in via configuration"]
     Request["LLMRequest"]
     Response["LLMResponse"]
     Contract["GeneratedSourceQuestion[]<br/>validated JSON contract"]
 
+    Factory --> Deterministic
+    Factory --> WorkflowGenerator
     WorkflowGenerator --> Request
     WorkflowGenerator --> LLMClient
     LLMClient --> FakeClient

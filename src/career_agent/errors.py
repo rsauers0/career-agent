@@ -29,6 +29,10 @@ class LLMClientError(CareerAgentError):
     """Raised when an LLM client cannot complete a request."""
 
 
+class LLMConfigurationError(CareerAgentError):
+    """Raised when LLM configuration is incomplete or invalid."""
+
+
 class AnalysisRunNotFoundError(CareerAgentError):
     """Raised when a referenced source analysis run does not exist."""
 

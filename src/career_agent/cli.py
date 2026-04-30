@@ -12,6 +12,9 @@ from career_agent.errors import (
     ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
+    InvalidLLMOutputError,
+    LLMClientError,
+    LLMConfigurationError,
     NoUnanalyzedSourcesError,
     RoleNotFoundError,
     SourceNotFoundError,
@@ -28,6 +31,7 @@ from career_agent.experience_roles.models import (
 )
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.experience_roles.service import ExperienceRoleService
+from career_agent.experience_workflow.factory import build_source_question_generator
 from career_agent.experience_workflow.service import ExperienceWorkflowService
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
@@ -663,8 +667,8 @@ def analyze_experience_sources(
 ) -> None:
     """Start deterministic source analysis for unanalyzed role sources."""
 
-    service = build_experience_workflow_service()
     try:
+        service = build_experience_workflow_service()
         run = service.analyze_sources(role_id)
     except (
         ActiveAnalysisRunExistsError,
@@ -672,6 +676,9 @@ def analyze_experience_sources(
         RoleNotFoundError,
         SourceNotFoundError,
         SourceRoleMismatchError,
+        InvalidLLMOutputError,
+        LLMClientError,
+        LLMConfigurationError,
     ) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
@@ -735,10 +742,17 @@ def build_source_analysis_service() -> SourceAnalysisService:
 def build_experience_workflow_service() -> ExperienceWorkflowService:
     """Build the experience workflow service from configured settings."""
 
+    settings = get_settings()
     role_service = build_experience_role_service()
     source_service = build_role_source_service()
     analysis_service = build_source_analysis_service()
-    return ExperienceWorkflowService(role_service, source_service, analysis_service)
+    question_generator = build_source_question_generator(settings)
+    return ExperienceWorkflowService(
+        role_service,
+        source_service,
+        analysis_service,
+        question_generator=question_generator,
+    )
 
 
 def render_user_preferences(preferences: UserPreferences) -> None:
