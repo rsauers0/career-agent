@@ -60,6 +60,21 @@ Experience Bullets are stored as:
       <timestamp>-experience_bullets.json
 ```
 
+Source Analysis artifacts are stored as table-like JSON files:
+
+```text
+<data_dir>/
+  source_analysis/
+    analysis_runs.json
+    clarification_questions.json
+    clarification_messages.json
+  snapshots/
+    source_analysis/
+      <timestamp>-analysis_runs.json
+      <timestamp>-clarification_questions.json
+      <timestamp>-clarification_messages.json
+```
+
 ## Snapshot Behavior
 
 When a managed JSON file already exists, saving creates a snapshot before overwriting the current file.

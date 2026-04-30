@@ -172,6 +172,7 @@ Current files:
 ```text
 src/career_agent/source_analysis/
   models.py
+  repository.py
 ```
 
 Current CLI group:
@@ -187,6 +188,7 @@ Examples of owned data:
 - clarification questions generated during analysis
 - clarification message threads attached to a question
 - question and analysis lifecycle statuses
+- table-like JSON files for runs, questions, and messages
 
 Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and bullet proposal generation. Canonical data changes should still be applied through deterministic services.
 

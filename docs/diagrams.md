@@ -98,10 +98,12 @@ flowchart TD
     DataDir --> Roles["experience_roles/experience_roles.json"]
     DataDir --> Sources["role_sources/role_sources.json"]
     DataDir --> Bullets["experience_bullets/experience_bullets.json"]
+    DataDir --> Analysis["source_analysis/*.json"]
     DataDir --> Snapshots["snapshots/"]
 
     Snapshots --> PreferenceSnapshots["user_preferences/<timestamp>-user_preferences.json"]
     Snapshots --> RoleSnapshots["experience_roles/<timestamp>-experience_roles.json"]
     Snapshots --> SourceSnapshots["role_sources/<timestamp>-role_sources.json"]
     Snapshots --> BulletSnapshots["experience_bullets/<timestamp>-experience_bullets.json"]
+    Snapshots --> AnalysisSnapshots["source_analysis/<timestamp>-*.json"]
 ```
