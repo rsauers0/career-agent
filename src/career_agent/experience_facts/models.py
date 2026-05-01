@@ -7,36 +7,36 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, field_validator
 
 
-class ExperienceBulletStatus(StrEnum):
-    """Lifecycle status for an experience bullet."""
+class ExperienceFactStatus(StrEnum):
+    """Lifecycle status for an experience fact."""
 
     DRAFT = "draft"
     ACTIVE = "active"
     ARCHIVED = "archived"
 
 
-class ExperienceBullet(BaseModel):
-    """Durable resume-style bullet derived from role context and source material."""
+class ExperienceFact(BaseModel):
+    """Durable experience fact derived from role context and source material."""
 
     id: str = Field(
         default_factory=lambda: str(uuid4()),
-        description="Stable identifier for this experience bullet.",
+        description="Stable identifier for this experience fact.",
     )
     role_id: str = Field(
         min_length=1,
-        description="Identifier of the experience role this bullet belongs to.",
+        description="Identifier of the experience role this fact belongs to.",
     )
     source_ids: list[str] = Field(
         default_factory=list,
-        description="Source entry identifiers used to support or derive this bullet.",
+        description="Source entry identifiers used to support or derive this fact.",
     )
     text: str = Field(
         min_length=1,
-        description="Resume-style bullet text for this role.",
+        description="Normalized experience fact text for this role.",
     )
-    status: ExperienceBulletStatus = Field(
-        default=ExperienceBulletStatus.DRAFT,
-        description="Lifecycle status for this bullet.",
+    status: ExperienceFactStatus = Field(
+        default=ExperienceFactStatus.DRAFT,
+        description="Lifecycle status for this fact.",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

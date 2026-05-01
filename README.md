@@ -13,7 +13,7 @@ Current scope:
 - keep the project runnable through a minimal Typer CLI
 - keep configuration loading through `pydantic-settings`
 - rebuild one component at a time
-- maintain component boundaries for User Preferences, Experience Roles, Role Sources, Experience Bullets, and Source Analysis
+- maintain component boundaries for User Preferences, Experience Roles, Role Sources, Experience Facts, and Source Analysis
 - use JSON persistence first
 - keep TUI deferred while validating workflow behavior through the CLI
 - support opt-in LLM-backed source question generation through an OpenAI-compatible endpoint
@@ -63,10 +63,10 @@ List saved role sources:
 uv run career-agent sources list
 ```
 
-List saved experience bullets:
+List saved experience facts:
 
 ```bash
-uv run career-agent bullets list
+uv run career-agent facts list
 ```
 
 List saved source analysis runs:
@@ -126,7 +126,7 @@ The rebuild sequence is:
 1. User Preferences model, JSON repository, service, CLI, and tests.
 2. Experience Role model, JSON repository, service, CLI, and tests.
 3. Role Source model, JSON repository, service, CLI, and tests.
-4. Experience Bullet model, JSON repository, service, CLI, and tests.
+4. Experience Fact model, JSON repository, service, CLI, and tests.
 5. Source Analysis model, JSON repository, service, CLI, and tests.
 6. Experience Workflow service, CLI/dev command, and tests.
 7. TUI presentation once the workflow is stable.

@@ -23,9 +23,9 @@ from career_agent.errors import (
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
 )
-from career_agent.experience_bullets.models import ExperienceBullet
-from career_agent.experience_bullets.repository import ExperienceBulletRepository
-from career_agent.experience_bullets.service import ExperienceBulletService
+from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.repository import ExperienceFactRepository
+from career_agent.experience_facts.service import ExperienceFactService
 from career_agent.experience_roles.models import (
     EmploymentType,
     ExperienceRole,
@@ -61,7 +61,7 @@ app = typer.Typer(
 preferences_app = typer.Typer(help="Manage user preferences.")
 roles_app = typer.Typer(help="Manage experience roles.")
 sources_app = typer.Typer(help="Manage role source entries.")
-bullets_app = typer.Typer(help="Manage canonical experience bullets.")
+facts_app = typer.Typer(help="Manage canonical experience facts.")
 source_analysis_app = typer.Typer(help="Manage source analysis workflow artifacts.")
 analysis_runs_app = typer.Typer(help="Manage source analysis runs.")
 analysis_questions_app = typer.Typer(help="Manage source clarification questions.")
@@ -90,9 +90,9 @@ def sources_cli() -> None:
     """Commands for working with role source entries."""
 
 
-@bullets_app.callback()
-def bullets_cli() -> None:
-    """Commands for working with canonical experience bullets."""
+@facts_app.callback()
+def facts_cli() -> None:
+    """Commands for working with canonical experience facts."""
 
 
 @source_analysis_app.callback()
@@ -385,76 +385,76 @@ def delete_source(source_id: str = typer.Argument(..., help="Role source identif
     console.print("[green]Deleted role source.[/green]")
 
 
-@bullets_app.command("list")
-def list_bullets(
-    role_id: str | None = typer.Option(None, help="Optional role id to filter bullets."),
+@facts_app.command("list")
+def list_facts(
+    role_id: str | None = typer.Option(None, help="Optional role id to filter facts."),
 ) -> None:
-    """List saved experience bullets."""
+    """List saved experience facts."""
 
-    service = build_experience_bullet_service()
-    bullets = service.list_bullets(role_id=role_id)
-    if not bullets:
-        console.print("[yellow]No experience bullets saved yet.[/yellow]")
+    service = build_experience_fact_service()
+    facts = service.list_facts(role_id=role_id)
+    if not facts:
+        console.print("[yellow]No experience facts saved yet.[/yellow]")
         return
 
-    render_experience_bullet_list(bullets)
+    render_experience_fact_list(facts)
 
 
-@bullets_app.command("show")
-def show_bullet(
-    bullet_id: str = typer.Argument(..., help="Experience bullet identifier."),
+@facts_app.command("show")
+def show_fact(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
 ) -> None:
-    """Show one saved experience bullet."""
+    """Show one saved experience fact."""
 
-    service = build_experience_bullet_service()
-    bullet = service.get_bullet(bullet_id)
-    if bullet is None:
-        console.print(f"[yellow]No experience bullet found for id: {bullet_id}[/yellow]")
+    service = build_experience_fact_service()
+    fact = service.get_fact(fact_id)
+    if fact is None:
+        console.print(f"[yellow]No experience fact found for id: {fact_id}[/yellow]")
         raise typer.Exit(1)
 
-    render_experience_bullet(bullet)
+    render_experience_fact(fact)
 
 
-@bullets_app.command("add")
-def add_bullet(
+@facts_app.command("add")
+def add_fact(
     role_id: str = typer.Option(..., help="Existing experience role id."),
-    text: str = typer.Option(..., help="Experience bullet text."),
+    text: str = typer.Option(..., help="Experience fact text."),
     source_ids: list[str] = typer.Option(
         [],
         "--source-id",
-        help="Source id supporting this bullet. Can be provided more than once.",
+        help="Source id supporting this fact. Can be provided more than once.",
     ),
 ) -> None:
-    """Add a canonical experience bullet for an existing role."""
+    """Add a canonical experience fact for an existing role."""
 
-    service = build_experience_bullet_service()
+    service = build_experience_fact_service()
     try:
-        bullet = service.add_bullet(role_id=role_id, text=text, source_ids=source_ids)
+        fact = service.add_fact(role_id=role_id, text=text, source_ids=source_ids)
     except (RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
     except ValidationError as exc:
-        console.print("[red]Could not save experience bullet.[/red]")
+        console.print("[red]Could not save experience fact.[/red]")
         for error in exc.errors():
             console.print(f"[red]- {error['msg']}[/red]")
         raise typer.Exit(1) from exc
 
-    console.print("[green]Saved experience bullet.[/green]")
-    console.print(f"Bullet ID: {bullet.id}")
+    console.print("[green]Saved experience fact.[/green]")
+    console.print(f"Fact ID: {fact.id}")
 
 
-@bullets_app.command("delete")
-def delete_bullet(
-    bullet_id: str = typer.Argument(..., help="Experience bullet identifier."),
+@facts_app.command("delete")
+def delete_fact(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
 ) -> None:
-    """Delete one saved experience bullet."""
+    """Delete one saved experience fact."""
 
-    service = build_experience_bullet_service()
-    if not service.delete_bullet(bullet_id):
-        console.print(f"[yellow]No experience bullet found for id: {bullet_id}[/yellow]")
+    service = build_experience_fact_service()
+    if not service.delete_fact(fact_id):
+        console.print(f"[yellow]No experience fact found for id: {fact_id}[/yellow]")
         raise typer.Exit(1)
 
-    console.print("[green]Deleted experience bullet.[/green]")
+    console.print("[green]Deleted experience fact.[/green]")
 
 
 @analysis_runs_app.command("list")
@@ -722,14 +722,14 @@ def build_role_source_service() -> RoleSourceService:
     return RoleSourceService(source_repository, role_repository)
 
 
-def build_experience_bullet_service() -> ExperienceBulletService:
-    """Build the experience bullet service from configured settings."""
+def build_experience_fact_service() -> ExperienceFactService:
+    """Build the experience fact service from configured settings."""
 
     settings = get_settings()
-    bullet_repository = ExperienceBulletRepository(settings.data_dir)
+    fact_repository = ExperienceFactRepository(settings.data_dir)
     role_repository = ExperienceRoleRepository(settings.data_dir)
     source_repository = RoleSourceRepository(settings.data_dir)
-    return ExperienceBulletService(bullet_repository, role_repository, source_repository)
+    return ExperienceFactService(fact_repository, role_repository, source_repository)
 
 
 def build_source_analysis_service() -> SourceAnalysisService:
@@ -881,37 +881,37 @@ def render_role_source(source: RoleSourceEntry) -> None:
     console.print(table)
 
 
-def render_experience_bullet_list(bullets: list[ExperienceBullet]) -> None:
-    """Render experience bullets as a compact CLI table."""
+def render_experience_fact_list(facts: list[ExperienceFact]) -> None:
+    """Render experience facts as a compact CLI table."""
 
-    table = Table(title="Experience Bullets")
+    table = Table(title="Experience Facts")
     table.add_column("ID", no_wrap=True)
     table.add_column("Role ID", no_wrap=True)
     table.add_column("Status", no_wrap=True)
     table.add_column("Preview")
-    for bullet in bullets:
+    for fact in facts:
         table.add_row(
-            bullet.id,
-            bullet.role_id,
-            bullet.status.value,
-            preview_source_text(bullet.text),
+            fact.id,
+            fact.role_id,
+            fact.status.value,
+            preview_source_text(fact.text),
         )
     console.print(table)
 
 
-def render_experience_bullet(bullet: ExperienceBullet) -> None:
-    """Render one experience bullet as a CLI table."""
+def render_experience_fact(fact: ExperienceFact) -> None:
+    """Render one experience fact as a CLI table."""
 
-    table = Table(title="Experience Bullet")
+    table = Table(title="Experience Fact")
     table.add_column("Field")
     table.add_column("Value")
-    table.add_row("ID", bullet.id)
-    table.add_row("Role ID", bullet.role_id)
-    table.add_row("Source IDs", ", ".join(bullet.source_ids) or "-")
-    table.add_row("Status", bullet.status.value)
-    table.add_row("Created At", bullet.created_at.isoformat())
-    table.add_row("Updated At", bullet.updated_at.isoformat())
-    table.add_row("Text", bullet.text)
+    table.add_row("ID", fact.id)
+    table.add_row("Role ID", fact.role_id)
+    table.add_row("Source IDs", ", ".join(fact.source_ids) or "-")
+    table.add_row("Status", fact.status.value)
+    table.add_row("Created At", fact.created_at.isoformat())
+    table.add_row("Updated At", fact.updated_at.isoformat())
+    table.add_row("Text", fact.text)
     console.print(table)
 
 
@@ -990,7 +990,7 @@ def preview_source_text(source_text: str, max_length: int = 80) -> str:
 app.add_typer(preferences_app, name="preferences")
 app.add_typer(roles_app, name="roles")
 app.add_typer(sources_app, name="sources")
-app.add_typer(bullets_app, name="bullets")
+app.add_typer(facts_app, name="facts")
 app.add_typer(experience_workflow_app, name="experience-workflow")
 source_analysis_app.add_typer(analysis_runs_app, name="runs")
 source_analysis_app.add_typer(analysis_questions_app, name="questions")

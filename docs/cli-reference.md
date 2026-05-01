@@ -12,8 +12,8 @@ uv run career-agent roles --help
 uv run career-agent roles save --help
 uv run career-agent sources --help
 uv run career-agent sources add --help
-uv run career-agent bullets --help
-uv run career-agent bullets add --help
+uv run career-agent facts --help
+uv run career-agent facts add --help
 uv run career-agent source-analysis --help
 uv run career-agent source-analysis runs start --help
 uv run career-agent source-analysis questions add --help
@@ -172,47 +172,47 @@ Delete one saved source entry:
 uv run career-agent sources delete <source-id>
 ```
 
-## Experience Bullets
+## Experience Facts
 
-List all saved experience bullets:
+List all saved experience facts:
 
 ```bash
-uv run career-agent bullets list
+uv run career-agent facts list
 ```
 
-List bullets for one role:
+List facts for one role:
 
 ```bash
-uv run career-agent bullets list --role-id <role-id>
+uv run career-agent facts list --role-id <role-id>
 ```
 
-Show one saved bullet:
+Show one saved fact:
 
 ```bash
-uv run career-agent bullets show <bullet-id>
+uv run career-agent facts show <fact-id>
 ```
 
-Add a draft canonical bullet:
+Add a draft canonical fact:
 
 ```bash
-uv run career-agent bullets add \
+uv run career-agent facts add \
   --role-id <role-id> \
   --text "Automated reporting workflows, reducing manual reconciliation time."
 ```
 
-Add a draft bullet with source traceability:
+Add a draft fact with source traceability:
 
 ```bash
-uv run career-agent bullets add \
+uv run career-agent facts add \
   --role-id <role-id> \
   --text "Automated reporting workflows, reducing manual reconciliation time." \
   --source-id <source-id>
 ```
 
-Delete one saved bullet:
+Delete one saved fact:
 
 ```bash
-uv run career-agent bullets delete <bullet-id>
+uv run career-agent facts delete <fact-id>
 ```
 
 ## Source Analysis

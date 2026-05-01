@@ -46,8 +46,8 @@ storage shape is:
     experience_roles.json
   role_sources/
     role_sources.json
-  experience_bullets/
-    experience_bullets.json
+  experience_facts/
+    experience_facts.json
   source_analysis/
     analysis_runs.json
     clarification_questions.json
@@ -56,7 +56,7 @@ storage shape is:
     user_preferences/
     experience_roles/
     role_sources/
-    experience_bullets/
+    experience_facts/
     source_analysis/
 ```
 

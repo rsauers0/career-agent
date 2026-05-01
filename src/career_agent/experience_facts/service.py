@@ -1,62 +1,62 @@
 from __future__ import annotations
 
 from career_agent.errors import RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError
-from career_agent.experience_bullets.models import ExperienceBullet
-from career_agent.experience_bullets.repository import ExperienceBulletRepository
+from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.repository import RoleSourceRepository
 
 
-class ExperienceBulletService:
-    """Application behavior for canonical experience bullets."""
+class ExperienceFactService:
+    """Application behavior for canonical experience facts."""
 
     def __init__(
         self,
-        bullet_repository: ExperienceBulletRepository,
+        fact_repository: ExperienceFactRepository,
         role_repository: ExperienceRoleRepository,
         source_repository: RoleSourceRepository,
     ) -> None:
-        self.bullet_repository = bullet_repository
+        self.fact_repository = fact_repository
         self.role_repository = role_repository
         self.source_repository = source_repository
 
-    def list_bullets(self, role_id: str | None = None) -> list[ExperienceBullet]:
-        """Return saved bullets, optionally filtered by role id."""
+    def list_facts(self, role_id: str | None = None) -> list[ExperienceFact]:
+        """Return saved facts, optionally filtered by role id."""
 
-        return self.bullet_repository.list(role_id=role_id)
+        return self.fact_repository.list(role_id=role_id)
 
-    def get_bullet(self, bullet_id: str) -> ExperienceBullet | None:
-        """Return one saved bullet if it exists."""
+    def get_fact(self, fact_id: str) -> ExperienceFact | None:
+        """Return one saved fact if it exists."""
 
-        return self.bullet_repository.get(bullet_id)
+        return self.fact_repository.get(fact_id)
 
-    def add_bullet(
+    def add_fact(
         self,
         role_id: str,
         text: str,
         source_ids: list[str] | None = None,
-    ) -> ExperienceBullet:
-        """Create a canonical bullet for an existing role."""
+    ) -> ExperienceFact:
+        """Create a canonical fact for an existing role."""
 
         self._validate_role_and_sources(role_id=role_id, source_ids=source_ids or [])
-        bullet = ExperienceBullet(
+        fact = ExperienceFact(
             role_id=role_id,
             source_ids=source_ids or [],
             text=text,
         )
-        self.bullet_repository.save(bullet)
-        return bullet
+        self.fact_repository.save(fact)
+        return fact
 
-    def save_bullet(self, bullet: ExperienceBullet) -> None:
-        """Persist an existing bullet after validating its references."""
+    def save_fact(self, fact: ExperienceFact) -> None:
+        """Persist an existing fact after validating its references."""
 
-        self._validate_role_and_sources(role_id=bullet.role_id, source_ids=bullet.source_ids)
-        self.bullet_repository.save(bullet)
+        self._validate_role_and_sources(role_id=fact.role_id, source_ids=fact.source_ids)
+        self.fact_repository.save(fact)
 
-    def delete_bullet(self, bullet_id: str) -> bool:
-        """Delete one saved bullet by identifier."""
+    def delete_fact(self, fact_id: str) -> bool:
+        """Delete one saved fact by identifier."""
 
-        return self.bullet_repository.delete(bullet_id)
+        return self.fact_repository.delete(fact_id)
 
     def _validate_role_and_sources(self, role_id: str, source_ids: list[str]) -> None:
         """Validate that role and source references are internally consistent."""

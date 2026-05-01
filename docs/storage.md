@@ -49,15 +49,15 @@ Role Sources are stored as:
       <timestamp>-role_sources.json
 ```
 
-Experience Bullets are stored as:
+Experience Facts are stored as:
 
 ```text
 <data_dir>/
-  experience_bullets/
-    experience_bullets.json
+  experience_facts/
+    experience_facts.json
   snapshots/
-    experience_bullets/
-      <timestamp>-experience_bullets.json
+    experience_facts/
+      <timestamp>-experience_facts.json
 ```
 
 Source Analysis artifacts are stored as table-like JSON files:

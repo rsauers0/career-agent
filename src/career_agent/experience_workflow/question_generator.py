@@ -87,7 +87,7 @@ class DeterministicSourceQuestionGenerator:
             GeneratedSourceQuestion(
                 question_text=(
                     f"DEV PLACEHOLDER: For {role_label}, are there tools, technologies, "
-                    "stakeholders, or scope details that should be captured before bullet "
+                    "stakeholders, or scope details that should be captured before fact "
                     "generation?"
                 ),
                 relevant_source_ids=source_ids,

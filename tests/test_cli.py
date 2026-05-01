@@ -2,8 +2,8 @@ from typer.testing import CliRunner
 
 from career_agent.cli import app
 from career_agent.config import get_settings
-from career_agent.experience_bullets.models import ExperienceBullet
-from career_agent.experience_bullets.repository import ExperienceBulletRepository
+from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
@@ -618,20 +618,20 @@ def test_sources_delete_removes_saved_source(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
-def test_bullets_list_reports_missing_bullets(monkeypatch, tmp_path) -> None:
+def test_facts_list_reports_missing_facts(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
     runner = CliRunner()
 
-    result = runner.invoke(app, ["bullets", "list"])
+    result = runner.invoke(app, ["facts", "list"])
 
     assert result.exit_code == 0
-    assert "No experience bullets saved yet." in result.output
+    assert "No experience facts saved yet." in result.output
 
     get_settings.cache_clear()
 
 
-def test_bullets_add_writes_bullet(monkeypatch, tmp_path) -> None:
+def test_facts_add_writes_fact(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
     ExperienceRoleRepository(tmp_path).save(
@@ -655,7 +655,7 @@ def test_bullets_add_writes_bullet(monkeypatch, tmp_path) -> None:
     result = runner.invoke(
         app,
         [
-            "bullets",
+            "facts",
             "add",
             "--role-id",
             "role-1",
@@ -666,19 +666,19 @@ def test_bullets_add_writes_bullet(monkeypatch, tmp_path) -> None:
         ],
     )
 
-    bullets = ExperienceBulletRepository(tmp_path).list(role_id="role-1")
+    facts = ExperienceFactRepository(tmp_path).list(role_id="role-1")
 
     assert result.exit_code == 0
-    assert "Saved experience bullet." in result.output
-    assert "Bullet ID:" in result.output
-    assert len(bullets) == 1
-    assert bullets[0].text == "Automated reporting workflows."
-    assert bullets[0].source_ids == ["source-1"]
+    assert "Saved experience fact." in result.output
+    assert "Fact ID:" in result.output
+    assert len(facts) == 1
+    assert facts[0].text == "Automated reporting workflows."
+    assert facts[0].source_ids == ["source-1"]
 
     get_settings.cache_clear()
 
 
-def test_bullets_add_reports_missing_role(monkeypatch, tmp_path) -> None:
+def test_facts_add_reports_missing_role(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
     runner = CliRunner()
@@ -686,7 +686,7 @@ def test_bullets_add_reports_missing_role(monkeypatch, tmp_path) -> None:
     result = runner.invoke(
         app,
         [
-            "bullets",
+            "facts",
             "add",
             "--role-id",
             "missing-role",
@@ -701,7 +701,7 @@ def test_bullets_add_reports_missing_role(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
-def test_bullets_add_reports_missing_source(monkeypatch, tmp_path) -> None:
+def test_facts_add_reports_missing_source(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
     ExperienceRoleRepository(tmp_path).save(
@@ -718,7 +718,7 @@ def test_bullets_add_reports_missing_source(monkeypatch, tmp_path) -> None:
     result = runner.invoke(
         app,
         [
-            "bullets",
+            "facts",
             "add",
             "--role-id",
             "role-1",
@@ -735,12 +735,12 @@ def test_bullets_add_reports_missing_source(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
-def test_bullets_list_renders_saved_bullets(monkeypatch, tmp_path) -> None:
+def test_facts_list_renders_saved_facts(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
-    ExperienceBulletRepository(tmp_path).save(
-        ExperienceBullet(
-            id="bullet-1",
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
             role_id="role-1",
             source_ids=["source-1"],
             text="Automated reporting workflows.",
@@ -748,31 +748,31 @@ def test_bullets_list_renders_saved_bullets(monkeypatch, tmp_path) -> None:
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["bullets", "list"], env={"COLUMNS": "160"})
+    result = runner.invoke(app, ["facts", "list"], env={"COLUMNS": "160"})
 
     assert result.exit_code == 0
-    assert "Experience Bullets" in result.output
-    assert "bullet-1" in result.output
+    assert "Experience Facts" in result.output
+    assert "fact-1" in result.output
     assert "role-1" in result.output
     assert "Automated reporting workflows." in result.output
 
     get_settings.cache_clear()
 
 
-def test_bullets_list_filters_by_role_id(monkeypatch, tmp_path) -> None:
+def test_facts_list_filters_by_role_id(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
-    repository = ExperienceBulletRepository(tmp_path)
+    repository = ExperienceFactRepository(tmp_path)
     repository.save(
-        ExperienceBullet(
-            id="bullet-1",
+        ExperienceFact(
+            id="fact-1",
             role_id="role-1",
             text="Automated reporting workflows.",
         )
     )
     repository.save(
-        ExperienceBullet(
-            id="bullet-2",
+        ExperienceFact(
+            id="fact-2",
             role_id="role-2",
             text="Built a service trend dashboard.",
         )
@@ -781,23 +781,23 @@ def test_bullets_list_filters_by_role_id(monkeypatch, tmp_path) -> None:
 
     result = runner.invoke(
         app,
-        ["bullets", "list", "--role-id", "role-1"],
+        ["facts", "list", "--role-id", "role-1"],
         env={"COLUMNS": "160"},
     )
 
     assert result.exit_code == 0
-    assert "bullet-1" in result.output
-    assert "bullet-2" not in result.output
+    assert "fact-1" in result.output
+    assert "fact-2" not in result.output
 
     get_settings.cache_clear()
 
 
-def test_bullets_show_renders_saved_bullet(monkeypatch, tmp_path) -> None:
+def test_facts_show_renders_saved_fact(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
-    ExperienceBulletRepository(tmp_path).save(
-        ExperienceBullet(
-            id="bullet-1",
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
             role_id="role-1",
             source_ids=["source-1"],
             text="Automated reporting workflows.",
@@ -805,11 +805,11 @@ def test_bullets_show_renders_saved_bullet(monkeypatch, tmp_path) -> None:
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["bullets", "show", "bullet-1"])
+    result = runner.invoke(app, ["facts", "show", "fact-1"])
 
     assert result.exit_code == 0
-    assert "Experience Bullet" in result.output
-    assert "bullet-1" in result.output
+    assert "Experience Fact" in result.output
+    assert "fact-1" in result.output
     assert "role-1" in result.output
     assert "source-1" in result.output
     assert "Automated reporting workflows." in result.output
@@ -817,37 +817,37 @@ def test_bullets_show_renders_saved_bullet(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
-def test_bullets_show_reports_missing_bullet(monkeypatch, tmp_path) -> None:
+def test_facts_show_reports_missing_fact(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
     runner = CliRunner()
 
-    result = runner.invoke(app, ["bullets", "show", "missing-bullet"])
+    result = runner.invoke(app, ["facts", "show", "missing-fact"])
 
     assert result.exit_code != 0
-    assert "No experience bullet found for id: missing-bullet" in result.output
+    assert "No experience fact found for id: missing-fact" in result.output
 
     get_settings.cache_clear()
 
 
-def test_bullets_delete_removes_saved_bullet(monkeypatch, tmp_path) -> None:
+def test_facts_delete_removes_saved_fact(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
-    repository = ExperienceBulletRepository(tmp_path)
+    repository = ExperienceFactRepository(tmp_path)
     repository.save(
-        ExperienceBullet(
-            id="bullet-1",
+        ExperienceFact(
+            id="fact-1",
             role_id="role-1",
             text="Automated reporting workflows.",
         )
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["bullets", "delete", "bullet-1"])
+    result = runner.invoke(app, ["facts", "delete", "fact-1"])
 
     assert result.exit_code == 0
-    assert "Deleted experience bullet." in result.output
-    assert repository.get("bullet-1") is None
+    assert "Deleted experience fact." in result.output
+    assert repository.get("fact-1") is None
 
     get_settings.cache_clear()
 

@@ -12,14 +12,14 @@ flowchart LR
     ExperienceRoles["Experience Roles<br/>Structured role facts"]
     RoleSources["Role Sources<br/>Raw submitted evidence"]
     SourceAnalysis["Source Analysis<br/>Runs, questions, messages"]
-    ExperienceBullets["Experience Bullets<br/>Canonical career bullets"]
+    ExperienceFacts["Experience Facts<br/>Canonical career facts"]
 
     ExperienceRoles -->|"role_id"| RoleSources
     ExperienceRoles -->|"role_id"| SourceAnalysis
     RoleSources -->|"source_ids"| SourceAnalysis
-    ExperienceRoles -->|"role_id"| ExperienceBullets
-    RoleSources -. "source_ids" .-> ExperienceBullets
-    SourceAnalysis -. "future clarification context" .-> ExperienceBullets
+    ExperienceRoles -->|"role_id"| ExperienceFacts
+    RoleSources -. "source_ids" .-> ExperienceFacts
+    SourceAnalysis -. "future clarification context" .-> ExperienceFacts
 
     UserPreferences -. "future job matching context" .-> ExperienceRoles
 ```
@@ -46,28 +46,28 @@ flowchart TD
 
 The CLI parses input and renders output. Services own workflow rules. Repositories own local persistence. Pydantic models own validation and JSON serialization.
 
-## Role Source To Bullet Flow
+## Role Source To Fact Flow
 
-This diagram shows the current deterministic flow from role facts and source material into canonical bullets.
+This diagram shows the current deterministic flow from role facts and source material into canonical facts.
 
 ```mermaid
 flowchart TD
     Role["Experience Role<br/>employer, title, dates, role_focus"]
     Source["Role Source<br/>raw submitted evidence"]
-    BulletService["ExperienceBulletService<br/>validates references"]
-    Bullet["Experience Bullet<br/>canonical career data"]
+    FactService["ExperienceFactService<br/>validates references"]
+    Fact["Experience Fact<br/>canonical career data"]
 
-    Role -->|"must exist"| BulletService
-    Source -->|"optional source_ids must exist"| BulletService
-    BulletService -->|"creates or updates"| Bullet
+    Role -->|"must exist"| FactService
+    Source -->|"optional source_ids must exist"| FactService
+    FactService -->|"creates or updates"| Fact
     Role -->|"role_id"| Source
-    Role -->|"role_id"| Bullet
-    Source -. "traceability" .-> Bullet
+    Role -->|"role_id"| Fact
+    Source -. "traceability" .-> Fact
 ```
 
 ## Source Analysis Workflow
 
-Source Analysis stores workflow evidence for clarifying submitted role source material. It does not directly create canonical bullets.
+Source Analysis stores workflow evidence for clarifying submitted role source material. It does not directly create canonical facts.
 
 ```mermaid
 flowchart TD
@@ -109,13 +109,13 @@ flowchart LR
     LLMWorkflow["Future LLM Workflow<br/>questions, proposals, evals"]
     AnalysisArtifacts["Analysis Artifacts<br/>source_analysis,<br/>eval results, failed proposals"]
     Services["Deterministic Services<br/>validate and apply changes"]
-    CanonicalBullets["Canonical Bullets<br/>experience_bullets"]
+    CanonicalFacts["Canonical Facts<br/>experience_facts"]
 
     RawEvidence --> LLMWorkflow
     RoleFacts --> LLMWorkflow
     LLMWorkflow --> AnalysisArtifacts
     LLMWorkflow -->|"structured proposal"| Services
-    Services -->|"validated write"| CanonicalBullets
+    Services -->|"validated write"| CanonicalFacts
     Services -. "reject or retain as artifact" .-> AnalysisArtifacts
 ```
 
@@ -210,13 +210,13 @@ flowchart TD
     DataDir --> Preferences["user_preferences/user_preferences.json"]
     DataDir --> Roles["experience_roles/experience_roles.json"]
     DataDir --> Sources["role_sources/role_sources.json"]
-    DataDir --> Bullets["experience_bullets/experience_bullets.json"]
+    DataDir --> Facts["experience_facts/experience_facts.json"]
     DataDir --> Analysis["source_analysis/*.json"]
     DataDir --> Snapshots["snapshots/"]
 
     Snapshots --> PreferenceSnapshots["user_preferences/<timestamp>-user_preferences.json"]
     Snapshots --> RoleSnapshots["experience_roles/<timestamp>-experience_roles.json"]
     Snapshots --> SourceSnapshots["role_sources/<timestamp>-role_sources.json"]
-    Snapshots --> BulletSnapshots["experience_bullets/<timestamp>-experience_bullets.json"]
+    Snapshots --> FactSnapshots["experience_facts/<timestamp>-experience_facts.json"]
     Snapshots --> AnalysisSnapshots["source_analysis/<timestamp>-*.json"]
 ```

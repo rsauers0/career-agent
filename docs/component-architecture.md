@@ -134,14 +134,14 @@ Examples of owned data:
 
 Role sources preserve submitted text exactly for traceability. They are separate from experience roles so the application can retain source evidence without mixing raw input into structured role facts.
 
-### Experience Bullets
+### Experience Facts
 
-Purpose: stores durable resume-style bullets linked to an experience role.
+Purpose: stores durable normalized experience facts linked to an experience role.
 
 Current files:
 
 ```text
-src/career_agent/experience_bullets/
+src/career_agent/experience_facts/
   models.py
   repository.py
   service.py
@@ -150,20 +150,20 @@ src/career_agent/experience_bullets/
 Current CLI group:
 
 ```bash
-career-agent bullets
+career-agent facts
 ```
 
 Examples of owned data:
 
 - role id
-- source ids used to support or derive the bullet
-- bullet text
+- source ids used to support or derive the fact
+- fact text
 - lifecycle status
 - creation and update timestamps
 
-Experience bullets are the current canonical career data component. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles. Bullets do not currently include tags or inferred classifications.
+Experience facts are the current canonical career data component. Draft facts are canonical fact records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles. Facts do not currently include tags or inferred classifications.
 
-Future evidence-normalization work should distinguish canonical experience facts from persuasive resume bullets. The existing `ExperienceBullet` name may not remain the best long-term name for this source-of-truth layer. Experience facts should document duties, functions, achievements, scope, systems, tools, and metrics in plain professional language. They are source-of-truth career evidence for later job-fit analysis, resumes, and cover letters; they should not bridge gaps, inflate scope, or use creative resume wording.
+Experience facts should be distinguished from persuasive resume bullets. Experience facts should document duties, functions, achievements, scope, systems, tools, and metrics in plain professional language. They are source-of-truth career evidence for later job-fit analysis, resumes, and cover letters; they should not bridge gaps, inflate scope, or use creative resume wording.
 
 ### Source Analysis
 

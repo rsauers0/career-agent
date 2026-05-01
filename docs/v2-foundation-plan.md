@@ -81,17 +81,17 @@ Build source material as a separate component:
 
 Role Sources are related to Experience Roles, but they are not owned by the Experience Role repository. Keeping them separate preserves traceability and prevents raw source material from being mixed into structured role facts.
 
-### 4. Experience Bullets
+### 4. Experience Facts
 
-Build durable resume-style bullet records as a separate component:
+Build durable normalized experience fact records as a separate component:
 
-- bullets linked to experience roles by `role_id`
+- facts linked to experience roles by `role_id`
 - optional source id traceability
-- bullet text
-- bullet lifecycle status: draft, active, archived
+- fact text
+- fact lifecycle status: draft, active, archived
 - no tags or inferred classifications in the first pass
 
-Experience Bullets are canonical career data. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles.
+Experience Facts are canonical career data. Draft facts are canonical fact records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles.
 
 ### 5. Source Analysis
 
@@ -104,7 +104,7 @@ Build analysis artifacts before the full AI workflow harness:
 - message threads linked to clarification questions
 - analysis and question lifecycle statuses
 
-Source Analysis is workflow evidence, not canonical career data. It gives the future LLM harness a deterministic place to store questions, user responses, and traceability without mixing that material into roles, sources, or bullets.
+Source Analysis is workflow evidence, not canonical career data. It gives the future LLM harness a deterministic place to store questions, user responses, and traceability without mixing that material into roles, sources, or facts.
 
 Only one active Source Analysis run should exist per experience role. This prevents a user from starting a second analysis session for the same role before the existing one has been completed or archived.
 
@@ -127,7 +127,7 @@ The TUI should not drive this design. The CLI/dev harness should make every stat
 
 Question resolution should remain explicit. A future LLM workflow may recommend that a clarification thread is complete, but the workflow should call a deterministic transition that can later include eval approval.
 
-The initial deterministic harness starts source analysis for `not_analyzed` role sources only. Previously analyzed sources should not be re-ingested as raw source material; later workflow passes can use existing bullets as structured context instead.
+The initial deterministic harness starts source analysis for `not_analyzed` role sources only. Previously analyzed sources should not be re-ingested as raw source material; later workflow passes can use existing facts as structured context instead.
 
 Source question generation should use a structured proposal boundary. The deterministic generator returns `GeneratedSourceQuestion` values with question text and relevant source ids. The LLM-backed generator replaces the generator implementation, not the workflow orchestration.
 
@@ -210,7 +210,7 @@ Role Sources
   -> CLI
   -> tests
 
-Experience Bullets
+Experience Facts
   -> model
   -> repository
   -> service
