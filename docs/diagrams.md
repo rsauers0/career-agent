@@ -132,25 +132,25 @@ flowchart TD
     Analysis["Source Analysis<br/>questions and messages"]
     Orchestrator["LLM Orchestrator<br/>small structured steps"]
     Constraints["Scoped Constraints<br/>global, role, project, proposal"]
-    FactProposals["Experience Fact Proposals<br/>grounded, generic, traceable"]
+    DraftFacts["Draft Experience Facts<br/>grounded, generic, traceable"]
     Revision["Revision Thread<br/>user + assistant collaboration"]
     Events["FactChangeEvent<br/>actor, event type,<br/>summary, message ids"]
-    ApprovedFacts["Approved Experience Facts<br/>canonical evidence,<br/>reference lists"]
+    ActiveFacts["Active Experience Facts<br/>canonical evidence,<br/>reference lists"]
     Derived["Derived Evidence Indexes<br/>cross-role skills,<br/>systems, capabilities"]
     Tailoring["Future Tailoring<br/>job fit, resumes,<br/>cover letters"]
 
     RawSources --> Analysis
     Analysis --> Orchestrator
     Constraints --> Orchestrator
-    Orchestrator -->|"propose / revise"| FactProposals
-    FactProposals --> Revision
+    Orchestrator -->|"create / revise"| DraftFacts
+    DraftFacts --> Revision
     Revision -->|"corrections may create"| Constraints
     Revision -->|"semantic history"| Events
-    Revision -->|"approval transition"| ApprovedFacts
-    ApprovedFacts -. "changes recorded in" .-> Events
-    ApprovedFacts --> Derived
+    Revision -->|"activation transition"| ActiveFacts
+    ActiveFacts -. "changes recorded in" .-> Events
+    ActiveFacts --> Derived
     Derived --> Tailoring
-    ApprovedFacts --> Tailoring
+    ActiveFacts --> Tailoring
 ```
 
 Experience facts are still data normalization. They should use plain,
@@ -169,8 +169,8 @@ merge checking, and clarification planning. Application services still own
 persistence and explicit state transitions.
 
 History has separate responsibilities: messages capture conversational rationale,
-change events capture semantic fact/proposal mutations, and snapshots remain
-file-level recovery artifacts.
+change events capture semantic fact mutations and lifecycle transitions, and
+snapshots remain file-level recovery artifacts.
 
 ## LLM Boundary
 

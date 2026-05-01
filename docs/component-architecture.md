@@ -129,10 +129,11 @@ Examples of owned data:
 
 - role id
 - submitted source text
+- optional related experience fact ids when a user adds source material because of a specific fact
 - source analysis status
 - creation timestamp
 
-Role sources preserve submitted text exactly for traceability. They are separate from experience roles so the application can retain source evidence without mixing raw input into structured role facts.
+Role sources preserve submitted text exactly for traceability. They are separate from experience roles so the application can retain source evidence without mixing raw input into structured role facts. A source can be related to one or more experience facts, but it remains role-owned source evidence. Fact-related sources should still be analyzed against the role's existing facts to check for support, revision needs, duplication, contradiction, or unsafe merge pressure.
 
 ### Experience Facts
 
@@ -164,7 +165,30 @@ Examples of owned data:
 - lifecycle status
 - creation and update timestamps
 
-Experience facts are the current canonical career data component. Draft facts are canonical fact records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles. Fact records may carry lightweight reference lists for systems, skills, and functions when those references are grounded in the fact evidence; broad inferred classifications should still wait for later derived-evidence workflows.
+Experience facts are the current canonical career data component. Draft facts are canonical fact records that are visible for review but not active yet. Proposed facts should be represented as `ExperienceFact` records in `draft` status, not as a parallel proposal component. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles. Fact records may carry lightweight reference lists for systems, skills, and functions when those references are grounded in the fact evidence; broad inferred classifications should still wait for later derived-evidence workflows.
+
+Experience fact lifecycle statuses should be:
+
+- `draft`: proposed or user-entered fact visible for review
+- `needs_clarification`: evidence is insufficient or conflicting
+- `active`: accepted source-of-truth fact
+- `rejected`: reviewed and not accepted
+- `superseded`: replaced by a newer fact
+- `archived`: removed from active use without necessarily being wrong
+
+The service should enforce lifecycle transitions strictly:
+
+- `draft` -> `active`
+- `draft` -> `needs_clarification`
+- `draft` -> `rejected`
+- `needs_clarification` -> `draft`
+- `needs_clarification` -> `rejected`
+- `active` -> `superseded`
+- `active` -> `archived`
+- `rejected` -> `archived`
+- `superseded` -> `archived`
+
+Draft and needs-clarification facts can be edited in place. Active facts should not be edited in place; revisions should create a new draft fact that references the active fact through `supersedes_fact_id`. When that draft revision becomes active, the prior active fact should move to `superseded` and reference the new fact through `superseded_by_fact_id`. Rejected, superseded, and archived facts should not be revised in place.
 
 Experience facts should be distinguished from persuasive resume bullets. Experience facts should document duties, functions, achievements, scope, systems, tools, and metrics in plain professional language. They are source-of-truth career evidence for later job-fit analysis, resumes, and cover letters; they should not bridge gaps, inflate scope, or use creative resume wording.
 
@@ -311,15 +335,15 @@ Expected flow:
 ```text
 raw role source material
   -> source analysis questions and messages
-  -> experience fact proposals
+  -> draft experience facts
   -> user/assistant revision thread
-  -> approved experience facts
+  -> active experience facts
   -> fact-level reference lists for skills, systems, tools, technologies, and functions
   -> derived cross-role evidence indexes and capabilities
   -> job-fit analysis and tailored documents
 ```
 
-Experience fact proposals should be grounded in referenced material. Each proposed fact should point back to supporting source ids, question ids, and message ids. Those ids should be append-only evidence references; later revisions can add additional support, but should not erase the original trail. Missing evidence should produce either a missing-evidence note or another clarification question, not an invented fact.
+Experience fact drafts should be grounded in referenced material. Each draft fact should point back to supporting source ids, question ids, and message ids. Those ids should be append-only evidence references; later revisions can add additional support, but should not erase the original trail. Missing evidence should produce either a missing-evidence note or another clarification question, not an invented fact.
 
 This is still the data normalization phase. The goal is a detailed, reusable accounting of the user's actual duties, functions, achievements, systems, tools, scope, and metrics. Persuasive tailoring belongs to later job-specific document generation.
 
@@ -334,7 +358,7 @@ Writing standards for normalized facts:
 
 Merge behavior should be conservative. Similar wording, similar metrics, or shared tools are not enough to combine facts. A generated fact should merge evidence only when it is clearly the same work, same project or process, same metric context, and same outcome.
 
-Fact history should stay separate from the canonical fact record. Messages capture the conversational why; snapshots provide file-level backup; a lightweight `FactChangeEvent` table should capture semantic system changes such as created, revised, accepted, archived, or constraint-created. Change events should use `actor` for the responsible party and link back to source message ids when a user or assistant exchange caused the change.
+Fact history should stay separate from the canonical fact record. Messages capture the conversational why; snapshots provide file-level backup; a lightweight `FactChangeEvent` table should capture semantic system changes such as created, revised, accepted, rejected, clarification-needed, superseded, archived, or constraint-created. Change events should use `actor` for the responsible party and link back to source message ids when a user or assistant exchange caused the change.
 
 ### Scoped Constraints
 
@@ -361,7 +385,7 @@ Candidate orchestration steps:
 - classify a user response as answer, correction, preference, constraint, rejection, or question
 - extract scoped constraints from user corrections and preferences
 - propose or revise normalized experience facts
-- check proposed facts for drift beyond cited evidence
+- check draft facts for drift beyond cited evidence
 - check whether similar facts are safe to merge or must remain separate
 - plan follow-up clarification questions when evidence is missing
 - recommend explicit status transitions, while deterministic services apply them

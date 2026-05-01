@@ -233,6 +233,16 @@ uv run career-agent facts add \
   --supersedes-fact-id <fact-id>
 ```
 
+Future lifecycle commands should follow the same noun/action CLI shape:
+
+```bash
+uv run career-agent facts activate <fact-id>
+uv run career-agent facts needs-clarification <fact-id> --reason "Metric needs supporting evidence."
+uv run career-agent facts reject <fact-id> --reason "Unsupported scope expansion."
+uv run career-agent facts archive <fact-id>
+uv run career-agent facts revise <fact-id> --text "Revised grounded fact text."
+```
+
 Delete one saved fact:
 
 ```bash

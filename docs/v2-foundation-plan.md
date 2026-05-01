@@ -91,10 +91,20 @@ Build durable normalized experience fact records as a separate component:
 - optional second-level details
 - grounded reference lists for systems, skills, and functions
 - revision links for superseded and superseding facts
-- fact lifecycle status: draft, active, superseded, archived
+- fact lifecycle status: draft, needs_clarification, active, rejected, superseded, archived
 - no broad inferred classifications in the first pass
 
-Experience Facts are canonical career data. Draft facts are canonical fact records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles.
+Experience Facts are canonical career data. Draft facts are canonical fact records that are visible for review but not active yet. Proposed facts should be represented as draft `ExperienceFact` records, not as a separate proposal component. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles.
+
+Experience fact services should strictly enforce status transitions:
+
+- `draft` -> `active`, `needs_clarification`, or `rejected`
+- `needs_clarification` -> `draft` or `rejected`
+- `active` -> `superseded` or `archived`
+- `rejected` -> `archived`
+- `superseded` -> `archived`
+
+Draft and needs-clarification facts can be edited in place. Active facts should be revised by creating a new draft fact with `supersedes_fact_id`; activation of that revision should supersede the prior active fact. Rejected, superseded, and archived facts should not be revised in place.
 
 ### 5. Source Analysis
 
@@ -120,11 +130,11 @@ Build as CLI/dev workflow first:
 - use Source Analysis to create clarification questions
 - capture clarification messages
 - resolve or skip questions when enough evidence exists
-- generate normalized experience fact proposals
-- preserve user/assistant revision threads for proposed facts
-- apply approved experience facts through service methods
-- compile grounded systems, skills, and functions on approved facts
-- derive cross-role evidence indexes and capabilities from approved facts later
+- generate normalized draft experience facts
+- preserve user/assistant revision threads for draft facts
+- activate accepted experience facts through service methods
+- compile grounded systems, skills, and functions on active facts
+- derive cross-role evidence indexes and capabilities from active facts later
 - mark role reviewed only when validation passes
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
@@ -139,11 +149,13 @@ The first LLM-backed source question generator uses the same boundary. It calls 
 
 The workflow should check for an existing active run before question generation, then generate valid question proposals before creating the Source Analysis run. A failed generator should not leave an active run behind.
 
-The next output layer should be experience fact proposals, not final resume bullets. Experience facts should normalize source material into grounded, generic, reusable career evidence. They should document duties, functions, achievements, scope, systems, tools, and metrics without adding unsupported complexity or persuasive resume language.
+The next output layer should be draft experience facts, not final resume bullets. Experience facts should normalize source material into grounded, generic, reusable career evidence. They should document duties, functions, achievements, scope, systems, tools, and metrics without adding unsupported complexity or persuasive resume language.
 
-Each proposed fact should reference supporting sources, questions, and messages. Those references should be append-only so later revisions preserve the original evidence trail while adding new support. If the evidence is missing, unclear, or conflicting, the workflow should ask another question or record missing evidence instead of fabricating a fact.
+Each draft fact should reference supporting sources, questions, and messages. Those references should be append-only so later revisions preserve the original evidence trail while adding new support. If the evidence is missing, unclear, or conflicting, the workflow should ask another question or record missing evidence instead of fabricating a fact.
 
 User review should be collaborative. A proposal may have a revision thread where the user corrects wording, supplies additional evidence, asks for a split, or rejects unsupported phrasing. Those messages should remain part of the historical chain for future analysis.
+
+When a user supplies new information during fact review, the durable evidence should be stored as role source material and may optionally link to related fact ids. Even fact-specific source additions should remain role-owned and should be analyzed against the role's existing facts for duplication, contradiction, support, revision needs, and merge risk.
 
 User corrections may create scoped constraints. A single correction can produce multiple durable rules, such as global writing preferences or role/project/proposal-specific hard rules. The first implementation should start with global and role scopes, then add more specific scopes as new components need them. Constraints should be linked to the source message and loaded by later LLM workflows that operate within the same scope.
 
