@@ -121,6 +121,57 @@ flowchart LR
 
 This is the core guardrail model: AI can reason and propose, but application services enforce boundaries before canonical data changes.
 
+## Experience Evidence Normalization Direction
+
+The next workflow stage should normalize source analysis evidence into grounded
+experience facts before any persuasive resume or cover-letter writing happens.
+
+```mermaid
+flowchart TD
+    RawSources["Role Sources<br/>raw evidence"]
+    Analysis["Source Analysis<br/>questions and messages"]
+    Orchestrator["LLM Orchestrator<br/>small structured steps"]
+    Constraints["Scoped Constraints<br/>global, role, project, proposal"]
+    FactProposals["Experience Fact Proposals<br/>grounded, generic, traceable"]
+    Revision["Revision Thread<br/>user + assistant collaboration"]
+    Events["FactChangeEvent<br/>actor, event type,<br/>summary, message ids"]
+    ApprovedFacts["Approved Experience Facts<br/>canonical evidence"]
+    Derived["Derived Evidence<br/>skills, systems, tools,<br/>technologies, capabilities"]
+    Tailoring["Future Tailoring<br/>job fit, resumes,<br/>cover letters"]
+
+    RawSources --> Analysis
+    Analysis --> Orchestrator
+    Constraints --> Orchestrator
+    Orchestrator -->|"propose / revise"| FactProposals
+    FactProposals --> Revision
+    Revision -->|"corrections may create"| Constraints
+    Revision -->|"semantic history"| Events
+    Revision -->|"approval transition"| ApprovedFacts
+    ApprovedFacts -. "changes recorded in" .-> Events
+    ApprovedFacts --> Derived
+    Derived --> Tailoring
+    ApprovedFacts --> Tailoring
+```
+
+Experience facts are still data normalization. They should use plain,
+professional, reusable terminology and must stay grounded in cited source,
+question, and message evidence. If evidence is missing, the workflow should ask
+for clarification or record missing evidence rather than inventing scope,
+metrics, or responsibilities.
+
+Fact merging should be conservative. Similar wording, similar metrics, or shared
+tools do not prove that two facts describe the same work. Unclear merges should
+remain separate until the user or evidence confirms they belong together.
+
+Future LLM behavior should be orchestrated as narrow checklist steps, such as
+response classification, constraint extraction, fact proposal, drift checking,
+merge checking, and clarification planning. Application services still own
+persistence and explicit state transitions.
+
+History has separate responsibilities: messages capture conversational rationale,
+change events capture semantic fact/proposal mutations, and snapshots remain
+file-level recovery artifacts.
+
 ## LLM Boundary
 
 The current LLM boundary has a provider-neutral client protocol plus an opt-in

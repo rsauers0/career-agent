@@ -161,7 +161,9 @@ Examples of owned data:
 - lifecycle status
 - creation and update timestamps
 
-Experience bullets are canonical career data. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles. Bullets do not currently include tags or inferred classifications.
+Experience bullets are the current canonical career data component. Draft bullets are canonical bullet records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical bullets. Role-level review remains on Experience Roles. Bullets do not currently include tags or inferred classifications.
+
+Future evidence-normalization work should distinguish canonical experience facts from persuasive resume bullets. The existing `ExperienceBullet` name may not remain the best long-term name for this source-of-truth layer. Experience facts should document duties, functions, achievements, scope, systems, tools, and metrics in plain professional language. They are source-of-truth career evidence for later job-fit analysis, resumes, and cover letters; they should not bridge gaps, inflate scope, or use creative resume wording.
 
 ### Source Analysis
 
@@ -191,7 +193,7 @@ Examples of owned data:
 - question and analysis lifecycle statuses
 - table-like JSON files for runs, questions, and messages
 
-Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and bullet proposal generation. Canonical data changes should still be applied through deterministic services.
+Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and experience fact proposal generation. Canonical data changes should still be applied through deterministic services.
 
 Clarification messages are append-only conversation turns. They do not resolve questions by themselves; question closure requires an explicit `resolve` or `skip` transition.
 
@@ -296,3 +298,65 @@ CLI / TUI / FastAPI / LLM workflow
 ```
 
 LLM behavior should produce structured proposals. Services should validate and apply those proposals deterministically.
+
+### Grounded Experience Evidence
+
+The next experience workflow layer should normalize analyzed source material into grounded experience facts before any resume-specific writing occurs.
+
+Expected flow:
+
+```text
+raw role source material
+  -> source analysis questions and messages
+  -> experience fact proposals
+  -> user/assistant revision thread
+  -> approved experience facts
+  -> derived skills, systems, tools, technologies, and capabilities
+  -> job-fit analysis and tailored documents
+```
+
+Experience fact proposals should be grounded in referenced material. Each proposed fact should point back to supporting source ids, question ids, and message ids. Missing evidence should produce either a missing-evidence note or another clarification question, not an invented fact.
+
+This is still the data normalization phase. The goal is a detailed, reusable accounting of the user's actual duties, functions, achievements, systems, tools, scope, and metrics. Persuasive tailoring belongs to later job-specific document generation.
+
+Writing standards for normalized facts:
+
+- prefer generic, reusable terminology over persuasive resume language
+- document role functions, duties, achievements, scope, tools, systems, and metrics
+- preserve exact metrics and technologies only when supported by evidence
+- avoid artificial scope expansion, inflated verbs, and target-job tailoring
+- keep similar-but-not-proven-same work items separate
+
+Merge behavior should be conservative. Similar wording, similar metrics, or shared tools are not enough to combine facts. A generated fact should merge evidence only when it is clearly the same work, same project or process, same metric context, and same outcome.
+
+Fact history should stay separate from the canonical fact record. Messages capture the conversational why; snapshots provide file-level backup; a lightweight `FactChangeEvent` table should capture semantic system changes such as created, revised, accepted, archived, or constraint-created. Change events should use `actor` for the responsible party and link back to source message ids when a user or assistant exchange caused the change.
+
+### Scoped Constraints
+
+User corrections and hard preferences should become durable constraints when appropriate. Constraints may be global writing preferences or scoped evidence rules tied to a role, source, analysis run, proposal, fact, project, or message.
+
+Examples:
+
+- global: never use em dashes
+- global: avoid specific disliked words
+- role-scoped: do not describe this role as enterprise-level without explicit evidence
+- proposal-scoped: do not say the user deployed the system; describe the involvement as support oversight
+- project-scoped: do not merge two similarly measured automations unless they are confirmed to be the same project
+
+The first constraint scope types should be `global` and `role`; additional scopes such as cover letter, resume, proposal, fact, and project can be added when those components exist. Constraints should be represented as separate rule records rather than a single record containing multiple unrelated rules. A single user response may yield multiple constraints, all linked back to the source message for traceability.
+
+Constraints should distinguish `preference` from `hard_rule`. The LLM may propose severity during constraint extraction, but deterministic workflow and user approval should decide what becomes active.
+
+### LLM Orchestration Direction
+
+Future LLM behavior should be orchestrated as small structured steps, not one large prompt that performs every task. Each model call should have a narrow responsibility and a validated output contract. Application services remain responsible for persistence and state transitions.
+
+Candidate orchestration steps:
+
+- classify a user response as answer, correction, preference, constraint, rejection, or question
+- extract scoped constraints from user corrections and preferences
+- propose or revise normalized experience facts
+- check proposed facts for drift beyond cited evidence
+- check whether similar facts are safe to merge or must remain separate
+- plan follow-up clarification questions when evidence is missing
+- recommend explicit status transitions, while deterministic services apply them

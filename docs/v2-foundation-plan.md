@@ -117,8 +117,10 @@ Build as CLI/dev workflow first:
 - use Source Analysis to create clarification questions
 - capture clarification messages
 - resolve or skip questions when enough evidence exists
-- generate candidate bullet proposals
-- apply bullet proposals through service methods
+- generate normalized experience fact proposals
+- preserve user/assistant revision threads for proposed facts
+- apply approved experience facts through service methods
+- derive skills, systems, tools, technologies, and capabilities from approved facts later
 - mark role reviewed only when validation passes
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
@@ -132,6 +134,20 @@ Source question generation should use a structured proposal boundary. The determ
 The first LLM-backed source question generator uses the same boundary. It calls `LLMClient`, parses JSON, tolerates fenced JSON blocks, and rejects malformed or ungrounded output before questions are saved.
 
 The workflow should check for an existing active run before question generation, then generate valid question proposals before creating the Source Analysis run. A failed generator should not leave an active run behind.
+
+The next output layer should be experience fact proposals, not final resume bullets. Experience facts should normalize source material into grounded, generic, reusable career evidence. They should document duties, functions, achievements, scope, systems, tools, and metrics without adding unsupported complexity or persuasive resume language.
+
+Each proposed fact should reference supporting sources, questions, and messages. If the evidence is missing, unclear, or conflicting, the workflow should ask another question or record missing evidence instead of fabricating a fact.
+
+User review should be collaborative. A proposal may have a revision thread where the user corrects wording, supplies additional evidence, asks for a split, or rejects unsupported phrasing. Those messages should remain part of the historical chain for future analysis.
+
+User corrections may create scoped constraints. A single correction can produce multiple durable rules, such as global writing preferences or role/project/proposal-specific hard rules. The first implementation should start with global and role scopes, then add more specific scopes as new components need them. Constraints should be linked to the source message and loaded by later LLM workflows that operate within the same scope.
+
+Constraint extraction should separate preferences from hard rules. The LLM may propose severity, but deterministic workflow and user approval decide what becomes active.
+
+Historical traceability should not be stored directly on the canonical fact. Messages preserve conversational rationale, snapshots preserve file-level backups, and a lightweight fact change event record should preserve semantic changes with an `actor`, event type, summary, and source message ids.
+
+Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, fact proposal, drift checking, merge checking, clarification planning, and deterministic service transitions.
 
 ### 7. TUI
 
