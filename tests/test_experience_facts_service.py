@@ -1,6 +1,13 @@
 import pytest
 
-from career_agent.errors import RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError
+from career_agent.errors import (
+    EvidenceReferenceRemovalError,
+    FactNotFoundError,
+    FactRoleMismatchError,
+    RoleNotFoundError,
+    SourceNotFoundError,
+    SourceRoleMismatchError,
+)
 from career_agent.experience_facts.models import ExperienceFact, ExperienceFactStatus
 from career_agent.experience_facts.service import ExperienceFactService
 from career_agent.experience_roles.models import ExperienceRole
@@ -130,12 +137,70 @@ def test_experience_fact_service_adds_fact_for_existing_role() -> None:
         role_id="role-1",
         text="Automated reporting workflows.",
         source_ids=["source-1"],
+        question_ids=["question-1"],
+        message_ids=["message-1"],
+        details=["Reduced monthly reconciliation effort."],
+        systems=["Power Platform"],
+        skills=["Power Automate"],
+        functions=["workflow automation"],
     )
 
     assert fact.role_id == "role-1"
     assert fact.source_ids == ["source-1"]
+    assert fact.question_ids == ["question-1"]
+    assert fact.message_ids == ["message-1"]
     assert fact.text == "Automated reporting workflows."
+    assert fact.details == ["Reduced monthly reconciliation effort."]
+    assert fact.systems == ["Power Platform"]
+    assert fact.skills == ["Power Automate"]
+    assert fact.functions == ["workflow automation"]
     assert fact.status == ExperienceFactStatus.DRAFT
+
+
+def test_experience_fact_service_adds_fact_that_supersedes_existing_fact() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    prior_fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated monthly reporting workflows.",
+        supersedes_fact_id=prior_fact.id,
+    )
+
+    assert fact.supersedes_fact_id == prior_fact.id
+
+
+def test_experience_fact_service_rejects_missing_superseded_fact() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+
+    with pytest.raises(FactNotFoundError, match="missing-fact"):
+        service.add_fact(
+            role_id="role-1",
+            text="Automated reporting workflows.",
+            supersedes_fact_id="missing-fact",
+        )
+
+
+def test_experience_fact_service_rejects_superseded_fact_for_different_role() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role(role_id="role-1"))
+    role_repository.save(build_role(role_id="role-2"))
+    prior_fact = service.add_fact(
+        role_id="role-2",
+        text="Built a service trend dashboard.",
+    )
+
+    with pytest.raises(FactRoleMismatchError, match=prior_fact.id):
+        service.add_fact(
+            role_id="role-1",
+            text="Automated reporting workflows.",
+            supersedes_fact_id=prior_fact.id,
+        )
 
 
 def test_experience_fact_service_rejects_fact_for_missing_role() -> None:
@@ -188,6 +253,54 @@ def test_experience_fact_service_saves_existing_fact_with_validation() -> None:
     service.save_fact(fact)
 
     assert service.get_fact("fact-1") == fact
+
+
+def test_experience_fact_service_allows_adding_evidence_references() -> None:
+    service, _fact_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    fact = service.add_fact(
+        role_id="role-1",
+        source_ids=["source-1"],
+        question_ids=["question-1"],
+        message_ids=["message-1"],
+        text="Automated reporting workflows.",
+    )
+    updated_fact = fact.model_copy(
+        update={
+            "source_ids": ["source-1", "source-2"],
+            "question_ids": ["question-1", "question-2"],
+            "message_ids": ["message-1", "message-2"],
+        }
+    )
+
+    service.save_fact(updated_fact)
+
+    assert service.get_fact(fact.id) == updated_fact
+
+
+def test_experience_fact_service_rejects_removed_evidence_references() -> None:
+    service, _fact_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    fact = service.add_fact(
+        role_id="role-1",
+        source_ids=["source-1"],
+        question_ids=["question-1"],
+        message_ids=["message-1"],
+        text="Automated reporting workflows.",
+    )
+    updated_fact = fact.model_copy(
+        update={
+            "source_ids": [],
+            "question_ids": ["question-1"],
+            "message_ids": ["message-1"],
+        }
+    )
+
+    with pytest.raises(EvidenceReferenceRemovalError, match="source_ids=source-1"):
+        service.save_fact(updated_fact)
 
 
 def test_experience_fact_service_deletes_fact() -> None:

@@ -209,6 +209,30 @@ uv run career-agent facts add \
   --source-id <source-id>
 ```
 
+Add a draft fact with richer evidence and reference lists:
+
+```bash
+uv run career-agent facts add \
+  --role-id <role-id> \
+  --text "Automated reporting workflows, reducing manual reconciliation time." \
+  --source-id <source-id> \
+  --question-id <question-id> \
+  --message-id <message-id> \
+  --detail "Reduced recurring manual reconciliation effort." \
+  --system "Power Platform" \
+  --skill "Power Automate" \
+  --function "workflow automation"
+```
+
+Add a revised fact that supersedes an earlier fact:
+
+```bash
+uv run career-agent facts add \
+  --role-id <role-id> \
+  --text "Automated monthly reporting workflows, reducing manual reconciliation time." \
+  --supersedes-fact-id <fact-id>
+```
+
 Delete one saved fact:
 
 ```bash

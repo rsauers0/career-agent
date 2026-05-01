@@ -12,6 +12,7 @@ class ExperienceFactStatus(StrEnum):
 
     DRAFT = "draft"
     ACTIVE = "active"
+    SUPERSEDED = "superseded"
     ARCHIVED = "archived"
 
 
@@ -30,9 +31,45 @@ class ExperienceFact(BaseModel):
         default_factory=list,
         description="Source entry identifiers used to support or derive this fact.",
     )
+    question_ids: list[str] = Field(
+        default_factory=list,
+        description="Clarification question identifiers used to support or derive this fact.",
+    )
+    message_ids: list[str] = Field(
+        default_factory=list,
+        description="Clarification message identifiers used to support or derive this fact.",
+    )
     text: str = Field(
         min_length=1,
         description="Normalized experience fact text for this role.",
+    )
+    details: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional second-level details that clarify the fact without changing its meaning."
+        ),
+    )
+    systems: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Referenced systems, platforms, applications, or environments named by this fact."
+        ),
+    )
+    skills: list[str] = Field(
+        default_factory=list,
+        description="Referenced skills, tools, technologies, or methods named by this fact.",
+    )
+    functions: list[str] = Field(
+        default_factory=list,
+        description="Referenced duties, functions, or work categories named by this fact.",
+    )
+    supersedes_fact_id: str | None = Field(
+        default=None,
+        description="Prior fact identifier this fact replaces or revises.",
+    )
+    superseded_by_fact_id: str | None = Field(
+        default=None,
+        description="Later fact identifier that replaces or revises this fact.",
     )
     status: ExperienceFactStatus = Field(
         default=ExperienceFactStatus.DRAFT,
@@ -47,19 +84,35 @@ class ExperienceFact(BaseModel):
         description="Timezone-aware UTC update timestamp.",
     )
 
-    @field_validator("role_id", "text", mode="before")
+    @field_validator(
+        "role_id",
+        "text",
+        "supersedes_fact_id",
+        "superseded_by_fact_id",
+        mode="before",
+    )
     @classmethod
-    def normalize_required_text(cls, value: str) -> str:
-        """Trim required text fields before normal Pydantic validation."""
+    def normalize_text_fields(cls, value: str | None) -> str | None:
+        """Trim text fields before normal Pydantic validation."""
 
         if isinstance(value, str):
-            return value.strip()
+            normalized = value.strip()
+            return normalized or None
         return value
 
-    @field_validator("source_ids", mode="before")
+    @field_validator(
+        "source_ids",
+        "question_ids",
+        "message_ids",
+        "details",
+        "systems",
+        "skills",
+        "functions",
+        mode="before",
+    )
     @classmethod
-    def normalize_source_ids(cls, values: list[str] | None) -> list[str]:
-        """Trim source ids and discard blank entries."""
+    def normalize_list_values(cls, values: list[str] | None) -> list[str]:
+        """Trim list values and discard blank entries."""
 
         if values is None:
             return []

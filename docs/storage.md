@@ -60,6 +60,11 @@ Experience Facts are stored as:
       <timestamp>-experience_facts.json
 ```
 
+Experience fact records include the fact text, optional second-level details,
+append-only evidence ids for sources/questions/messages, grounded reference
+lists for systems/skills/functions, revision links, lifecycle status, and
+timestamps.
+
 Source Analysis artifacts are stored as table-like JSON files:
 
 ```text

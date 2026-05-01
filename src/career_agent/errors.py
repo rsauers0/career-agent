@@ -17,6 +17,18 @@ class SourceRoleMismatchError(CareerAgentError):
     """Raised when a source does not belong to the expected role."""
 
 
+class FactNotFoundError(CareerAgentError):
+    """Raised when a referenced experience fact does not exist."""
+
+
+class FactRoleMismatchError(CareerAgentError):
+    """Raised when a fact does not belong to the expected role."""
+
+
+class EvidenceReferenceRemovalError(CareerAgentError):
+    """Raised when immutable evidence references would be removed."""
+
+
 class NoUnanalyzedSourcesError(CareerAgentError):
     """Raised when a workflow requires unanalyzed sources but none exist."""
 

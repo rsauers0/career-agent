@@ -663,6 +663,18 @@ def test_facts_add_writes_fact(monkeypatch, tmp_path) -> None:
             "Automated reporting workflows.",
             "--source-id",
             "source-1",
+            "--question-id",
+            "question-1",
+            "--message-id",
+            "message-1",
+            "--detail",
+            "Reduced monthly reconciliation effort.",
+            "--system",
+            "Power Platform",
+            "--skill",
+            "Power Automate",
+            "--function",
+            "workflow automation",
         ],
     )
 
@@ -674,6 +686,12 @@ def test_facts_add_writes_fact(monkeypatch, tmp_path) -> None:
     assert len(facts) == 1
     assert facts[0].text == "Automated reporting workflows."
     assert facts[0].source_ids == ["source-1"]
+    assert facts[0].question_ids == ["question-1"]
+    assert facts[0].message_ids == ["message-1"]
+    assert facts[0].details == ["Reduced monthly reconciliation effort."]
+    assert facts[0].systems == ["Power Platform"]
+    assert facts[0].skills == ["Power Automate"]
+    assert facts[0].functions == ["workflow automation"]
 
     get_settings.cache_clear()
 
@@ -735,6 +753,40 @@ def test_facts_add_reports_missing_source(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
+def test_facts_add_reports_missing_superseded_fact(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "facts",
+            "add",
+            "--role-id",
+            "role-1",
+            "--text",
+            "Automated reporting workflows.",
+            "--supersedes-fact-id",
+            "missing-fact",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Experience fact does not exist: missing-fact" in result.output
+
+    get_settings.cache_clear()
+
+
 def test_facts_list_renders_saved_facts(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
@@ -743,7 +795,15 @@ def test_facts_list_renders_saved_facts(monkeypatch, tmp_path) -> None:
             id="fact-1",
             role_id="role-1",
             source_ids=["source-1"],
+            question_ids=["question-1"],
+            message_ids=["message-1"],
             text="Automated reporting workflows.",
+            details=["Reduced monthly reconciliation effort."],
+            systems=["Power Platform"],
+            skills=["Power Automate"],
+            functions=["workflow automation"],
+            supersedes_fact_id="fact-0",
+            superseded_by_fact_id="fact-2",
         )
     )
     runner = CliRunner()
@@ -800,7 +860,15 @@ def test_facts_show_renders_saved_fact(monkeypatch, tmp_path) -> None:
             id="fact-1",
             role_id="role-1",
             source_ids=["source-1"],
+            question_ids=["question-1"],
+            message_ids=["message-1"],
             text="Automated reporting workflows.",
+            details=["Reduced monthly reconciliation effort."],
+            systems=["Power Platform"],
+            skills=["Power Automate"],
+            functions=["workflow automation"],
+            supersedes_fact_id="fact-0",
+            superseded_by_fact_id="fact-2",
         )
     )
     runner = CliRunner()
@@ -812,6 +880,14 @@ def test_facts_show_renders_saved_fact(monkeypatch, tmp_path) -> None:
     assert "fact-1" in result.output
     assert "role-1" in result.output
     assert "source-1" in result.output
+    assert "question-1" in result.output
+    assert "message-1" in result.output
+    assert "Power Platform" in result.output
+    assert "Power Automate" in result.output
+    assert "workflow automation" in result.output
+    assert "fact-0" in result.output
+    assert "fact-2" in result.output
+    assert "Reduced monthly reconciliation effort." in result.output
     assert "Automated reporting workflows." in result.output
 
     get_settings.cache_clear()

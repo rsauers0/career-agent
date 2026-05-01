@@ -86,10 +86,13 @@ Role Sources are related to Experience Roles, but they are not owned by the Expe
 Build durable normalized experience fact records as a separate component:
 
 - facts linked to experience roles by `role_id`
-- optional source id traceability
+- append-only source, clarification question, and clarification message id traceability
 - fact text
-- fact lifecycle status: draft, active, archived
-- no tags or inferred classifications in the first pass
+- optional second-level details
+- grounded reference lists for systems, skills, and functions
+- revision links for superseded and superseding facts
+- fact lifecycle status: draft, active, superseded, archived
+- no broad inferred classifications in the first pass
 
 Experience Facts are canonical career data. Draft facts are canonical fact records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles.
 
@@ -120,7 +123,8 @@ Build as CLI/dev workflow first:
 - generate normalized experience fact proposals
 - preserve user/assistant revision threads for proposed facts
 - apply approved experience facts through service methods
-- derive skills, systems, tools, technologies, and capabilities from approved facts later
+- compile grounded systems, skills, and functions on approved facts
+- derive cross-role evidence indexes and capabilities from approved facts later
 - mark role reviewed only when validation passes
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
@@ -137,7 +141,7 @@ The workflow should check for an existing active run before question generation,
 
 The next output layer should be experience fact proposals, not final resume bullets. Experience facts should normalize source material into grounded, generic, reusable career evidence. They should document duties, functions, achievements, scope, systems, tools, and metrics without adding unsupported complexity or persuasive resume language.
 
-Each proposed fact should reference supporting sources, questions, and messages. If the evidence is missing, unclear, or conflicting, the workflow should ask another question or record missing evidence instead of fabricating a fact.
+Each proposed fact should reference supporting sources, questions, and messages. Those references should be append-only so later revisions preserve the original evidence trail while adding new support. If the evidence is missing, unclear, or conflicting, the workflow should ask another question or record missing evidence instead of fabricating a fact.
 
 User review should be collaborative. A proposal may have a revision thread where the user corrects wording, supplies additional evidence, asks for a split, or rejects unsupported phrasing. Those messages should remain part of the historical chain for future analysis.
 

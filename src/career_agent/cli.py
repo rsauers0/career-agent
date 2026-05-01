@@ -14,6 +14,8 @@ from career_agent.errors import (
     ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
+    FactNotFoundError,
+    FactRoleMismatchError,
     InvalidLLMOutputError,
     LLMClientError,
     LLMConfigurationError,
@@ -424,13 +426,67 @@ def add_fact(
         "--source-id",
         help="Source id supporting this fact. Can be provided more than once.",
     ),
+    question_ids: list[str] = typer.Option(
+        [],
+        "--question-id",
+        help="Clarification question id supporting this fact. Can be provided more than once.",
+    ),
+    message_ids: list[str] = typer.Option(
+        [],
+        "--message-id",
+        help="Clarification message id supporting this fact. Can be provided more than once.",
+    ),
+    details: list[str] = typer.Option(
+        [],
+        "--detail",
+        help="Second-level detail clarifying this fact. Can be provided more than once.",
+    ),
+    systems: list[str] = typer.Option(
+        [],
+        "--system",
+        help=(
+            "Referenced system, platform, application, or environment. "
+            "Can be provided more than once."
+        ),
+    ),
+    skills: list[str] = typer.Option(
+        [],
+        "--skill",
+        help="Referenced skill, tool, technology, or method. Can be provided more than once.",
+    ),
+    functions: list[str] = typer.Option(
+        [],
+        "--function",
+        help="Referenced duty, function, or work category. Can be provided more than once.",
+    ),
+    supersedes_fact_id: str | None = typer.Option(
+        None,
+        help="Existing fact id this fact replaces or revises.",
+    ),
 ) -> None:
     """Add a canonical experience fact for an existing role."""
 
     service = build_experience_fact_service()
     try:
-        fact = service.add_fact(role_id=role_id, text=text, source_ids=source_ids)
-    except (RoleNotFoundError, SourceNotFoundError, SourceRoleMismatchError) as exc:
+        fact = service.add_fact(
+            role_id=role_id,
+            text=text,
+            source_ids=source_ids,
+            question_ids=question_ids,
+            message_ids=message_ids,
+            details=details,
+            systems=systems,
+            skills=skills,
+            functions=functions,
+            supersedes_fact_id=supersedes_fact_id,
+        )
+    except (
+        FactNotFoundError,
+        FactRoleMismatchError,
+        RoleNotFoundError,
+        SourceNotFoundError,
+        SourceRoleMismatchError,
+    ) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
     except ValidationError as exc:
@@ -908,10 +964,18 @@ def render_experience_fact(fact: ExperienceFact) -> None:
     table.add_row("ID", fact.id)
     table.add_row("Role ID", fact.role_id)
     table.add_row("Source IDs", ", ".join(fact.source_ids) or "-")
+    table.add_row("Question IDs", ", ".join(fact.question_ids) or "-")
+    table.add_row("Message IDs", ", ".join(fact.message_ids) or "-")
+    table.add_row("Systems", ", ".join(fact.systems) or "-")
+    table.add_row("Skills", ", ".join(fact.skills) or "-")
+    table.add_row("Functions", ", ".join(fact.functions) or "-")
+    table.add_row("Supersedes Fact ID", fact.supersedes_fact_id or "-")
+    table.add_row("Superseded By Fact ID", fact.superseded_by_fact_id or "-")
     table.add_row("Status", fact.status.value)
     table.add_row("Created At", fact.created_at.isoformat())
     table.add_row("Updated At", fact.updated_at.isoformat())
     table.add_row("Text", fact.text)
+    table.add_row("Details", "\n".join(fact.details) or "-")
     console.print(table)
 
 

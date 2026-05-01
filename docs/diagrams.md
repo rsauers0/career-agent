@@ -135,8 +135,8 @@ flowchart TD
     FactProposals["Experience Fact Proposals<br/>grounded, generic, traceable"]
     Revision["Revision Thread<br/>user + assistant collaboration"]
     Events["FactChangeEvent<br/>actor, event type,<br/>summary, message ids"]
-    ApprovedFacts["Approved Experience Facts<br/>canonical evidence"]
-    Derived["Derived Evidence<br/>skills, systems, tools,<br/>technologies, capabilities"]
+    ApprovedFacts["Approved Experience Facts<br/>canonical evidence,<br/>reference lists"]
+    Derived["Derived Evidence Indexes<br/>cross-role skills,<br/>systems, capabilities"]
     Tailoring["Future Tailoring<br/>job fit, resumes,<br/>cover letters"]
 
     RawSources --> Analysis

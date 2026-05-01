@@ -156,12 +156,15 @@ career-agent facts
 Examples of owned data:
 
 - role id
-- source ids used to support or derive the fact
+- source, clarification question, and clarification message ids used to support or derive the fact
 - fact text
+- optional second-level details
+- referenced systems, skills, and functions
+- superseded/supersedes fact ids for revisions
 - lifecycle status
 - creation and update timestamps
 
-Experience facts are the current canonical career data component. Draft facts are canonical fact records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles. Facts do not currently include tags or inferred classifications.
+Experience facts are the current canonical career data component. Draft facts are canonical fact records that are not active yet. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles. Fact records may carry lightweight reference lists for systems, skills, and functions when those references are grounded in the fact evidence; broad inferred classifications should still wait for later derived-evidence workflows.
 
 Experience facts should be distinguished from persuasive resume bullets. Experience facts should document duties, functions, achievements, scope, systems, tools, and metrics in plain professional language. They are source-of-truth career evidence for later job-fit analysis, resumes, and cover letters; they should not bridge gaps, inflate scope, or use creative resume wording.
 
@@ -311,11 +314,12 @@ raw role source material
   -> experience fact proposals
   -> user/assistant revision thread
   -> approved experience facts
-  -> derived skills, systems, tools, technologies, and capabilities
+  -> fact-level reference lists for skills, systems, tools, technologies, and functions
+  -> derived cross-role evidence indexes and capabilities
   -> job-fit analysis and tailored documents
 ```
 
-Experience fact proposals should be grounded in referenced material. Each proposed fact should point back to supporting source ids, question ids, and message ids. Missing evidence should produce either a missing-evidence note or another clarification question, not an invented fact.
+Experience fact proposals should be grounded in referenced material. Each proposed fact should point back to supporting source ids, question ids, and message ids. Those ids should be append-only evidence references; later revisions can add additional support, but should not erase the original trail. Missing evidence should produce either a missing-evidence note or another clarification question, not an invented fact.
 
 This is still the data normalization phase. The goal is a detailed, reusable accounting of the user's actual duties, functions, achievements, systems, tools, scope, and metrics. Persuasive tailoring belongs to later job-specific document generation.
 
@@ -324,6 +328,7 @@ Writing standards for normalized facts:
 - prefer generic, reusable terminology over persuasive resume language
 - document role functions, duties, achievements, scope, tools, systems, and metrics
 - preserve exact metrics and technologies only when supported by evidence
+- compile systems, skills, and functions as grounded reference lists, not broad inferred classifications
 - avoid artificial scope expansion, inflated verbs, and target-job tailoring
 - keep similar-but-not-proven-same work items separate
 
