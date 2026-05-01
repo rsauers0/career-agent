@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from career_agent.errors import (
     EvidenceReferenceRemovalError,
     FactNotFoundError,
+    FactRevisionNotAllowedError,
     FactRoleMismatchError,
+    InvalidFactStatusTransitionError,
     RoleNotFoundError,
     SourceNotFoundError,
     SourceRoleMismatchError,
 )
-from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.models import ExperienceFact, ExperienceFactStatus
 from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.repository import RoleSourceRepository
@@ -16,6 +20,29 @@ from career_agent.role_sources.repository import RoleSourceRepository
 
 class ExperienceFactService:
     """Application behavior for canonical experience facts."""
+
+    _ALLOWED_TRANSITIONS: dict[ExperienceFactStatus, set[ExperienceFactStatus]] = {
+        ExperienceFactStatus.DRAFT: {
+            ExperienceFactStatus.ACTIVE,
+            ExperienceFactStatus.NEEDS_CLARIFICATION,
+            ExperienceFactStatus.REJECTED,
+        },
+        ExperienceFactStatus.NEEDS_CLARIFICATION: {
+            ExperienceFactStatus.DRAFT,
+            ExperienceFactStatus.REJECTED,
+        },
+        ExperienceFactStatus.ACTIVE: {
+            ExperienceFactStatus.SUPERSEDED,
+            ExperienceFactStatus.ARCHIVED,
+        },
+        ExperienceFactStatus.REJECTED: {
+            ExperienceFactStatus.ARCHIVED,
+        },
+        ExperienceFactStatus.SUPERSEDED: {
+            ExperienceFactStatus.ARCHIVED,
+        },
+        ExperienceFactStatus.ARCHIVED: set(),
+    }
 
     def __init__(
         self,
@@ -76,12 +103,218 @@ class ExperienceFactService:
         self._validate_fact_link(role_id=fact.role_id, fact_id=fact.supersedes_fact_id)
         self._validate_fact_link(role_id=fact.role_id, fact_id=fact.superseded_by_fact_id)
         self._validate_append_only_evidence_references(fact)
+        self._validate_saved_fact_lifecycle_rules(fact)
         self.fact_repository.save(fact)
+
+    def activate_fact(self, fact_id: str) -> ExperienceFact:
+        """Activate a draft fact and supersede its prior fact when applicable."""
+
+        fact = self._get_required_fact(fact_id)
+        self._validate_status_transition(fact.status, ExperienceFactStatus.ACTIVE)
+        superseded_fact = None
+        if fact.supersedes_fact_id is not None:
+            superseded_fact = self._get_required_fact(fact.supersedes_fact_id)
+            self._validate_status_transition(
+                superseded_fact.status,
+                ExperienceFactStatus.SUPERSEDED,
+            )
+
+        activated_fact = self._with_status(fact, ExperienceFactStatus.ACTIVE)
+        self.save_fact(activated_fact)
+
+        if superseded_fact is not None:
+            superseded_fact = superseded_fact.model_copy(
+                update={
+                    "status": ExperienceFactStatus.SUPERSEDED,
+                    "superseded_by_fact_id": activated_fact.id,
+                    "updated_at": self._now(),
+                }
+            )
+            self.save_fact(superseded_fact)
+
+        return activated_fact
+
+    def mark_needs_clarification(self, fact_id: str) -> ExperienceFact:
+        """Mark a draft fact as needing additional clarification."""
+
+        return self._transition_fact(fact_id, ExperienceFactStatus.NEEDS_CLARIFICATION)
+
+    def return_to_draft(self, fact_id: str) -> ExperienceFact:
+        """Return a needs-clarification fact to draft status."""
+
+        return self._transition_fact(fact_id, ExperienceFactStatus.DRAFT)
+
+    def reject_fact(self, fact_id: str) -> ExperienceFact:
+        """Reject a draft or needs-clarification fact."""
+
+        return self._transition_fact(fact_id, ExperienceFactStatus.REJECTED)
+
+    def archive_fact(self, fact_id: str) -> ExperienceFact:
+        """Archive a fact when its current lifecycle status allows it."""
+
+        return self._transition_fact(fact_id, ExperienceFactStatus.ARCHIVED)
+
+    def revise_fact(
+        self,
+        fact_id: str,
+        text: str,
+        source_ids: list[str] | None = None,
+        question_ids: list[str] | None = None,
+        message_ids: list[str] | None = None,
+        details: list[str] | None = None,
+        systems: list[str] | None = None,
+        skills: list[str] | None = None,
+        functions: list[str] | None = None,
+    ) -> ExperienceFact:
+        """Revise a fact according to lifecycle rules."""
+
+        fact = self._get_required_fact(fact_id)
+        source_ids = source_ids or []
+        self._validate_role_and_sources(role_id=fact.role_id, source_ids=source_ids)
+
+        if fact.status in {ExperienceFactStatus.DRAFT, ExperienceFactStatus.NEEDS_CLARIFICATION}:
+            revised_fact = self._build_revised_fact(
+                fact=fact,
+                text=text,
+                source_ids=source_ids,
+                question_ids=question_ids or [],
+                message_ids=message_ids or [],
+                details=details or [],
+                systems=systems or [],
+                skills=skills or [],
+                functions=functions or [],
+                status=fact.status,
+                supersedes_fact_id=fact.supersedes_fact_id,
+                superseded_by_fact_id=fact.superseded_by_fact_id,
+            )
+            self.save_fact(revised_fact)
+            return revised_fact
+
+        if fact.status == ExperienceFactStatus.ACTIVE:
+            revised_fact = self._build_revised_fact(
+                fact=fact,
+                text=text,
+                source_ids=source_ids,
+                question_ids=question_ids or [],
+                message_ids=message_ids or [],
+                details=details or [],
+                systems=systems or [],
+                skills=skills or [],
+                functions=functions or [],
+                status=ExperienceFactStatus.DRAFT,
+                supersedes_fact_id=fact.id,
+                superseded_by_fact_id=None,
+                new_id=True,
+            )
+            self.save_fact(revised_fact)
+            return revised_fact
+
+        msg = f"Experience fact cannot be revised while status is {fact.status.value}."
+        raise FactRevisionNotAllowedError(msg)
 
     def delete_fact(self, fact_id: str) -> bool:
         """Delete one saved fact by identifier."""
 
         return self.fact_repository.delete(fact_id)
+
+    def _get_required_fact(self, fact_id: str) -> ExperienceFact:
+        """Return a fact or raise a domain error."""
+
+        fact = self.fact_repository.get(fact_id)
+        if fact is None:
+            msg = f"Experience fact does not exist: {fact_id}"
+            raise FactNotFoundError(msg)
+        return fact
+
+    def _transition_fact(
+        self,
+        fact_id: str,
+        new_status: ExperienceFactStatus,
+    ) -> ExperienceFact:
+        """Apply a strict lifecycle transition to one fact."""
+
+        fact = self._get_required_fact(fact_id)
+        self._validate_status_transition(fact.status, new_status)
+        updated_fact = self._with_status(fact, new_status)
+        self.save_fact(updated_fact)
+        return updated_fact
+
+    def _with_status(
+        self,
+        fact: ExperienceFact,
+        status: ExperienceFactStatus,
+    ) -> ExperienceFact:
+        """Return a copy of a fact with a new status and update timestamp."""
+
+        return fact.model_copy(update={"status": status, "updated_at": self._now()})
+
+    def _validate_status_transition(
+        self,
+        current_status: ExperienceFactStatus,
+        new_status: ExperienceFactStatus,
+    ) -> None:
+        """Validate an experience fact lifecycle transition."""
+
+        allowed_statuses = self._ALLOWED_TRANSITIONS[current_status]
+        if new_status not in allowed_statuses:
+            msg = (
+                "Experience fact status transition is not allowed: "
+                f"{current_status.value} -> {new_status.value}"
+            )
+            raise InvalidFactStatusTransitionError(msg)
+
+    def _build_revised_fact(
+        self,
+        fact: ExperienceFact,
+        text: str,
+        source_ids: list[str],
+        question_ids: list[str],
+        message_ids: list[str],
+        details: list[str],
+        systems: list[str],
+        skills: list[str],
+        functions: list[str],
+        status: ExperienceFactStatus,
+        supersedes_fact_id: str | None,
+        superseded_by_fact_id: str | None,
+        new_id: bool = False,
+    ) -> ExperienceFact:
+        """Build an in-place or replacement fact revision."""
+
+        created_at = self._now() if new_id else fact.created_at
+        fact_values = {
+            "role_id": fact.role_id,
+            "source_ids": self._merge_values(fact.source_ids, source_ids),
+            "question_ids": self._merge_values(fact.question_ids, question_ids),
+            "message_ids": self._merge_values(fact.message_ids, message_ids),
+            "text": text,
+            "details": details or fact.details,
+            "systems": systems or fact.systems,
+            "skills": skills or fact.skills,
+            "functions": functions or fact.functions,
+            "supersedes_fact_id": supersedes_fact_id,
+            "superseded_by_fact_id": superseded_by_fact_id,
+            "status": status,
+            "created_at": created_at,
+            "updated_at": self._now(),
+        }
+        if not new_id:
+            fact_values["id"] = fact.id
+        return ExperienceFact(**fact_values)
+
+    def _merge_values(self, existing_values: list[str], new_values: list[str]) -> list[str]:
+        """Append new values while preserving order and removing duplicates."""
+
+        merged_values: list[str] = []
+        for value in [*existing_values, *new_values]:
+            if value not in merged_values:
+                merged_values.append(value)
+        return merged_values
+
+    def _now(self) -> datetime:
+        """Return the current UTC timestamp."""
+
+        return datetime.now(UTC)
 
     def _validate_role_and_sources(self, role_id: str, source_ids: list[str]) -> None:
         """Validate that role and source references are internally consistent."""
@@ -131,3 +364,47 @@ class ExperienceFactService:
                     f"{field_name}={removed}"
                 )
                 raise EvidenceReferenceRemovalError(msg)
+
+    def _validate_saved_fact_lifecycle_rules(self, fact: ExperienceFact) -> None:
+        """Ensure direct saves cannot bypass lifecycle and revision rules."""
+
+        existing_fact = self.fact_repository.get(fact.id)
+        if existing_fact is None:
+            return
+
+        if existing_fact.status != fact.status:
+            self._validate_status_transition(existing_fact.status, fact.status)
+
+        if not self._has_content_change(existing_fact, fact):
+            return
+
+        if existing_fact.status in {
+            ExperienceFactStatus.DRAFT,
+            ExperienceFactStatus.NEEDS_CLARIFICATION,
+        }:
+            return
+
+        msg = f"Experience fact cannot be revised while status is {existing_fact.status.value}."
+        raise FactRevisionNotAllowedError(msg)
+
+    def _has_content_change(
+        self,
+        existing_fact: ExperienceFact,
+        updated_fact: ExperienceFact,
+    ) -> bool:
+        """Return whether a save changes fact content or evidence."""
+
+        fields = (
+            "source_ids",
+            "question_ids",
+            "message_ids",
+            "text",
+            "details",
+            "systems",
+            "skills",
+            "functions",
+        )
+        return any(
+            getattr(existing_fact, field_name) != getattr(updated_fact, field_name)
+            for field_name in fields
+        )

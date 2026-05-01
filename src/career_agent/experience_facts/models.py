@@ -11,7 +11,9 @@ class ExperienceFactStatus(StrEnum):
     """Lifecycle status for an experience fact."""
 
     DRAFT = "draft"
+    NEEDS_CLARIFICATION = "needs_clarification"
     ACTIVE = "active"
+    REJECTED = "rejected"
     SUPERSEDED = "superseded"
     ARCHIVED = "archived"
 

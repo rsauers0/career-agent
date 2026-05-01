@@ -3,7 +3,9 @@ import pytest
 from career_agent.errors import (
     EvidenceReferenceRemovalError,
     FactNotFoundError,
+    FactRevisionNotAllowedError,
     FactRoleMismatchError,
+    InvalidFactStatusTransitionError,
     RoleNotFoundError,
     SourceNotFoundError,
     SourceRoleMismatchError,
@@ -280,6 +282,36 @@ def test_experience_fact_service_allows_adding_evidence_references() -> None:
     assert service.get_fact(fact.id) == updated_fact
 
 
+def test_experience_fact_service_save_rejects_invalid_status_transition() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+    active_fact = service.activate_fact(fact.id)
+    invalid_fact = active_fact.model_copy(update={"status": ExperienceFactStatus.REJECTED})
+
+    with pytest.raises(InvalidFactStatusTransitionError, match="active -> rejected"):
+        service.save_fact(invalid_fact)
+
+
+def test_experience_fact_service_save_rejects_active_content_revision() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+    active_fact = service.activate_fact(fact.id)
+    invalid_fact = active_fact.model_copy(
+        update={"text": "Automated monthly reporting workflows."}
+    )
+
+    with pytest.raises(FactRevisionNotAllowedError, match="active"):
+        service.save_fact(invalid_fact)
+
+
 def test_experience_fact_service_rejects_removed_evidence_references() -> None:
     service, _fact_repository, role_repository, source_repository = build_service()
     role_repository.save(build_role())
@@ -301,6 +333,158 @@ def test_experience_fact_service_rejects_removed_evidence_references() -> None:
 
     with pytest.raises(EvidenceReferenceRemovalError, match="source_ids=source-1"):
         service.save_fact(updated_fact)
+
+
+def test_experience_fact_service_activates_draft_fact() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+
+    activated_fact = service.activate_fact(fact.id)
+
+    assert activated_fact.status == ExperienceFactStatus.ACTIVE
+    assert service.get_fact(fact.id) == activated_fact
+
+
+def test_experience_fact_service_rejects_invalid_transition() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+    active_fact = service.activate_fact(fact.id)
+
+    with pytest.raises(InvalidFactStatusTransitionError, match="active -> rejected"):
+        service.reject_fact(active_fact.id)
+
+
+def test_experience_fact_service_marks_needs_clarification_and_returns_to_draft() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+
+    needs_clarification_fact = service.mark_needs_clarification(fact.id)
+    draft_fact = service.return_to_draft(fact.id)
+
+    assert needs_clarification_fact.status == ExperienceFactStatus.NEEDS_CLARIFICATION
+    assert draft_fact.status == ExperienceFactStatus.DRAFT
+
+
+def test_experience_fact_service_rejects_and_archives_fact() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+    rejected_fact = service.reject_fact(fact.id)
+
+    archived_fact = service.archive_fact(rejected_fact.id)
+
+    assert rejected_fact.status == ExperienceFactStatus.REJECTED
+    assert archived_fact.status == ExperienceFactStatus.ARCHIVED
+
+
+def test_experience_fact_service_revises_draft_fact_in_place() -> None:
+    service, _fact_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+
+    revised_fact = service.revise_fact(
+        fact_id=fact.id,
+        text="Automated monthly reporting workflows.",
+        source_ids=["source-1"],
+        question_ids=["question-1"],
+        message_ids=["message-1"],
+        details=["Reduced monthly reconciliation effort."],
+        systems=["Power Platform"],
+        skills=["Power Automate"],
+        functions=["workflow automation"],
+    )
+
+    assert revised_fact.id == fact.id
+    assert revised_fact.status == ExperienceFactStatus.DRAFT
+    assert revised_fact.text == "Automated monthly reporting workflows."
+    assert revised_fact.source_ids == ["source-1"]
+    assert revised_fact.question_ids == ["question-1"]
+    assert revised_fact.message_ids == ["message-1"]
+    assert revised_fact.details == ["Reduced monthly reconciliation effort."]
+    assert revised_fact.systems == ["Power Platform"]
+    assert revised_fact.skills == ["Power Automate"]
+    assert revised_fact.functions == ["workflow automation"]
+
+
+def test_experience_fact_service_revises_active_fact_as_new_draft() -> None:
+    service, _fact_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    fact = service.add_fact(
+        role_id="role-1",
+        source_ids=["source-1"],
+        text="Automated reporting workflows.",
+    )
+    active_fact = service.activate_fact(fact.id)
+
+    revised_fact = service.revise_fact(
+        fact_id=active_fact.id,
+        text="Automated monthly reporting workflows.",
+        question_ids=["question-1"],
+    )
+
+    assert revised_fact.id != active_fact.id
+    assert revised_fact.status == ExperienceFactStatus.DRAFT
+    assert revised_fact.supersedes_fact_id == active_fact.id
+    assert revised_fact.source_ids == ["source-1"]
+    assert revised_fact.question_ids == ["question-1"]
+    assert service.get_fact(active_fact.id).status == ExperienceFactStatus.ACTIVE
+
+
+def test_experience_fact_service_activation_supersedes_prior_active_fact() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+    active_fact = service.activate_fact(fact.id)
+    revised_fact = service.revise_fact(
+        fact_id=active_fact.id,
+        text="Automated monthly reporting workflows.",
+    )
+
+    activated_revision = service.activate_fact(revised_fact.id)
+    superseded_fact = service.get_fact(active_fact.id)
+
+    assert activated_revision.status == ExperienceFactStatus.ACTIVE
+    assert superseded_fact.status == ExperienceFactStatus.SUPERSEDED
+    assert superseded_fact.superseded_by_fact_id == activated_revision.id
+
+
+def test_experience_fact_service_rejects_revision_for_terminal_status() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+    rejected_fact = service.reject_fact(fact.id)
+
+    with pytest.raises(FactRevisionNotAllowedError, match="rejected"):
+        service.revise_fact(
+            fact_id=rejected_fact.id,
+            text="Automated monthly reporting workflows.",
+        )
 
 
 def test_experience_fact_service_deletes_fact() -> None:

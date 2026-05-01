@@ -2,7 +2,7 @@ from typer.testing import CliRunner
 
 from career_agent.cli import app
 from career_agent.config import get_settings
-from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.models import ExperienceFact, ExperienceFactStatus
 from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.repository import ExperienceRoleRepository
@@ -924,6 +924,163 @@ def test_facts_delete_removes_saved_fact(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "Deleted experience fact." in result.output
     assert repository.get("fact-1") is None
+
+    get_settings.cache_clear()
+
+
+def test_facts_activate_marks_draft_fact_active(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    repository = ExperienceFactRepository(tmp_path)
+    repository.save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Automated reporting workflows.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["facts", "activate", "fact-1"])
+
+    assert result.exit_code == 0
+    assert "Activated experience fact." in result.output
+    assert repository.get("fact-1").status == ExperienceFactStatus.ACTIVE
+
+    get_settings.cache_clear()
+
+
+def test_facts_needs_clarification_marks_draft_fact(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    repository = ExperienceFactRepository(tmp_path)
+    repository.save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Automated reporting workflows.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["facts", "needs-clarification", "fact-1", "--reason", "Metric needs evidence."],
+    )
+
+    assert result.exit_code == 0
+    assert "Marked experience fact as needing clarification." in result.output
+    assert "Metric needs evidence." in result.output
+    assert repository.get("fact-1").status == ExperienceFactStatus.NEEDS_CLARIFICATION
+
+    get_settings.cache_clear()
+
+
+def test_facts_reject_reports_invalid_transition(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Automated reporting workflows.",
+            status=ExperienceFactStatus.ACTIVE,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["facts", "reject", "fact-1"])
+
+    assert result.exit_code != 0
+    assert "active -> rejected" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_facts_revise_active_fact_creates_draft_revision(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = ExperienceFactRepository(tmp_path)
+    repository.save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+            text="Automated reporting workflows.",
+            status=ExperienceFactStatus.ACTIVE,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "facts",
+            "revise",
+            "fact-1",
+            "--text",
+            "Automated monthly reporting workflows.",
+            "--question-id",
+            "question-1",
+        ],
+    )
+    facts = repository.list(role_id="role-1")
+    draft_revisions = [
+        fact
+        for fact in facts
+        if fact.supersedes_fact_id == "fact-1" and fact.status == ExperienceFactStatus.DRAFT
+    ]
+
+    assert result.exit_code == 0
+    assert "Revised experience fact." in result.output
+    assert len(draft_revisions) == 1
+    assert draft_revisions[0].text == "Automated monthly reporting workflows."
+    assert draft_revisions[0].source_ids == ["source-1"]
+    assert draft_revisions[0].question_ids == ["question-1"]
+    assert repository.get("fact-1").status == ExperienceFactStatus.ACTIVE
 
     get_settings.cache_clear()
 

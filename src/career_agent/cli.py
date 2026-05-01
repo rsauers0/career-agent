@@ -14,8 +14,11 @@ from career_agent.errors import (
     ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
+    EvidenceReferenceRemovalError,
     FactNotFoundError,
+    FactRevisionNotAllowedError,
     FactRoleMismatchError,
+    InvalidFactStatusTransitionError,
     InvalidLLMOutputError,
     LLMClientError,
     LLMConfigurationError,
@@ -496,6 +499,168 @@ def add_fact(
         raise typer.Exit(1) from exc
 
     console.print("[green]Saved experience fact.[/green]")
+    console.print(f"Fact ID: {fact.id}")
+
+
+@facts_app.command("activate")
+def activate_fact(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+) -> None:
+    """Activate a draft experience fact."""
+
+    service = build_experience_fact_service()
+    try:
+        fact = service.activate_fact(fact_id)
+    except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Activated experience fact.[/green]")
+    console.print(f"Fact ID: {fact.id}")
+
+
+@facts_app.command("needs-clarification")
+def mark_fact_needs_clarification(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    reason: str | None = typer.Option(None, help="Reason clarification is needed."),
+) -> None:
+    """Mark a draft experience fact as needing clarification."""
+
+    service = build_experience_fact_service()
+    try:
+        fact = service.mark_needs_clarification(fact_id)
+    except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Marked experience fact as needing clarification.[/green]")
+    console.print(f"Fact ID: {fact.id}")
+    if reason:
+        console.print(f"Reason: {reason}")
+
+
+@facts_app.command("draft")
+def return_fact_to_draft(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+) -> None:
+    """Return a needs-clarification experience fact to draft."""
+
+    service = build_experience_fact_service()
+    try:
+        fact = service.return_to_draft(fact_id)
+    except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Returned experience fact to draft.[/green]")
+    console.print(f"Fact ID: {fact.id}")
+
+
+@facts_app.command("reject")
+def reject_fact(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    reason: str | None = typer.Option(None, help="Reason this fact was rejected."),
+) -> None:
+    """Reject a draft or needs-clarification experience fact."""
+
+    service = build_experience_fact_service()
+    try:
+        fact = service.reject_fact(fact_id)
+    except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Rejected experience fact.[/green]")
+    console.print(f"Fact ID: {fact.id}")
+    if reason:
+        console.print(f"Reason: {reason}")
+
+
+@facts_app.command("archive")
+def archive_fact(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+) -> None:
+    """Archive an experience fact."""
+
+    service = build_experience_fact_service()
+    try:
+        fact = service.archive_fact(fact_id)
+    except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Archived experience fact.[/green]")
+    console.print(f"Fact ID: {fact.id}")
+
+
+@facts_app.command("revise")
+def revise_fact(
+    fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    text: str = typer.Option(..., help="Revised experience fact text."),
+    source_ids: list[str] = typer.Option(
+        [],
+        "--source-id",
+        help="Additional source id supporting this revision. Can be provided more than once.",
+    ),
+    question_ids: list[str] = typer.Option(
+        [],
+        "--question-id",
+        help="Additional clarification question id. Can be provided more than once.",
+    ),
+    message_ids: list[str] = typer.Option(
+        [],
+        "--message-id",
+        help="Additional clarification message id. Can be provided more than once.",
+    ),
+    details: list[str] = typer.Option(
+        [],
+        "--detail",
+        help="Replacement second-level detail. Can be provided more than once.",
+    ),
+    systems: list[str] = typer.Option(
+        [],
+        "--system",
+        help="Replacement referenced system list item. Can be provided more than once.",
+    ),
+    skills: list[str] = typer.Option(
+        [],
+        "--skill",
+        help="Replacement referenced skill list item. Can be provided more than once.",
+    ),
+    functions: list[str] = typer.Option(
+        [],
+        "--function",
+        help="Replacement referenced function list item. Can be provided more than once.",
+    ),
+) -> None:
+    """Revise an experience fact according to lifecycle rules."""
+
+    service = build_experience_fact_service()
+    try:
+        fact = service.revise_fact(
+            fact_id=fact_id,
+            text=text,
+            source_ids=source_ids,
+            question_ids=question_ids,
+            message_ids=message_ids,
+            details=details,
+            systems=systems,
+            skills=skills,
+            functions=functions,
+        )
+    except (
+        EvidenceReferenceRemovalError,
+        FactNotFoundError,
+        FactRevisionNotAllowedError,
+        RoleNotFoundError,
+        SourceNotFoundError,
+        SourceRoleMismatchError,
+        ValidationError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Revised experience fact.[/green]")
     console.print(f"Fact ID: {fact.id}")
 
 

@@ -89,6 +89,22 @@ def test_experience_fact_supports_superseded_status() -> None:
     assert fact.superseded_by_fact_id == "fact-2"
 
 
+def test_experience_fact_supports_review_statuses() -> None:
+    needs_clarification_fact = ExperienceFact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+        status=ExperienceFactStatus.NEEDS_CLARIFICATION,
+    )
+    rejected_fact = ExperienceFact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+        status=ExperienceFactStatus.REJECTED,
+    )
+
+    assert needs_clarification_fact.status == ExperienceFactStatus.NEEDS_CLARIFICATION
+    assert rejected_fact.status == ExperienceFactStatus.REJECTED
+
+
 def test_experience_fact_requires_role_id() -> None:
     with pytest.raises(ValidationError):
         ExperienceFact(

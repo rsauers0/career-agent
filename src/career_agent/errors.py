@@ -29,6 +29,14 @@ class EvidenceReferenceRemovalError(CareerAgentError):
     """Raised when immutable evidence references would be removed."""
 
 
+class InvalidFactStatusTransitionError(CareerAgentError):
+    """Raised when an experience fact status transition is not allowed."""
+
+
+class FactRevisionNotAllowedError(CareerAgentError):
+    """Raised when an experience fact cannot be revised in its current state."""
+
+
 class NoUnanalyzedSourcesError(CareerAgentError):
     """Raised when a workflow requires unanalyzed sources but none exist."""
 
