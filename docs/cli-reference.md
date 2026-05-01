@@ -302,7 +302,7 @@ not resolve a question automatically; use `questions resolve` or
 
 ## Experience Workflow
 
-Start deterministic source analysis for one experience role's unanalyzed sources:
+Start source analysis for one experience role's unanalyzed sources:
 
 ```bash
 uv run career-agent experience-workflow analyze-sources --role-id <role-id>
@@ -315,7 +315,8 @@ does not mark those sources as analyzed.
 
 If `CAREER_AGENT_LLM_BASE_URL` is configured, this command uses the LLM-backed
 source question generator. If it is unset, it uses deterministic local question
-generation.
+generation. The command prints the selected question generator before analysis
+starts.
 
 ## Configuration
 

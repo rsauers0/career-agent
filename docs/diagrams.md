@@ -123,7 +123,9 @@ This is the core guardrail model: AI can reason and propose, but application ser
 
 ## LLM Boundary
 
-The current LLM boundary is implemented without real network transport. Future model-backed generators should depend on this boundary instead of embedding provider calls directly in workflow services.
+The current LLM boundary has a provider-neutral client protocol plus an opt-in
+OpenAI-compatible transport. Model-backed generators depend on this boundary
+instead of embedding provider calls directly in workflow services.
 
 ```mermaid
 flowchart LR

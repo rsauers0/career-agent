@@ -2,7 +2,7 @@
 
 Career Agent is a local-first Python application for managing structured career data and building AI-assisted job search workflows.
 
-This branch, `v2-foundation`, is rebuilding the application foundation around smaller, CLI-first workflows before reintroducing TUI and LLM-assisted features.
+This branch, `v2-foundation`, is rebuilding the application foundation around smaller, CLI-first workflows before expanding TUI and LLM-assisted features.
 
 ## Current Branch Status
 
@@ -15,7 +15,8 @@ Current scope:
 - rebuild one component at a time
 - maintain component boundaries for User Preferences, Experience Roles, Role Sources, Experience Bullets, and Source Analysis
 - use JSON persistence first
-- defer TUI and LLM workflow integration until the underlying services are clear and tested
+- keep TUI deferred while validating workflow behavior through the CLI
+- support opt-in LLM-backed source question generation through an OpenAI-compatible endpoint
 
 See [docs/v2-foundation-plan.md](docs/v2-foundation-plan.md) for the rebuild plan.
 See [docs/component-architecture.md](docs/component-architecture.md) for the current component architecture.
@@ -107,6 +108,16 @@ If `CAREER_AGENT_DATA_DIR` is unset, the app uses:
 ```text
 <home-directory>/.career-agent
 ```
+
+Optional LLM settings:
+
+```dotenv
+CAREER_AGENT_LLM_BASE_URL=http://localhost:1234/v1
+CAREER_AGENT_LLM_MODEL=<model-name>
+CAREER_AGENT_LLM_API_KEY=
+```
+
+If no LLM base URL is configured, supported workflows use deterministic local behavior.
 
 ## Development Direction
 

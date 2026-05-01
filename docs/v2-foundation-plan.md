@@ -39,9 +39,9 @@ Each major component should be built in this order:
 7. LLM workflow
    Add AI behavior as structured proposals applied by deterministic services.
 
-The LLM boundary should be introduced before real model calls. The first slice is a synchronous, provider-neutral `LLMClient` protocol with request/response models and a fake client for tests. Real endpoint configuration and HTTP transport should be added later.
+The LLM boundary is introduced before broader AI workflows. The first slice is a synchronous, provider-neutral `LLMClient` protocol with request/response models, a fake client for tests, and an opt-in OpenAI-compatible HTTP client.
 
-The OpenAI-compatible client should remain opt-in until configuration and workflow wiring are added. Tests should use mocked HTTP transport and should not make real network calls.
+The OpenAI-compatible client remains opt-in through configuration. Tests should use mocked HTTP transport and should not make real network calls.
 
 Workflow wiring should default to deterministic local behavior when no LLM base URL is configured. Setting an LLM base URL opts supported workflows into the OpenAI-compatible client and requires a model.
 
@@ -127,9 +127,9 @@ Question resolution should remain explicit. A future LLM workflow may recommend 
 
 The initial deterministic harness starts source analysis for `not_analyzed` role sources only. Previously analyzed sources should not be re-ingested as raw source material; later workflow passes can use existing bullets as structured context instead.
 
-Source question generation should use a structured proposal boundary. The current deterministic generator returns `GeneratedSourceQuestion` values with question text and relevant source ids. A future LLM implementation should replace the generator, not the workflow orchestration.
+Source question generation should use a structured proposal boundary. The deterministic generator returns `GeneratedSourceQuestion` values with question text and relevant source ids. The LLM-backed generator replaces the generator implementation, not the workflow orchestration.
 
-The first LLM-backed source question generator should use the same boundary. It should call `LLMClient`, parse JSON, and reject malformed or ungrounded output before questions are saved.
+The first LLM-backed source question generator uses the same boundary. It calls `LLMClient`, parses JSON, tolerates fenced JSON blocks, and rejects malformed or ungrounded output before questions are saved.
 
 The workflow should check for an existing active run before question generation, then generate valid question proposals before creating the Source Analysis run. A failed generator should not leave an active run behind.
 

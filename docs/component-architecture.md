@@ -224,7 +224,7 @@ Examples of coordinated behavior:
 
 Experience Workflow does not own persistence. It coordinates component services and should not write directly to JSON files.
 
-Question generation is behind a small `SourceQuestionGenerator` protocol. The current implementation is deterministic and used for dev validation; a future LLM generator should plug into the same structured proposal contract.
+Question generation is behind a small `SourceQuestionGenerator` protocol. The deterministic generator is used for local dev validation and fallback behavior. The LLM-backed generator plugs into the same structured proposal contract.
 
 `LLMSourceQuestionGenerator` is available as the first LLM-backed implementation of that protocol. It uses `LLMClient`, expects JSON output, and validates that generated questions match the `GeneratedSourceQuestion` contract before returning them to the workflow.
 
@@ -234,7 +234,7 @@ Factory wiring selects the deterministic generator when no LLM base URL is confi
 
 ### LLM Boundary
 
-Purpose: defines a provider-neutral completion boundary for future AI features.
+Purpose: defines a provider-neutral completion boundary for AI-assisted workflows.
 
 Current files:
 
@@ -242,6 +242,7 @@ Current files:
 src/career_agent/llm/
   models.py
   client.py
+  openai_compatible_client.py
 ```
 
 Current CLI group:
