@@ -955,6 +955,9 @@ def test_facts_activate_marks_draft_fact_active(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "Activated experience fact." in result.output
     assert repository.get("fact-1").status == ExperienceFactStatus.ACTIVE
+    events = repository.list_change_events(fact_id="fact-1")
+    assert events[-1].event_type.value == "activated"
+    assert events[-1].actor.value == "user"
 
     get_settings.cache_clear()
 
@@ -983,13 +986,28 @@ def test_facts_needs_clarification_marks_draft_fact(monkeypatch, tmp_path) -> No
 
     result = runner.invoke(
         app,
-        ["facts", "needs-clarification", "fact-1", "--reason", "Metric needs evidence."],
+        [
+            "facts",
+            "needs-clarification",
+            "fact-1",
+            "--actor",
+            "llm",
+            "--reason",
+            "Metric needs evidence.",
+            "--source-message-id",
+            "message-1",
+        ],
     )
 
     assert result.exit_code == 0
     assert "Marked experience fact as needing clarification." in result.output
     assert "Metric needs evidence." in result.output
     assert repository.get("fact-1").status == ExperienceFactStatus.NEEDS_CLARIFICATION
+    events = repository.list_change_events(fact_id="fact-1")
+    assert events[-1].event_type.value == "needs_clarification"
+    assert events[-1].actor.value == "llm"
+    assert events[-1].summary == "Metric needs evidence."
+    assert events[-1].source_message_ids == ["message-1"]
 
     get_settings.cache_clear()
 
@@ -1065,6 +1083,10 @@ def test_facts_revise_active_fact_creates_draft_revision(monkeypatch, tmp_path) 
             "Automated monthly reporting workflows.",
             "--question-id",
             "question-1",
+            "--reason",
+            "Added monthly reporting specificity.",
+            "--source-message-id",
+            "message-1",
         ],
     )
     facts = repository.list(role_id="role-1")
@@ -1081,6 +1103,20 @@ def test_facts_revise_active_fact_creates_draft_revision(monkeypatch, tmp_path) 
     assert draft_revisions[0].source_ids == ["source-1"]
     assert draft_revisions[0].question_ids == ["question-1"]
     assert repository.get("fact-1").status == ExperienceFactStatus.ACTIVE
+    events = repository.list_change_events(fact_id=draft_revisions[0].id)
+    assert events[0].event_type.value == "revised"
+    assert events[0].summary == "Added monthly reporting specificity."
+    assert events[0].source_message_ids == ["message-1"]
+
+    list_result = runner.invoke(
+        app,
+        ["facts", "events", "--role-id", "role-1"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert list_result.exit_code == 0
+    assert "Fact Change Events" in list_result.output
+    assert "revised" in list_result.output
 
     get_settings.cache_clear()
 

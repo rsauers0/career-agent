@@ -164,6 +164,7 @@ Examples of owned data:
 - superseded/supersedes fact ids for revisions
 - lifecycle status
 - creation and update timestamps
+- semantic fact change events stored in `fact_change_events.json`
 
 Experience facts are the current canonical career data component. Draft facts are canonical fact records that are visible for review but not active yet. Proposed facts should be represented as `ExperienceFact` records in `draft` status, not as a parallel proposal component. LLM-generated candidates that fail evals should be retained later as analysis artifacts, not as canonical facts. Role-level review remains on Experience Roles. Fact records may carry lightweight reference lists for systems, skills, and functions when those references are grounded in the fact evidence; broad inferred classifications should still wait for later derived-evidence workflows.
 
@@ -358,7 +359,7 @@ Writing standards for normalized facts:
 
 Merge behavior should be conservative. Similar wording, similar metrics, or shared tools are not enough to combine facts. A generated fact should merge evidence only when it is clearly the same work, same project or process, same metric context, and same outcome.
 
-Fact history should stay separate from the canonical fact record. Messages capture the conversational why; snapshots provide file-level backup; a lightweight `FactChangeEvent` table should capture semantic system changes such as created, revised, accepted, rejected, clarification-needed, superseded, archived, or constraint-created. Change events should use `actor` for the responsible party and link back to source message ids when a user or assistant exchange caused the change.
+Fact history should stay separate from the canonical fact record. Messages capture the conversational why; snapshots provide file-level backup; a lightweight `FactChangeEvent` table captures semantic changes such as created, revised, activated, needs-clarification, returned-to-draft, rejected, archived, superseded, and evidence-added. Change events use `actor` for the responsible party with values `user`, `llm`, or `system`, and link back to source message ids when a user or LLM exchange caused the change. CLI exposes actor as developer/workflow harness metadata; later TUI or web interfaces should derive actor from workflow context rather than exposing it as an end-user choice.
 
 ### Scoped Constraints
 

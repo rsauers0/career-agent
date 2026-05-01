@@ -4,6 +4,9 @@ from pydantic import ValidationError
 from career_agent.experience_facts.models import (
     ExperienceFact,
     ExperienceFactStatus,
+    FactChangeActor,
+    FactChangeEvent,
+    FactChangeEventType,
 )
 
 
@@ -126,5 +129,53 @@ def test_experience_fact_rejects_naive_timestamps() -> None:
         ExperienceFact(
             role_id="role-1",
             text="Automated reporting workflows.",
+            created_at="2026-01-01T00:00:00",
+        )
+
+
+def test_fact_change_event_json_round_trip() -> None:
+    event = FactChangeEvent(
+        fact_id="fact-1",
+        role_id="role-1",
+        event_type=FactChangeEventType.ACTIVATED,
+        actor=FactChangeActor.USER,
+        summary="Accepted as grounded.",
+        source_message_ids=["message-1"],
+        from_status=ExperienceFactStatus.DRAFT,
+        to_status=ExperienceFactStatus.ACTIVE,
+        related_fact_id="fact-0",
+    )
+
+    restored = FactChangeEvent.model_validate_json(event.model_dump_json())
+
+    assert restored == event
+    assert restored.id
+
+
+def test_fact_change_event_normalizes_text_fields() -> None:
+    event = FactChangeEvent(
+        fact_id="  fact-1  ",
+        role_id="  role-1  ",
+        event_type=FactChangeEventType.REVISED,
+        actor=FactChangeActor.LLM,
+        summary="  Revised from user clarification.  ",
+        source_message_ids=["  message-1  ", ""],
+        related_fact_id="  fact-0  ",
+    )
+
+    assert event.fact_id == "fact-1"
+    assert event.role_id == "role-1"
+    assert event.summary == "Revised from user clarification."
+    assert event.source_message_ids == ["message-1"]
+    assert event.related_fact_id == "fact-0"
+
+
+def test_fact_change_event_rejects_naive_timestamp() -> None:
+    with pytest.raises(ValidationError, match="timezone-aware"):
+        FactChangeEvent(
+            fact_id="fact-1",
+            role_id="role-1",
+            event_type=FactChangeEventType.CREATED,
+            actor=FactChangeActor.SYSTEM,
             created_at="2026-01-01T00:00:00",
         )

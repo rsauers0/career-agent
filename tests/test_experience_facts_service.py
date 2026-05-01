@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from career_agent.errors import (
@@ -10,7 +12,13 @@ from career_agent.errors import (
     SourceNotFoundError,
     SourceRoleMismatchError,
 )
-from career_agent.experience_facts.models import ExperienceFact, ExperienceFactStatus
+from career_agent.experience_facts.models import (
+    ExperienceFact,
+    ExperienceFactStatus,
+    FactChangeActor,
+    FactChangeEvent,
+    FactChangeEventType,
+)
 from career_agent.experience_facts.service import ExperienceFactService
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.role_sources.models import RoleSourceEntry
@@ -19,6 +27,7 @@ from career_agent.role_sources.models import RoleSourceEntry
 class FakeExperienceFactRepository:
     def __init__(self) -> None:
         self.facts: dict[str, ExperienceFact] = {}
+        self.change_events: list[FactChangeEvent] = []
 
     def list(self, role_id: str | None = None) -> list[ExperienceFact]:
         facts = list(self.facts.values())
@@ -31,6 +40,21 @@ class FakeExperienceFactRepository:
 
     def save(self, fact: ExperienceFact) -> None:
         self.facts[fact.id] = fact
+
+    def list_change_events(
+        self,
+        fact_id: str | None = None,
+        role_id: str | None = None,
+    ) -> list[FactChangeEvent]:
+        events = self.change_events
+        if fact_id is not None:
+            events = [event for event in events if event.fact_id == fact_id]
+        if role_id is not None:
+            events = [event for event in events if event.role_id == role_id]
+        return events
+
+    def save_change_event(self, event: FactChangeEvent) -> None:
+        self.change_events.append(event)
 
     def delete(self, fact_id: str) -> bool:
         if fact_id not in self.facts:
@@ -130,6 +154,21 @@ def test_experience_fact_service_returns_fact_by_id() -> None:
     assert service.get_fact("missing-fact") is None
 
 
+def test_experience_fact_service_lists_change_events() -> None:
+    service, _fact_repository, role_repository, _source_repository = build_service()
+    role_repository.save(build_role())
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+
+    events = service.list_change_events(fact_id=fact.id)
+
+    assert len(events) == 1
+    assert events[0].event_type == FactChangeEventType.CREATED
+    assert service.list_change_events(role_id="role-1") == events
+
+
 def test_experience_fact_service_adds_fact_for_existing_role() -> None:
     service, _fact_repository, role_repository, source_repository = build_service()
     role_repository.save(build_role())
@@ -157,6 +196,10 @@ def test_experience_fact_service_adds_fact_for_existing_role() -> None:
     assert fact.skills == ["Power Automate"]
     assert fact.functions == ["workflow automation"]
     assert fact.status == ExperienceFactStatus.DRAFT
+    assert _fact_repository.change_events[0].event_type == FactChangeEventType.CREATED
+    assert _fact_repository.change_events[0].actor == FactChangeActor.USER
+    assert _fact_repository.change_events[0].fact_id == fact.id
+    assert _fact_repository.change_events[0].to_status == ExperienceFactStatus.DRAFT
 
 
 def test_experience_fact_service_adds_fact_that_supersedes_existing_fact() -> None:
@@ -336,7 +379,7 @@ def test_experience_fact_service_rejects_removed_evidence_references() -> None:
 
 
 def test_experience_fact_service_activates_draft_fact() -> None:
-    service, _fact_repository, role_repository, _source_repository = build_service()
+    service, fact_repository, role_repository, _source_repository = build_service()
     role_repository.save(build_role())
     fact = service.add_fact(
         role_id="role-1",
@@ -347,6 +390,9 @@ def test_experience_fact_service_activates_draft_fact() -> None:
 
     assert activated_fact.status == ExperienceFactStatus.ACTIVE
     assert service.get_fact(fact.id) == activated_fact
+    assert fact_repository.change_events[-1].event_type == FactChangeEventType.ACTIVATED
+    assert fact_repository.change_events[-1].from_status == ExperienceFactStatus.DRAFT
+    assert fact_repository.change_events[-1].to_status == ExperienceFactStatus.ACTIVE
 
 
 def test_experience_fact_service_rejects_invalid_transition() -> None:

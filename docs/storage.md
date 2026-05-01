@@ -55,15 +55,21 @@ Experience Facts are stored as:
 <data_dir>/
   experience_facts/
     experience_facts.json
+    fact_change_events.json
   snapshots/
     experience_facts/
       <timestamp>-experience_facts.json
+      <timestamp>-fact_change_events.json
 ```
 
 Experience fact records include the fact text, optional second-level details,
 append-only evidence ids for sources/questions/messages, grounded reference
 lists for systems/skills/functions, revision links, lifecycle status, and
 timestamps.
+
+Fact change events record semantic history for experience facts, including the
+event type, actor, summary, source message ids, status transition, related fact
+id, and timestamp.
 
 Source Analysis artifacts are stored as table-like JSON files:
 

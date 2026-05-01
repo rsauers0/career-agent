@@ -161,7 +161,7 @@ User corrections may create scoped constraints. A single correction can produce 
 
 Constraint extraction should separate preferences from hard rules. The LLM may propose severity, but deterministic workflow and user approval decide what becomes active.
 
-Historical traceability should not be stored directly on the canonical fact. Messages preserve conversational rationale, snapshots preserve file-level backups, and a lightweight fact change event record should preserve semantic changes with an `actor`, event type, summary, and source message ids.
+Historical traceability should not be stored directly on the canonical fact. Messages preserve conversational rationale, snapshots preserve file-level backups, and fact change event records preserve semantic changes with an `actor`, event type, summary, source message ids, status transition, related fact id, and timestamp. Actor values are `user`, `llm`, and `system`; UI workflows should set actor from context rather than exposing it as an end-user control.
 
 Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, fact proposal, drift checking, merge checking, clarification planning, and deterministic service transitions.
 

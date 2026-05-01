@@ -12,7 +12,13 @@ from career_agent.errors import (
     SourceNotFoundError,
     SourceRoleMismatchError,
 )
-from career_agent.experience_facts.models import ExperienceFact, ExperienceFactStatus
+from career_agent.experience_facts.models import (
+    ExperienceFact,
+    ExperienceFactStatus,
+    FactChangeActor,
+    FactChangeEvent,
+    FactChangeEventType,
+)
 from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.repository import RoleSourceRepository
@@ -76,6 +82,9 @@ class ExperienceFactService:
         skills: list[str] | None = None,
         functions: list[str] | None = None,
         supersedes_fact_id: str | None = None,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
     ) -> ExperienceFact:
         """Create a canonical fact for an existing role."""
 
@@ -94,6 +103,15 @@ class ExperienceFactService:
             supersedes_fact_id=supersedes_fact_id,
         )
         self.fact_repository.save(fact)
+        self._record_change_event(
+            fact=fact,
+            event_type=FactChangeEventType.CREATED,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids or [],
+            to_status=fact.status,
+            related_fact_id=supersedes_fact_id,
+        )
         return fact
 
     def save_fact(self, fact: ExperienceFact) -> None:
@@ -106,7 +124,13 @@ class ExperienceFactService:
         self._validate_saved_fact_lifecycle_rules(fact)
         self.fact_repository.save(fact)
 
-    def activate_fact(self, fact_id: str) -> ExperienceFact:
+    def activate_fact(
+        self,
+        fact_id: str,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ExperienceFact:
         """Activate a draft fact and supersede its prior fact when applicable."""
 
         fact = self._get_required_fact(fact_id)
@@ -121,8 +145,19 @@ class ExperienceFactService:
 
         activated_fact = self._with_status(fact, ExperienceFactStatus.ACTIVE)
         self.save_fact(activated_fact)
+        self._record_change_event(
+            fact=activated_fact,
+            event_type=FactChangeEventType.ACTIVATED,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids or [],
+            from_status=fact.status,
+            to_status=activated_fact.status,
+            related_fact_id=activated_fact.supersedes_fact_id,
+        )
 
         if superseded_fact is not None:
+            from_status = superseded_fact.status
             superseded_fact = superseded_fact.model_copy(
                 update={
                     "status": ExperienceFactStatus.SUPERSEDED,
@@ -131,28 +166,90 @@ class ExperienceFactService:
                 }
             )
             self.save_fact(superseded_fact)
+            self._record_change_event(
+                fact=superseded_fact,
+                event_type=FactChangeEventType.SUPERSEDED,
+                actor=actor,
+                summary=summary,
+                source_message_ids=source_message_ids or [],
+                from_status=from_status,
+                to_status=superseded_fact.status,
+                related_fact_id=activated_fact.id,
+            )
 
         return activated_fact
 
-    def mark_needs_clarification(self, fact_id: str) -> ExperienceFact:
+    def mark_needs_clarification(
+        self,
+        fact_id: str,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ExperienceFact:
         """Mark a draft fact as needing additional clarification."""
 
-        return self._transition_fact(fact_id, ExperienceFactStatus.NEEDS_CLARIFICATION)
+        return self._transition_fact(
+            fact_id=fact_id,
+            new_status=ExperienceFactStatus.NEEDS_CLARIFICATION,
+            event_type=FactChangeEventType.NEEDS_CLARIFICATION,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids or [],
+        )
 
-    def return_to_draft(self, fact_id: str) -> ExperienceFact:
+    def return_to_draft(
+        self,
+        fact_id: str,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ExperienceFact:
         """Return a needs-clarification fact to draft status."""
 
-        return self._transition_fact(fact_id, ExperienceFactStatus.DRAFT)
+        return self._transition_fact(
+            fact_id=fact_id,
+            new_status=ExperienceFactStatus.DRAFT,
+            event_type=FactChangeEventType.RETURNED_TO_DRAFT,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids or [],
+        )
 
-    def reject_fact(self, fact_id: str) -> ExperienceFact:
+    def reject_fact(
+        self,
+        fact_id: str,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ExperienceFact:
         """Reject a draft or needs-clarification fact."""
 
-        return self._transition_fact(fact_id, ExperienceFactStatus.REJECTED)
+        return self._transition_fact(
+            fact_id=fact_id,
+            new_status=ExperienceFactStatus.REJECTED,
+            event_type=FactChangeEventType.REJECTED,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids or [],
+        )
 
-    def archive_fact(self, fact_id: str) -> ExperienceFact:
+    def archive_fact(
+        self,
+        fact_id: str,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ExperienceFact:
         """Archive a fact when its current lifecycle status allows it."""
 
-        return self._transition_fact(fact_id, ExperienceFactStatus.ARCHIVED)
+        return self._transition_fact(
+            fact_id=fact_id,
+            new_status=ExperienceFactStatus.ARCHIVED,
+            event_type=FactChangeEventType.ARCHIVED,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids or [],
+        )
 
     def revise_fact(
         self,
@@ -165,11 +262,15 @@ class ExperienceFactService:
         systems: list[str] | None = None,
         skills: list[str] | None = None,
         functions: list[str] | None = None,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
     ) -> ExperienceFact:
         """Revise a fact according to lifecycle rules."""
 
         fact = self._get_required_fact(fact_id)
         source_ids = source_ids or []
+        source_message_ids = source_message_ids or []
         self._validate_role_and_sources(role_id=fact.role_id, source_ids=source_ids)
 
         if fact.status in {ExperienceFactStatus.DRAFT, ExperienceFactStatus.NEEDS_CLARIFICATION}:
@@ -188,6 +289,13 @@ class ExperienceFactService:
                 superseded_by_fact_id=fact.superseded_by_fact_id,
             )
             self.save_fact(revised_fact)
+            self._record_revision_events(
+                original_fact=fact,
+                revised_fact=revised_fact,
+                actor=actor,
+                summary=summary,
+                source_message_ids=source_message_ids,
+            )
             return revised_fact
 
         if fact.status == ExperienceFactStatus.ACTIVE:
@@ -207,6 +315,25 @@ class ExperienceFactService:
                 new_id=True,
             )
             self.save_fact(revised_fact)
+            self._record_change_event(
+                fact=revised_fact,
+                event_type=FactChangeEventType.REVISED,
+                actor=actor,
+                summary=summary,
+                source_message_ids=source_message_ids,
+                to_status=revised_fact.status,
+                related_fact_id=fact.id,
+            )
+            if self._has_added_evidence(fact, revised_fact):
+                self._record_change_event(
+                    fact=revised_fact,
+                    event_type=FactChangeEventType.EVIDENCE_ADDED,
+                    actor=actor,
+                    summary=summary,
+                    source_message_ids=source_message_ids,
+                    to_status=revised_fact.status,
+                    related_fact_id=fact.id,
+                )
             return revised_fact
 
         msg = f"Experience fact cannot be revised while status is {fact.status.value}."
@@ -216,6 +343,15 @@ class ExperienceFactService:
         """Delete one saved fact by identifier."""
 
         return self.fact_repository.delete(fact_id)
+
+    def list_change_events(
+        self,
+        fact_id: str | None = None,
+        role_id: str | None = None,
+    ) -> list[FactChangeEvent]:
+        """Return fact change events, optionally filtered by fact or role."""
+
+        return self.fact_repository.list_change_events(fact_id=fact_id, role_id=role_id)
 
     def _get_required_fact(self, fact_id: str) -> ExperienceFact:
         """Return a fact or raise a domain error."""
@@ -230,6 +366,10 @@ class ExperienceFactService:
         self,
         fact_id: str,
         new_status: ExperienceFactStatus,
+        event_type: FactChangeEventType,
+        actor: FactChangeActor,
+        summary: str | None,
+        source_message_ids: list[str],
     ) -> ExperienceFact:
         """Apply a strict lifecycle transition to one fact."""
 
@@ -237,6 +377,15 @@ class ExperienceFactService:
         self._validate_status_transition(fact.status, new_status)
         updated_fact = self._with_status(fact, new_status)
         self.save_fact(updated_fact)
+        self._record_change_event(
+            fact=updated_fact,
+            event_type=event_type,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids,
+            from_status=fact.status,
+            to_status=new_status,
+        )
         return updated_fact
 
     def _with_status(
@@ -247,6 +396,76 @@ class ExperienceFactService:
         """Return a copy of a fact with a new status and update timestamp."""
 
         return fact.model_copy(update={"status": status, "updated_at": self._now()})
+
+    def _record_revision_events(
+        self,
+        original_fact: ExperienceFact,
+        revised_fact: ExperienceFact,
+        actor: FactChangeActor,
+        summary: str | None,
+        source_message_ids: list[str],
+    ) -> None:
+        """Record revision and evidence-added events for an in-place revision."""
+
+        self._record_change_event(
+            fact=revised_fact,
+            event_type=FactChangeEventType.REVISED,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids,
+            from_status=original_fact.status,
+            to_status=revised_fact.status,
+        )
+        if self._has_added_evidence(original_fact, revised_fact):
+            self._record_change_event(
+                fact=revised_fact,
+                event_type=FactChangeEventType.EVIDENCE_ADDED,
+                actor=actor,
+                summary=summary,
+                source_message_ids=source_message_ids,
+                from_status=original_fact.status,
+                to_status=revised_fact.status,
+            )
+
+    def _record_change_event(
+        self,
+        fact: ExperienceFact,
+        event_type: FactChangeEventType,
+        actor: FactChangeActor,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
+        from_status: ExperienceFactStatus | None = None,
+        to_status: ExperienceFactStatus | None = None,
+        related_fact_id: str | None = None,
+    ) -> None:
+        """Persist a semantic fact change event."""
+
+        event = FactChangeEvent(
+            fact_id=fact.id,
+            role_id=fact.role_id,
+            event_type=event_type,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids or [],
+            from_status=from_status,
+            to_status=to_status,
+            related_fact_id=related_fact_id,
+        )
+        self.fact_repository.save_change_event(event)
+
+    def _has_added_evidence(
+        self,
+        existing_fact: ExperienceFact,
+        updated_fact: ExperienceFact,
+    ) -> bool:
+        """Return whether an update adds evidence references."""
+
+        for field_name in ("source_ids", "question_ids", "message_ids"):
+            existing_values = set(getattr(existing_fact, field_name))
+            updated_values = set(getattr(updated_fact, field_name))
+            if updated_values - existing_values:
+                return True
+        return False
 
     def _validate_status_transition(
         self,

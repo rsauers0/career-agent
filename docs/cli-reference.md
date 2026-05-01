@@ -236,12 +236,30 @@ uv run career-agent facts add \
 Manage fact lifecycle:
 
 ```bash
-uv run career-agent facts activate <fact-id>
-uv run career-agent facts needs-clarification <fact-id> --reason "Metric needs supporting evidence."
-uv run career-agent facts draft <fact-id>
-uv run career-agent facts reject <fact-id> --reason "Unsupported scope expansion."
-uv run career-agent facts archive <fact-id>
-uv run career-agent facts revise <fact-id> --text "Revised grounded fact text."
+uv run career-agent facts activate <fact-id> --actor user
+uv run career-agent facts needs-clarification <fact-id> \
+  --actor llm \
+  --reason "Metric needs supporting evidence." \
+  --source-message-id <message-id>
+uv run career-agent facts draft <fact-id> --actor user
+uv run career-agent facts reject <fact-id> --actor user --reason "Unsupported scope expansion."
+uv run career-agent facts archive <fact-id> --actor user
+uv run career-agent facts revise <fact-id> \
+  --text "Revised grounded fact text." \
+  --actor user \
+  --source-message-id <message-id>
+```
+
+The `--actor` option is CLI/dev workflow metadata. It defaults to `user` and
+accepts `user`, `llm`, or `system`. Later TUI or web flows should set actor from
+the workflow context rather than exposing it as an end-user control.
+
+List fact change events:
+
+```bash
+uv run career-agent facts events
+uv run career-agent facts events --fact-id <fact-id>
+uv run career-agent facts events --role-id <role-id>
 ```
 
 Delete one saved fact:

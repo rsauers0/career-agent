@@ -28,7 +28,11 @@ from career_agent.errors import (
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
 )
-from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.models import (
+    ExperienceFact,
+    FactChangeActor,
+    FactChangeEvent,
+)
 from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_facts.service import ExperienceFactService
 from career_agent.experience_roles.models import (
@@ -420,6 +424,22 @@ def show_fact(
     render_experience_fact(fact)
 
 
+@facts_app.command("events")
+def list_fact_change_events(
+    fact_id: str | None = typer.Option(None, help="Optional fact id to filter events."),
+    role_id: str | None = typer.Option(None, help="Optional role id to filter events."),
+) -> None:
+    """List experience fact change events."""
+
+    service = build_experience_fact_service()
+    events = service.list_change_events(fact_id=fact_id, role_id=role_id)
+    if not events:
+        console.print("[yellow]No fact change events saved yet.[/yellow]")
+        return
+
+    render_fact_change_event_list(events)
+
+
 @facts_app.command("add")
 def add_fact(
     role_id: str = typer.Option(..., help="Existing experience role id."),
@@ -466,6 +486,19 @@ def add_fact(
         None,
         help="Existing fact id this fact replaces or revises.",
     ),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.USER,
+        help="Workflow actor recorded for the change event.",
+    ),
+    summary: str | None = typer.Option(
+        None,
+        help="Optional summary for the change event.",
+    ),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Clarification message id that caused this change. Can be provided more than once.",
+    ),
 ) -> None:
     """Add a canonical experience fact for an existing role."""
 
@@ -482,6 +515,9 @@ def add_fact(
             skills=skills,
             functions=functions,
             supersedes_fact_id=supersedes_fact_id,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids,
         )
     except (
         FactNotFoundError,
@@ -505,12 +541,27 @@ def add_fact(
 @facts_app.command("activate")
 def activate_fact(
     fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.USER,
+        help="Workflow actor recorded for the change event.",
+    ),
+    reason: str | None = typer.Option(None, help="Reason this fact was activated."),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Clarification message id that caused this change. Can be provided more than once.",
+    ),
 ) -> None:
     """Activate a draft experience fact."""
 
     service = build_experience_fact_service()
     try:
-        fact = service.activate_fact(fact_id)
+        fact = service.activate_fact(
+            fact_id,
+            actor=actor,
+            summary=reason,
+            source_message_ids=source_message_ids,
+        )
     except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
@@ -522,13 +573,27 @@ def activate_fact(
 @facts_app.command("needs-clarification")
 def mark_fact_needs_clarification(
     fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.USER,
+        help="Workflow actor recorded for the change event.",
+    ),
     reason: str | None = typer.Option(None, help="Reason clarification is needed."),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Clarification message id that caused this change. Can be provided more than once.",
+    ),
 ) -> None:
     """Mark a draft experience fact as needing clarification."""
 
     service = build_experience_fact_service()
     try:
-        fact = service.mark_needs_clarification(fact_id)
+        fact = service.mark_needs_clarification(
+            fact_id,
+            actor=actor,
+            summary=reason,
+            source_message_ids=source_message_ids,
+        )
     except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
@@ -542,12 +607,27 @@ def mark_fact_needs_clarification(
 @facts_app.command("draft")
 def return_fact_to_draft(
     fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.USER,
+        help="Workflow actor recorded for the change event.",
+    ),
+    reason: str | None = typer.Option(None, help="Reason this fact returned to draft."),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Clarification message id that caused this change. Can be provided more than once.",
+    ),
 ) -> None:
     """Return a needs-clarification experience fact to draft."""
 
     service = build_experience_fact_service()
     try:
-        fact = service.return_to_draft(fact_id)
+        fact = service.return_to_draft(
+            fact_id,
+            actor=actor,
+            summary=reason,
+            source_message_ids=source_message_ids,
+        )
     except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
@@ -559,13 +639,27 @@ def return_fact_to_draft(
 @facts_app.command("reject")
 def reject_fact(
     fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.USER,
+        help="Workflow actor recorded for the change event.",
+    ),
     reason: str | None = typer.Option(None, help="Reason this fact was rejected."),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Clarification message id that caused this change. Can be provided more than once.",
+    ),
 ) -> None:
     """Reject a draft or needs-clarification experience fact."""
 
     service = build_experience_fact_service()
     try:
-        fact = service.reject_fact(fact_id)
+        fact = service.reject_fact(
+            fact_id,
+            actor=actor,
+            summary=reason,
+            source_message_ids=source_message_ids,
+        )
     except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
@@ -579,12 +673,27 @@ def reject_fact(
 @facts_app.command("archive")
 def archive_fact(
     fact_id: str = typer.Argument(..., help="Experience fact identifier."),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.USER,
+        help="Workflow actor recorded for the change event.",
+    ),
+    reason: str | None = typer.Option(None, help="Reason this fact was archived."),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Clarification message id that caused this change. Can be provided more than once.",
+    ),
 ) -> None:
     """Archive an experience fact."""
 
     service = build_experience_fact_service()
     try:
-        fact = service.archive_fact(fact_id)
+        fact = service.archive_fact(
+            fact_id,
+            actor=actor,
+            summary=reason,
+            source_message_ids=source_message_ids,
+        )
     except (FactNotFoundError, InvalidFactStatusTransitionError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
@@ -632,6 +741,16 @@ def revise_fact(
         "--function",
         help="Replacement referenced function list item. Can be provided more than once.",
     ),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.USER,
+        help="Workflow actor recorded for the change event.",
+    ),
+    reason: str | None = typer.Option(None, help="Reason this fact was revised."),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Clarification message id that caused this change. Can be provided more than once.",
+    ),
 ) -> None:
     """Revise an experience fact according to lifecycle rules."""
 
@@ -647,6 +766,9 @@ def revise_fact(
             systems=systems,
             skills=skills,
             functions=functions,
+            actor=actor,
+            summary=reason,
+            source_message_ids=source_message_ids,
         )
     except (
         EvidenceReferenceRemovalError,
@@ -1141,6 +1263,35 @@ def render_experience_fact(fact: ExperienceFact) -> None:
     table.add_row("Updated At", fact.updated_at.isoformat())
     table.add_row("Text", fact.text)
     table.add_row("Details", "\n".join(fact.details) or "-")
+    console.print(table)
+
+
+def render_fact_change_event_list(events: list[FactChangeEvent]) -> None:
+    """Render fact change events as a compact CLI table."""
+
+    table = Table(title="Fact Change Events")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Fact ID", no_wrap=True)
+    table.add_column("Role ID", no_wrap=True)
+    table.add_column("Type", no_wrap=True)
+    table.add_column("Actor", no_wrap=True)
+    table.add_column("Status")
+    table.add_column("Summary")
+    for event in events:
+        status_change = "-"
+        if event.from_status is not None or event.to_status is not None:
+            from_status = event.from_status.value if event.from_status is not None else "-"
+            to_status = event.to_status.value if event.to_status is not None else "-"
+            status_change = f"{from_status} -> {to_status}"
+        table.add_row(
+            event.id,
+            event.fact_id,
+            event.role_id,
+            event.event_type.value,
+            event.actor.value,
+            status_change,
+            event.summary or "-",
+        )
     console.print(table)
 
 
