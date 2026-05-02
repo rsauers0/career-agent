@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -41,7 +42,7 @@ class RoleSourceEntry(BaseModel):
 
     @field_validator("role_id", mode="before")
     @classmethod
-    def normalize_role_id(cls, value: str) -> str:
+    def normalize_role_id(cls, value: Any) -> Any:
         """Trim role ids before normal Pydantic validation."""
 
         if isinstance(value, str):

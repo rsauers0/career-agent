@@ -501,25 +501,41 @@ class ExperienceFactService:
         """Build an in-place or replacement fact revision."""
 
         created_at = self._now() if new_id else fact.created_at
-        fact_values = {
-            "role_id": fact.role_id,
-            "source_ids": self._merge_values(fact.source_ids, source_ids),
-            "question_ids": self._merge_values(fact.question_ids, question_ids),
-            "message_ids": self._merge_values(fact.message_ids, message_ids),
-            "text": text,
-            "details": details or fact.details,
-            "systems": systems or fact.systems,
-            "skills": skills or fact.skills,
-            "functions": functions or fact.functions,
-            "supersedes_fact_id": supersedes_fact_id,
-            "superseded_by_fact_id": superseded_by_fact_id,
-            "status": status,
-            "created_at": created_at,
-            "updated_at": self._now(),
-        }
-        if not new_id:
-            fact_values["id"] = fact.id
-        return ExperienceFact(**fact_values)
+        updated_at = self._now()
+        if new_id:
+            return ExperienceFact(
+                role_id=fact.role_id,
+                source_ids=self._merge_values(fact.source_ids, source_ids),
+                question_ids=self._merge_values(fact.question_ids, question_ids),
+                message_ids=self._merge_values(fact.message_ids, message_ids),
+                text=text,
+                details=details or fact.details,
+                systems=systems or fact.systems,
+                skills=skills or fact.skills,
+                functions=functions or fact.functions,
+                supersedes_fact_id=supersedes_fact_id,
+                superseded_by_fact_id=superseded_by_fact_id,
+                status=status,
+                created_at=created_at,
+                updated_at=updated_at,
+            )
+        return ExperienceFact(
+            id=fact.id,
+            role_id=fact.role_id,
+            source_ids=self._merge_values(fact.source_ids, source_ids),
+            question_ids=self._merge_values(fact.question_ids, question_ids),
+            message_ids=self._merge_values(fact.message_ids, message_ids),
+            text=text,
+            details=details or fact.details,
+            systems=systems or fact.systems,
+            skills=skills or fact.skills,
+            functions=functions or fact.functions,
+            supersedes_fact_id=supersedes_fact_id,
+            superseded_by_fact_id=superseded_by_fact_id,
+            status=status,
+            created_at=created_at,
+            updated_at=updated_at,
+        )
 
     def _merge_values(self, existing_values: list[str], new_values: list[str]) -> list[str]:
         """Append new values while preserving order and removing duplicates."""
@@ -579,8 +595,7 @@ class ExperienceFactService:
             if removed_values:
                 removed = ", ".join(removed_values)
                 msg = (
-                    "Experience fact evidence references cannot be removed: "
-                    f"{field_name}={removed}"
+                    f"Experience fact evidence references cannot be removed: {field_name}={removed}"
                 )
                 raise EvidenceReferenceRemovalError(msg)
 

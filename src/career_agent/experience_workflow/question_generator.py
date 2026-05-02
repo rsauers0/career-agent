@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError, field_validator
 
@@ -26,7 +26,7 @@ class GeneratedSourceQuestion(BaseModel):
 
     @field_validator("question_text", mode="before")
     @classmethod
-    def normalize_question_text(cls, value: str) -> str:
+    def normalize_question_text(cls, value: Any) -> Any:
         """Trim question text before normal Pydantic validation."""
 
         if isinstance(value, str):
@@ -35,7 +35,7 @@ class GeneratedSourceQuestion(BaseModel):
 
     @field_validator("relevant_source_ids", mode="before")
     @classmethod
-    def normalize_relevant_source_ids(cls, values: list[str] | None) -> list[str]:
+    def normalize_relevant_source_ids(cls, values: Any) -> list[str]:
         """Trim source ids and discard blank entries."""
 
         if values is None:

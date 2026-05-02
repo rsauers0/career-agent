@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import TypeAlias
 
 from pydantic import TypeAdapter
 
@@ -11,6 +12,9 @@ from career_agent.storage import SNAPSHOTS_DIRNAME, timestamp_for_snapshot
 EXPERIENCE_FACTS_DIRNAME = "experience_facts"
 EXPERIENCE_FACTS_FILENAME = "experience_facts.json"
 FACT_CHANGE_EVENTS_FILENAME = "fact_change_events.json"
+
+ExperienceFactList: TypeAlias = list[ExperienceFact]
+FactChangeEventList: TypeAlias = list[FactChangeEvent]
 
 _FACT_LIST_ADAPTER = TypeAdapter(list[ExperienceFact])
 _FACT_CHANGE_EVENT_LIST_ADAPTER = TypeAdapter(list[FactChangeEvent])
@@ -46,7 +50,7 @@ class ExperienceFactRepository:
 
         return self.data_dir / SNAPSHOTS_DIRNAME / EXPERIENCE_FACTS_DIRNAME
 
-    def list(self, role_id: str | None = None) -> list[ExperienceFact]:
+    def list(self, role_id: str | None = None) -> ExperienceFactList:
         """Load all facts, optionally filtered by experience role id."""
 
         facts = self._load_all()
@@ -65,11 +69,7 @@ class ExperienceFactRepository:
     def save(self, fact: ExperienceFact) -> None:
         """Create or update one experience fact."""
 
-        facts = [
-            existing_fact
-            for existing_fact in self._load_all()
-            if existing_fact.id != fact.id
-        ]
+        facts = [existing_fact for existing_fact in self._load_all() if existing_fact.id != fact.id]
         facts.append(fact)
         self._save_all(facts)
 
@@ -77,7 +77,7 @@ class ExperienceFactRepository:
         self,
         fact_id: str | None = None,
         role_id: str | None = None,
-    ) -> list[FactChangeEvent]:
+    ) -> FactChangeEventList:
         """Load fact change events, optionally filtered by fact or role."""
 
         events = self._load_all_change_events()
@@ -105,7 +105,7 @@ class ExperienceFactRepository:
         self._save_all(remaining_facts)
         return True
 
-    def _load_all(self) -> list[ExperienceFact]:
+    def _load_all(self) -> ExperienceFactList:
         """Load all facts from disk in stored order."""
 
         if not self.facts_path.exists():
@@ -113,7 +113,7 @@ class ExperienceFactRepository:
 
         return _FACT_LIST_ADAPTER.validate_json(self.facts_path.read_text(encoding="utf-8"))
 
-    def _load_all_change_events(self) -> list[FactChangeEvent]:
+    def _load_all_change_events(self) -> FactChangeEventList:
         """Load all fact change events from disk in stored order."""
 
         if not self.change_events_path.exists():
@@ -123,7 +123,7 @@ class ExperienceFactRepository:
             self.change_events_path.read_text(encoding="utf-8")
         )
 
-    def _save_all(self, facts: list[ExperienceFact]) -> None:
+    def _save_all(self, facts: ExperienceFactList) -> None:
         """Persist the complete fact list to disk."""
 
         self.facts_dir.mkdir(parents=True, exist_ok=True)
@@ -133,7 +133,7 @@ class ExperienceFactRepository:
             encoding="utf-8",
         )
 
-    def _save_all_change_events(self, events: list[FactChangeEvent]) -> None:
+    def _save_all_change_events(self, events: FactChangeEventList) -> None:
         """Persist the complete fact change event list to disk."""
 
         self.facts_dir.mkdir(parents=True, exist_ok=True)

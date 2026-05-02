@@ -93,6 +93,12 @@ Run linting:
 uv run ruff check .
 ```
 
+Run type checking:
+
+```bash
+uv run mypy
+```
+
 ## Configuration
 
 Career Agent reads configuration from environment variables or a local `.env` file.

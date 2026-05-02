@@ -48,6 +48,7 @@ storage shape is:
     role_sources.json
   experience_facts/
     experience_facts.json
+    fact_change_events.json
   source_analysis/
     analysis_runs.json
     clarification_questions.json
@@ -75,6 +76,7 @@ The following commands are useful for reviewing the current project state:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy
 uv run pytest -q
 ```
 

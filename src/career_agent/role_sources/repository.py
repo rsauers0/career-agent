@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import TypeAlias
 
 from pydantic import TypeAdapter
 
@@ -10,6 +11,8 @@ from career_agent.storage import SNAPSHOTS_DIRNAME, timestamp_for_snapshot
 
 ROLE_SOURCES_DIRNAME = "role_sources"
 ROLE_SOURCES_FILENAME = "role_sources.json"
+
+RoleSourceEntryList: TypeAlias = list[RoleSourceEntry]
 
 _SOURCE_LIST_ADAPTER = TypeAdapter(list[RoleSourceEntry])
 
@@ -38,7 +41,7 @@ class RoleSourceRepository:
 
         return self.data_dir / SNAPSHOTS_DIRNAME / ROLE_SOURCES_DIRNAME
 
-    def list(self, role_id: str | None = None) -> list[RoleSourceEntry]:
+    def list(self, role_id: str | None = None) -> RoleSourceEntryList:
         """Load all sources, optionally filtered by experience role id."""
 
         sources = self._load_all()
@@ -76,7 +79,7 @@ class RoleSourceRepository:
         self._save_all(remaining_sources)
         return True
 
-    def _load_all(self) -> list[RoleSourceEntry]:
+    def _load_all(self) -> RoleSourceEntryList:
         """Load all source entries from disk in stored order."""
 
         if not self.sources_path.exists():
@@ -84,7 +87,7 @@ class RoleSourceRepository:
 
         return _SOURCE_LIST_ADAPTER.validate_json(self.sources_path.read_text(encoding="utf-8"))
 
-    def _save_all(self, sources: list[RoleSourceEntry]) -> None:
+    def _save_all(self, sources: RoleSourceEntryList) -> None:
         """Persist the complete source list to disk."""
 
         self.sources_dir.mkdir(parents=True, exist_ok=True)

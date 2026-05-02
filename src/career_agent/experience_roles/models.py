@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -35,7 +36,7 @@ class YearMonth(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def parse_string_input(cls, value):
+    def parse_string_input(cls, value: Any) -> Any:
         """Allow common string formats while storing structured year/month data."""
 
         if not isinstance(value, str):
@@ -114,7 +115,7 @@ class ExperienceRole(BaseModel):
 
     @field_validator("employer_name", "job_title", mode="before")
     @classmethod
-    def normalize_required_text(cls, value: str) -> str:
+    def normalize_required_text(cls, value: Any) -> Any:
         """Trim required text fields before normal Pydantic validation."""
 
         if isinstance(value, str):
@@ -123,7 +124,7 @@ class ExperienceRole(BaseModel):
 
     @field_validator("location", "role_focus", mode="before")
     @classmethod
-    def normalize_optional_text(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: Any) -> Any:
         """Trim optional text fields and treat blanks as unset."""
 
         if value is None:

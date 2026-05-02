@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -27,7 +29,7 @@ class LLMRequest(BaseModel):
 
     @field_validator("system_prompt", "user_prompt", mode="before")
     @classmethod
-    def normalize_required_text(cls, value: str) -> str:
+    def normalize_required_text(cls, value: Any) -> Any:
         """Trim required prompt fields before normal Pydantic validation."""
 
         if isinstance(value, str):
@@ -36,7 +38,7 @@ class LLMRequest(BaseModel):
 
     @field_validator("model", mode="before")
     @classmethod
-    def normalize_optional_text(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: Any) -> Any:
         """Trim optional text fields and treat blanks as unset."""
 
         if value is None:
@@ -59,7 +61,7 @@ class LLMResponse(BaseModel):
 
     @field_validator("content", mode="before")
     @classmethod
-    def normalize_content(cls, value: str) -> str:
+    def normalize_content(cls, value: Any) -> Any:
         """Trim response content before normal Pydantic validation."""
 
         if isinstance(value, str):
@@ -68,7 +70,7 @@ class LLMResponse(BaseModel):
 
     @field_validator("model", mode="before")
     @classmethod
-    def normalize_optional_text(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: Any) -> Any:
         """Trim optional text fields and treat blanks as unset."""
 
         if value is None:

@@ -347,9 +347,7 @@ def test_experience_fact_service_save_rejects_active_content_revision() -> None:
         text="Automated reporting workflows.",
     )
     active_fact = service.activate_fact(fact.id)
-    invalid_fact = active_fact.model_copy(
-        update={"text": "Automated monthly reporting workflows."}
-    )
+    invalid_fact = active_fact.model_copy(update={"text": "Automated monthly reporting workflows."})
 
     with pytest.raises(FactRevisionNotAllowedError, match="active"):
         service.save_fact(invalid_fact)

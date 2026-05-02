@@ -290,7 +290,7 @@ def save_role(
         }
         if role_id is not None:
             role_data["id"] = role_id
-        role = ExperienceRole(**role_data)
+        role = ExperienceRole.model_validate(role_data)
     except ValidationError as exc:
         console.print("[red]Could not save experience role.[/red]")
         for error in exc.errors():

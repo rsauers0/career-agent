@@ -162,9 +162,7 @@ def test_experience_fact_repository_snapshots_existing_file_before_overwrite(
 
     snapshots = list(repository.snapshots_dir.glob(f"*-{EXPERIENCE_FACTS_FILENAME}"))
     assert len(snapshots) == 1
-    snapshotted_facts = FACT_LIST_ADAPTER.validate_json(
-        snapshots[0].read_text(encoding="utf-8")
-    )
+    snapshotted_facts = FACT_LIST_ADAPTER.validate_json(snapshots[0].read_text(encoding="utf-8"))
     assert snapshotted_facts == [first_fact]
     assert repository.list() == [first_fact, second_fact]
 

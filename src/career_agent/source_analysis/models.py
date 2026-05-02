@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -61,7 +62,7 @@ class SourceAnalysisRun(BaseModel):
 
     @field_validator("role_id", mode="before")
     @classmethod
-    def normalize_role_id(cls, value: str) -> str:
+    def normalize_role_id(cls, value: Any) -> Any:
         """Trim role ids before normal Pydantic validation."""
 
         if isinstance(value, str):
@@ -70,7 +71,7 @@ class SourceAnalysisRun(BaseModel):
 
     @field_validator("source_ids", mode="before")
     @classmethod
-    def normalize_source_ids(cls, values: list[str] | None) -> list[str]:
+    def normalize_source_ids(cls, values: Any) -> list[str]:
         """Trim source ids and discard blank entries."""
 
         if values is None:
@@ -125,7 +126,7 @@ class SourceClarificationQuestion(BaseModel):
 
     @field_validator("analysis_run_id", "question_text", mode="before")
     @classmethod
-    def normalize_required_text(cls, value: str) -> str:
+    def normalize_required_text(cls, value: Any) -> Any:
         """Trim required text fields before normal Pydantic validation."""
 
         if isinstance(value, str):
@@ -134,7 +135,7 @@ class SourceClarificationQuestion(BaseModel):
 
     @field_validator("relevant_source_ids", mode="before")
     @classmethod
-    def normalize_relevant_source_ids(cls, values: list[str] | None) -> list[str]:
+    def normalize_relevant_source_ids(cls, values: Any) -> list[str]:
         """Trim relevant source ids and discard blank entries."""
 
         if values is None:
@@ -177,7 +178,7 @@ class SourceClarificationMessage(BaseModel):
 
     @field_validator("question_id", "message_text", mode="before")
     @classmethod
-    def normalize_required_text(cls, value: str) -> str:
+    def normalize_required_text(cls, value: Any) -> Any:
         """Trim required text fields before normal Pydantic validation."""
 
         if isinstance(value, str):

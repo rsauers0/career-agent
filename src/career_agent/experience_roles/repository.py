@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from datetime import datetime
 from pathlib import Path
+from typing import TypeAlias
 
 from pydantic import TypeAdapter
 
@@ -11,6 +12,8 @@ from career_agent.storage import SNAPSHOTS_DIRNAME, timestamp_for_snapshot
 
 EXPERIENCE_ROLES_DIRNAME = "experience_roles"
 EXPERIENCE_ROLES_FILENAME = "experience_roles.json"
+
+ExperienceRoleList: TypeAlias = list[ExperienceRole]
 
 _ROLE_LIST_ADAPTER = TypeAdapter(list[ExperienceRole])
 
@@ -39,7 +42,7 @@ class ExperienceRoleRepository:
 
         return self.data_dir / SNAPSHOTS_DIRNAME / EXPERIENCE_ROLES_DIRNAME
 
-    def list(self) -> list[ExperienceRole]:
+    def list(self) -> ExperienceRoleList:
         """Load all roles from disk in default display order."""
 
         return sorted(self._load_all(), key=self._role_sort_key, reverse=True)
@@ -70,7 +73,7 @@ class ExperienceRoleRepository:
         self._save_all(remaining_roles)
         return True
 
-    def _load_all(self) -> list[ExperienceRole]:
+    def _load_all(self) -> ExperienceRoleList:
         """Load all roles from disk in stored order."""
 
         if not self.roles_path.exists():
@@ -78,7 +81,7 @@ class ExperienceRoleRepository:
 
         return _ROLE_LIST_ADAPTER.validate_json(self.roles_path.read_text(encoding="utf-8"))
 
-    def _save_all(self, roles: list[ExperienceRole]) -> None:
+    def _save_all(self, roles: ExperienceRoleList) -> None:
         """Persist the complete role list to disk."""
 
         self.roles_dir.mkdir(parents=True, exist_ok=True)

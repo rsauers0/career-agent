@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
@@ -82,7 +83,7 @@ class UserPreferences(BaseModel):
 
     @field_validator("full_name", "base_location", mode="before")
     @classmethod
-    def normalize_required_text(cls, value: str) -> str:
+    def normalize_required_text(cls, value: Any) -> Any:
         """Trim required text fields before normal Pydantic validation."""
 
         if isinstance(value, str):
@@ -91,7 +92,7 @@ class UserPreferences(BaseModel):
 
     @field_validator("time_zone", mode="before")
     @classmethod
-    def normalize_optional_time_zone(cls, value: str | None) -> str | None:
+    def normalize_optional_time_zone(cls, value: Any) -> Any:
         """Trim optional time zone input and treat blanks as unset."""
 
         if value is None:
@@ -117,7 +118,7 @@ class UserPreferences(BaseModel):
 
     @field_validator("target_job_titles", "preferred_locations", mode="before")
     @classmethod
-    def normalize_text_list(cls, values: list[str] | None) -> list[str]:
+    def normalize_text_list(cls, values: Any) -> list[str]:
         """Trim list items and discard blank entries."""
 
         if values is None:
@@ -126,7 +127,7 @@ class UserPreferences(BaseModel):
 
     @field_validator("salary_currency", mode="before")
     @classmethod
-    def normalize_salary_currency(cls, value: str) -> str:
+    def normalize_salary_currency(cls, value: Any) -> Any:
         """Normalize currency code casing before validation."""
 
         if isinstance(value, str):
