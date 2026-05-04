@@ -12,12 +12,15 @@ from rich.text import Text
 from career_agent.config import get_settings
 from career_agent.errors import (
     ActiveAnalysisRunExistsError,
+    ActiveFactReviewThreadExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
     EvidenceReferenceRemovalError,
     FactNotFoundError,
+    FactReviewThreadNotFoundError,
     FactRevisionNotAllowedError,
     FactRoleMismatchError,
+    InvalidFactReviewThreadStatusTransitionError,
     InvalidFactStatusTransitionError,
     InvalidLLMOutputError,
     InvalidSourceFindingStatusTransitionError,
@@ -54,6 +57,14 @@ from career_agent.experience_workflow.service import (
     AppliedSourceFindingResult,
     ExperienceWorkflowService,
 )
+from career_agent.fact_review.models import (
+    FactReviewMessage,
+    FactReviewMessageAuthor,
+    FactReviewRecommendedAction,
+    FactReviewThread,
+)
+from career_agent.fact_review.repository import FactReviewRepository
+from career_agent.fact_review.service import FactReviewService
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.role_sources.service import RoleSourceService
@@ -88,6 +99,9 @@ analysis_runs_app = typer.Typer(help="Manage source analysis runs.")
 analysis_questions_app = typer.Typer(help="Manage source clarification questions.")
 analysis_messages_app = typer.Typer(help="Manage source clarification messages.")
 analysis_findings_app = typer.Typer(help="Manage structured source findings.")
+fact_review_app = typer.Typer(help="Manage fact review workflow artifacts.")
+fact_review_threads_app = typer.Typer(help="Manage fact review threads.")
+fact_review_messages_app = typer.Typer(help="Manage fact review messages.")
 experience_workflow_app = typer.Typer(help="Run experience workflow harness commands.")
 console = Console()
 
@@ -120,6 +134,21 @@ def facts_cli() -> None:
 @source_analysis_app.callback()
 def source_analysis_cli() -> None:
     """Commands for working with source analysis workflow artifacts."""
+
+
+@fact_review_app.callback()
+def fact_review_cli() -> None:
+    """Commands for working with fact review workflow artifacts."""
+
+
+@fact_review_threads_app.callback()
+def fact_review_threads_cli() -> None:
+    """Commands for working with fact review threads."""
+
+
+@fact_review_messages_app.callback()
+def fact_review_messages_cli() -> None:
+    """Commands for working with fact review messages."""
 
 
 @analysis_runs_app.callback()
@@ -1157,6 +1186,151 @@ def archive_source_analysis_finding(
     console.print(f"Finding ID: {finding.id}")
 
 
+@fact_review_threads_app.command("start")
+def start_fact_review_thread(
+    fact_id: str = typer.Option(..., help="Existing experience fact id."),
+) -> None:
+    """Start a review thread for an experience fact."""
+
+    service = build_fact_review_service()
+    try:
+        thread = service.start_thread(fact_id)
+    except (ActiveFactReviewThreadExistsError, FactNotFoundError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not start fact review thread.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Started fact review thread.[/green]")
+    console.print(f"Thread ID: {thread.id}")
+
+
+@fact_review_threads_app.command("list")
+def list_fact_review_threads(
+    fact_id: str | None = typer.Option(None, help="Optional fact id."),
+    role_id: str | None = typer.Option(None, help="Optional role id."),
+) -> None:
+    """List fact review threads."""
+
+    service = build_fact_review_service()
+    threads = service.list_threads(fact_id=fact_id, role_id=role_id)
+    if not threads:
+        console.print("[yellow]No fact review threads saved yet.[/yellow]")
+        return
+
+    render_fact_review_thread_list(threads)
+
+
+@fact_review_threads_app.command("resolve")
+def resolve_fact_review_thread(
+    thread_id: str = typer.Argument(..., help="Fact review thread identifier."),
+) -> None:
+    """Mark a fact review thread as resolved."""
+
+    service = build_fact_review_service()
+    try:
+        thread = service.resolve_thread(thread_id)
+    except (
+        FactReviewThreadNotFoundError,
+        InvalidFactReviewThreadStatusTransitionError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Resolved fact review thread.[/green]")
+    console.print(f"Thread ID: {thread.id}")
+
+
+@fact_review_threads_app.command("archive")
+def archive_fact_review_thread(
+    thread_id: str = typer.Argument(..., help="Fact review thread identifier."),
+) -> None:
+    """Archive a fact review thread."""
+
+    service = build_fact_review_service()
+    try:
+        thread = service.archive_thread(thread_id)
+    except (
+        FactReviewThreadNotFoundError,
+        InvalidFactReviewThreadStatusTransitionError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Archived fact review thread.[/green]")
+    console.print(f"Thread ID: {thread.id}")
+
+
+@fact_review_messages_app.command("list")
+def list_fact_review_messages(
+    thread_id: str = typer.Option(..., help="Fact review thread id."),
+) -> None:
+    """List messages for a fact review thread."""
+
+    service = build_fact_review_service()
+    messages = service.list_messages(thread_id)
+    if not messages:
+        console.print("[yellow]No fact review messages saved yet.[/yellow]")
+        return
+
+    render_fact_review_message_list(messages)
+
+
+@fact_review_messages_app.command("add")
+def add_fact_review_message(
+    thread_id: str = typer.Option(..., help="Existing fact review thread id."),
+    author: FactReviewMessageAuthor = typer.Option(
+        ...,
+        help="Message author: assistant, user, or system.",
+    ),
+    text: str | None = typer.Option(None, help="Fact review message text."),
+    from_file: Path | None = typer.Option(
+        None,
+        "--from-file",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to a UTF-8 text file containing fact review message text.",
+    ),
+    recommended_action: FactReviewRecommendedAction = typer.Option(
+        FactReviewRecommendedAction.NONE,
+        help="Optional recommended action metadata.",
+    ),
+) -> None:
+    """Append one message to a fact review thread."""
+
+    if (text is None) == (from_file is None):
+        console.print("[red]Provide exactly one of --text or --from-file.[/red]")
+        raise typer.Exit(1)
+
+    if from_file is not None:
+        text = from_file.read_text(encoding="utf-8")
+
+    service = build_fact_review_service()
+    try:
+        message = service.add_message(
+            thread_id=thread_id,
+            author=author,
+            message_text=text or "",
+            recommended_action=recommended_action,
+        )
+    except FactReviewThreadNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save fact review message.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved fact review message.[/green]")
+    console.print(f"Message ID: {message.id}")
+
+
 @experience_workflow_app.command("analyze-sources")
 def analyze_experience_sources(
     role_id: str = typer.Option(..., help="Existing experience role id."),
@@ -1318,6 +1492,15 @@ def build_source_analysis_service() -> SourceAnalysisService:
         source_repository,
         fact_repository,
     )
+
+
+def build_fact_review_service() -> FactReviewService:
+    """Build the fact review service from configured settings."""
+
+    settings = get_settings()
+    review_repository = FactReviewRepository(settings.data_dir)
+    fact_repository = ExperienceFactRepository(settings.data_dir)
+    return FactReviewService(review_repository, fact_repository)
 
 
 def build_experience_workflow_service() -> ExperienceWorkflowService:
@@ -1624,6 +1807,48 @@ def render_source_finding_list(findings: list[SourceFinding]) -> None:
         )
 
 
+def render_fact_review_thread_list(threads: list[FactReviewThread]) -> None:
+    """Render fact review threads as a CLI table."""
+
+    table = Table(title="Fact Review Threads")
+    table.add_column("ID")
+    table.add_column("Fact ID")
+    table.add_column("Role ID")
+    table.add_column("Status")
+    table.add_column("Updated")
+    for thread in threads:
+        table.add_row(
+            thread.id,
+            thread.fact_id,
+            thread.role_id,
+            thread.status.value,
+            thread.updated_at.isoformat(),
+        )
+    console.print(table)
+
+
+def render_fact_review_message_list(messages: list[FactReviewMessage]) -> None:
+    """Render fact review messages as separated readable CLI blocks."""
+
+    console.print("[bold]Fact Review Messages[/bold]")
+    for index, message in enumerate(messages, start=1):
+        message_details = Table.grid(expand=True, padding=(0, 2))
+        message_details.add_column(no_wrap=True, style="bold")
+        message_details.add_column(ratio=1)
+        message_details.add_row("Message", message.message_text)
+        message_details.add_row("ID", message.id)
+        message_details.add_row("Thread ID", message.thread_id)
+        message_details.add_row("Author", message.author.value)
+        message_details.add_row("Recommended Action", message.recommended_action.value)
+        console.print(
+            Panel(
+                message_details,
+                title=f"Message {index}",
+                expand=True,
+            )
+        )
+
+
 def render_applied_source_finding_results(results: list[AppliedSourceFindingResult]) -> None:
     """Render source finding application results."""
 
@@ -1657,12 +1882,15 @@ app.add_typer(preferences_app, name="preferences")
 app.add_typer(roles_app, name="roles")
 app.add_typer(sources_app, name="sources")
 app.add_typer(facts_app, name="facts")
+app.add_typer(fact_review_app, name="fact-review")
 app.add_typer(experience_workflow_app, name="experience-workflow")
 source_analysis_app.add_typer(analysis_runs_app, name="runs")
 source_analysis_app.add_typer(analysis_questions_app, name="questions")
 source_analysis_app.add_typer(analysis_messages_app, name="messages")
 source_analysis_app.add_typer(analysis_findings_app, name="findings")
 app.add_typer(source_analysis_app, name="source-analysis")
+fact_review_app.add_typer(fact_review_threads_app, name="threads")
+fact_review_app.add_typer(fact_review_messages_app, name="messages")
 
 
 def main() -> None:

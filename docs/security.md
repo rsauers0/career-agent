@@ -49,6 +49,9 @@ storage shape is:
   experience_facts/
     experience_facts.json
     fact_change_events.json
+  fact_review/
+    fact_review_threads.json
+    fact_review_messages.json
   source_analysis/
     analysis_runs.json
     clarification_questions.json
@@ -59,6 +62,7 @@ storage shape is:
     experience_roles/
     role_sources/
     experience_facts/
+    fact_review/
     source_analysis/
 ```
 
@@ -69,6 +73,10 @@ existing JSON file is replaced, the previous version is copied into the relevant
 Source Analysis data is workflow evidence. It may include clarification
 questions, message history, and source findings entered or generated during
 analysis, so it should be treated as career-sensitive local data.
+
+Fact Review data is also workflow evidence. It may include user corrections,
+assistant recommendations, and review notes about draft facts, so it should be
+treated as career-sensitive local data.
 
 ## Verification Commands
 

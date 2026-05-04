@@ -71,6 +71,23 @@ Fact change events record semantic history for experience facts, including the
 event type, actor, summary, source message ids, status transition, related fact
 id, and timestamp.
 
+Fact Review artifacts are stored as table-like JSON files:
+
+```text
+<data_dir>/
+  fact_review/
+    fact_review_threads.json
+    fact_review_messages.json
+  snapshots/
+    fact_review/
+      <timestamp>-fact_review_threads.json
+      <timestamp>-fact_review_messages.json
+```
+
+Fact review threads and messages preserve collaborative review history for draft
+and revised facts. Recommended actions are metadata only; they do not mutate
+canonical facts by themselves.
+
 Source Analysis artifacts are stored as table-like JSON files:
 
 ```text

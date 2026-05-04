@@ -6,6 +6,14 @@ from career_agent.experience_facts.models import ExperienceFact, ExperienceFactS
 from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.repository import ExperienceRoleRepository
+from career_agent.fact_review.models import (
+    FactReviewMessage,
+    FactReviewMessageAuthor,
+    FactReviewRecommendedAction,
+    FactReviewThread,
+    FactReviewThreadStatus,
+)
+from career_agent.fact_review.repository import FactReviewRepository
 from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.source_analysis.models import (
@@ -2352,5 +2360,200 @@ def test_experience_workflow_apply_findings_reports_no_accepted_findings(
 
     assert result.exit_code == 0
     assert "No accepted source findings to apply." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_threads_start_writes_thread(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Automated reporting workflows.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "threads", "start", "--fact-id", "fact-1"],
+    )
+
+    threads = FactReviewRepository(tmp_path).list_threads(fact_id="fact-1")
+
+    assert result.exit_code == 0
+    assert "Started fact review thread." in result.output
+    assert "Thread ID:" in result.output
+    assert len(threads) == 1
+    assert threads[0].fact_id == "fact-1"
+    assert threads[0].role_id == "role-1"
+    assert threads[0].status == FactReviewThreadStatus.OPEN
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_threads_start_reports_existing_open_thread(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Automated reporting workflows.",
+        )
+    )
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "threads", "start", "--fact-id", "fact-1"],
+    )
+
+    assert result.exit_code != 0
+    assert "Open fact review thread already exists" in result.output
+    assert "thread-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_threads_list_renders_threads(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    FactReviewRepository(tmp_path).save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "threads", "list", "--fact-id", "fact-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Fact Review Threads" in result.output
+    assert "thread-1" in result.output
+    assert "fact-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_messages_add_writes_message(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "fact-review",
+            "messages",
+            "add",
+            "--thread-id",
+            "thread-1",
+            "--author",
+            "user",
+            "--text",
+            "Please split this into two facts.",
+            "--recommended-action",
+            "split_fact",
+        ],
+    )
+
+    messages = repository.list_messages("thread-1")
+
+    assert result.exit_code == 0
+    assert "Saved fact review message." in result.output
+    assert len(messages) == 1
+    assert messages[0].author == FactReviewMessageAuthor.USER
+    assert messages[0].message_text == "Please split this into two facts."
+    assert messages[0].recommended_action == FactReviewRecommendedAction.SPLIT_FACT
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_messages_list_renders_messages(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    repository.save_message(
+        FactReviewMessage(
+            id="message-1",
+            thread_id="thread-1",
+            author=FactReviewMessageAuthor.USER,
+            message_text="Looks good.",
+            recommended_action=FactReviewRecommendedAction.ACTIVATE_FACT,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "messages", "list", "--thread-id", "thread-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Fact Review Messages" in result.output
+    assert "message-1" in result.output
+    assert "Looks good." in result.output
+    assert "activate_fact" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_threads_resolve_and_archive(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    runner = CliRunner()
+
+    resolve_result = runner.invoke(app, ["fact-review", "threads", "resolve", "thread-1"])
+    archive_result = runner.invoke(app, ["fact-review", "threads", "archive", "thread-1"])
+
+    assert resolve_result.exit_code == 0
+    assert "Resolved fact review thread." in resolve_result.output
+    assert archive_result.exit_code == 0
+    assert "Archived fact review thread." in archive_result.output
+    assert repository.get_thread("thread-1").status == FactReviewThreadStatus.ARCHIVED
 
     get_settings.cache_clear()

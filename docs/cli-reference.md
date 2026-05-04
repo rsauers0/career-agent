@@ -16,6 +16,9 @@ uv run career-agent facts --help
 uv run career-agent facts add --help
 uv run career-agent facts events --help
 uv run career-agent facts revise --help
+uv run career-agent fact-review --help
+uv run career-agent fact-review threads start --help
+uv run career-agent fact-review messages add --help
 uv run career-agent source-analysis --help
 uv run career-agent source-analysis runs start --help
 uv run career-agent source-analysis questions add --help
@@ -273,6 +276,61 @@ Delete one saved fact:
 ```bash
 uv run career-agent facts delete <fact-id>
 ```
+
+## Fact Review
+
+Start a fact review thread for an existing fact:
+
+```bash
+uv run career-agent fact-review threads start --fact-id <fact-id>
+```
+
+Only one open review thread can exist for a fact at a time. Resolve or archive
+the open thread before starting another review thread for the same fact.
+
+List review threads:
+
+```bash
+uv run career-agent fact-review threads list
+uv run career-agent fact-review threads list --fact-id <fact-id>
+uv run career-agent fact-review threads list --role-id <role-id>
+```
+
+Append one review message:
+
+```bash
+uv run career-agent fact-review messages add \
+  --thread-id <thread-id> \
+  --author user \
+  --text "Please split this into two facts." \
+  --recommended-action split_fact
+```
+
+Append one review message from a UTF-8 text file:
+
+```bash
+uv run career-agent fact-review messages add \
+  --thread-id <thread-id> \
+  --author user \
+  --from-file review-note.txt
+```
+
+List review messages:
+
+```bash
+uv run career-agent fact-review messages list --thread-id <thread-id>
+```
+
+Resolve or archive a review thread:
+
+```bash
+uv run career-agent fact-review threads resolve <thread-id>
+uv run career-agent fact-review threads archive <thread-id>
+```
+
+Fact review messages are append-only workflow artifacts. Recommended actions are
+metadata only in the first implementation; they do not revise, reject, activate,
+or split facts by themselves.
 
 ## Source Analysis
 

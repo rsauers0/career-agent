@@ -28,6 +28,24 @@ flowchart LR
     Sources -. "source_ids on fact<br/>canonical support after review" .-> Facts
 ```
 
+## Fact Review Data
+
+```mermaid
+flowchart LR
+    Roles["EXPERIENCE_ROLES<br/>id PK"]
+
+    Facts["EXPERIENCE_FACTS<br/>id PK<br/>role_id FK<br/>status"]
+
+    Threads["FACT_REVIEW_THREADS<br/>id PK<br/>fact_id FK<br/>role_id FK<br/>status<br/>created_at<br/>updated_at"]
+
+    Messages["FACT_REVIEW_MESSAGES<br/>id PK<br/>thread_id FK<br/>author<br/>message_text<br/>recommended_action<br/>created_at"]
+
+    Roles -->|"role_id"| Facts
+    Roles -->|"role_id"| Threads
+    Facts -->|"fact_id"| Threads
+    Threads -->|"thread_id"| Messages
+```
+
 ## Source Analysis Data
 
 ```mermaid
@@ -143,6 +161,30 @@ flowchart LR
 | `related_fact_id` | string/null | `ExperienceFact.id` | Related fact, often revision-related. |
 | `created_at` | datetime | | UTC timestamp. |
 
+## Fact Review Tables
+
+### `fact_review_threads.json`
+
+| Column | Type | Relationship | Notes |
+| --- | --- | --- | --- |
+| `id` | string | Primary key. | Stable review thread id. |
+| `fact_id` | string | `ExperienceFact.id` | Fact being reviewed. |
+| `role_id` | string | `ExperienceRole.id` | Role scope for filtering. |
+| `status` | enum | | `open`, `resolved`, `archived`. |
+| `created_at` | datetime | | UTC timestamp. |
+| `updated_at` | datetime | | UTC timestamp. |
+
+### `fact_review_messages.json`
+
+| Column | Type | Relationship | Notes |
+| --- | --- | --- | --- |
+| `id` | string | Primary key. | Stable review message id. |
+| `thread_id` | string | `FactReviewThread.id` | Message belongs to one review thread. |
+| `author` | enum | | `assistant`, `user`, or `system`. |
+| `message_text` | string | | Review message text. |
+| `recommended_action` | enum | | `revise_fact`, `add_evidence`, `split_fact`, `reject_fact`, `activate_fact`, `propose_constraint`, or `none`. |
+| `created_at` | datetime | | UTC timestamp. |
+
 ## Source Analysis Tables
 
 ### `analysis_runs.json`
@@ -201,6 +243,9 @@ flowchart LR
 | --- | --- | --- | --- |
 | `RoleSourceEntry` | `role_id` | `ExperienceRole.id` | Source belongs to a role. |
 | `ExperienceFact` | `role_id` | `ExperienceRole.id` | Fact belongs to a role. |
+| `FactReviewThread` | `fact_id` | `ExperienceFact.id` | Review thread belongs to a fact. |
+| `FactReviewThread` | `role_id` | `ExperienceRole.id` | Review thread is scoped to a role. |
+| `FactReviewMessage` | `thread_id` | `FactReviewThread.id` | Message belongs to a review thread. |
 | `SourceAnalysisRun` | `role_id` | `ExperienceRole.id` | Analysis run is scoped to a role. |
 | `SourceAnalysisRun` | `source_ids` | `RoleSourceEntry.id` | Sources included in an analysis run. |
 | `SourceClarificationQuestion` | `analysis_run_id` | `SourceAnalysisRun.id` | Question belongs to an analysis run. |

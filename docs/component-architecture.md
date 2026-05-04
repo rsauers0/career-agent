@@ -231,6 +231,43 @@ Source findings are structured analysis notes. They can indicate that a source a
 
 Only one active Source Analysis run may exist for a single experience role at a time. Separate roles may have active analysis runs simultaneously.
 
+### Fact Review
+
+Purpose: stores collaborative review artifacts for draft or revised experience facts.
+
+Current files:
+
+```text
+src/career_agent/fact_review/
+  models.py
+  repository.py
+  service.py
+```
+
+Current CLI group:
+
+```bash
+career-agent fact-review
+```
+
+Examples of owned data:
+
+- fact review threads linked to one experience fact and role
+- append-only review messages
+- message authors: assistant, user, or system
+- optional recommended action metadata
+- thread lifecycle status: open, resolved, archived
+
+Fact Review is workflow evidence, not canonical career data. It preserves the
+user/assistant collaboration history around draft facts without allowing review
+messages to mutate canonical fact text. Recommended actions such as
+`revise_fact`, `add_evidence`, `split_fact`, `reject_fact`, `activate_fact`, and
+`propose_constraint` are metadata only in the first implementation.
+
+Only one open Fact Review thread may exist for a single fact at a time. Messages
+are append-only. Resolving or archiving a thread is an explicit status
+transition, and fact activation remains a separate Experience Facts command.
+
 ### Experience Workflow
 
 Purpose: orchestrates experience-related workflow steps across existing components.
@@ -352,7 +389,7 @@ Expected flow:
 raw role source material
   -> source analysis questions, messages, and findings
   -> draft experience facts
-  -> user/assistant revision thread
+  -> fact review threads and messages
   -> active experience facts
   -> fact-level reference lists for skills, systems, tools, technologies, and functions
   -> derived cross-role evidence indexes and capabilities

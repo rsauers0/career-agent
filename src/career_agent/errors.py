@@ -83,3 +83,15 @@ class OpenClarificationQuestionsError(CareerAgentError):
 
 class SourceFindingsAlreadyExistError(CareerAgentError):
     """Raised when findings already exist for a source analysis run."""
+
+
+class FactReviewThreadNotFoundError(CareerAgentError):
+    """Raised when a referenced fact review thread does not exist."""
+
+
+class ActiveFactReviewThreadExistsError(CareerAgentError):
+    """Raised when an open fact review thread already exists for a fact."""
+
+
+class InvalidFactReviewThreadStatusTransitionError(CareerAgentError):
+    """Raised when a fact review thread status transition is not allowed."""

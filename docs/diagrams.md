@@ -16,11 +16,14 @@ flowchart LR
     RoleSources["Role Sources<br/>Raw submitted evidence"]
     SourceAnalysis["Source Analysis<br/>Runs, questions,<br/>messages, findings"]
     ExperienceFacts["Experience Facts<br/>Canonical career facts"]
+    FactReview["Fact Review<br/>Threads and review messages"]
 
     ExperienceRoles -->|"role_id"| RoleSources
     ExperienceRoles -->|"role_id"| SourceAnalysis
     RoleSources -->|"source_ids"| SourceAnalysis
     ExperienceRoles -->|"role_id"| ExperienceFacts
+    ExperienceRoles -->|"role_id"| FactReview
+    ExperienceFacts -->|"fact_id"| FactReview
     RoleSources -. "source_ids" .-> ExperienceFacts
     SourceAnalysis -. "findings and evidence context" .-> ExperienceFacts
 
@@ -165,7 +168,7 @@ flowchart TD
     Orchestrator["LLM Orchestrator<br/>small structured steps"]
     Constraints["Scoped Constraints<br/>global, role, project, proposal"]
     DraftFacts["Draft Experience Facts<br/>grounded, generic, traceable"]
-    Revision["Revision Thread<br/>user + LLM/system collaboration"]
+    Review["Fact Review<br/>threads, messages,<br/>recommended actions"]
     Events["FactChangeEvent<br/>actor, event type,<br/>summary, message ids"]
     ActiveFacts["Active Experience Facts<br/>canonical evidence,<br/>reference lists"]
     Derived["Derived Evidence Indexes<br/>cross-role skills,<br/>systems, capabilities"]
@@ -175,10 +178,10 @@ flowchart TD
     Analysis --> Orchestrator
     Constraints --> Orchestrator
     Orchestrator -->|"create / revise"| DraftFacts
-    DraftFacts --> Revision
-    Revision -->|"corrections may create"| Constraints
-    Revision -->|"semantic history"| Events
-    Revision -->|"activation transition"| ActiveFacts
+    DraftFacts --> Review
+    Review -->|"corrections may create"| Constraints
+    Review -. "recommended action metadata" .-> Orchestrator
+    Review -->|"separate explicit transition"| ActiveFacts
     ActiveFacts -. "changes recorded in" .-> Events
     ActiveFacts --> Derived
     Derived --> Tailoring
@@ -203,6 +206,10 @@ still own persistence and explicit state transitions.
 History has separate responsibilities: messages capture conversational rationale,
 change events capture semantic fact mutations and lifecycle transitions, and
 snapshots remain file-level recovery artifacts.
+
+Fact Review messages are workflow evidence. Recommended actions do not mutate
+facts by themselves; deterministic fact services still own revision, rejection,
+activation, and evidence updates.
 
 ## LLM Boundary
 
@@ -244,6 +251,7 @@ flowchart TD
     DataDir --> Sources["role_sources/role_sources.json"]
     DataDir --> Facts["experience_facts/experience_facts.json"]
     DataDir --> FactEvents["experience_facts/fact_change_events.json"]
+    DataDir --> Review["fact_review/*.json"]
     DataDir --> Analysis["source_analysis/*.json"]
     DataDir --> Snapshots["snapshots/"]
 
@@ -252,5 +260,6 @@ flowchart TD
     Snapshots --> SourceSnapshots["role_sources/<timestamp>-role_sources.json"]
     Snapshots --> FactSnapshots["experience_facts/<timestamp>-experience_facts.json"]
     Snapshots --> FactEventSnapshots["experience_facts/<timestamp>-fact_change_events.json"]
+    Snapshots --> ReviewSnapshots["fact_review/<timestamp>-*.json"]
     Snapshots --> AnalysisSnapshots["source_analysis/<timestamp>-*.json"]
 ```

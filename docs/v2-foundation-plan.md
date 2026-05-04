@@ -121,7 +121,27 @@ Source Analysis is workflow evidence, not canonical career data. It gives the fu
 
 Only one active Source Analysis run should exist per experience role. This prevents a user from starting a second analysis session for the same role before the existing one has been completed or archived.
 
-### 6. Experience AI Workflow Harness
+### 6. Fact Review
+
+Build collaborative review artifacts before richer draft fact revision workflows:
+
+- review threads linked to one experience fact by `fact_id`
+- each review thread also stores `role_id` for filtering
+- append-only review messages linked to a review thread
+- message authors: assistant, user, or system
+- optional recommended action metadata
+- thread lifecycle status: open, resolved, archived
+
+Fact Review is workflow evidence, not canonical career data. Review messages can
+recommend revising, adding evidence, splitting, rejecting, activating, or
+proposing constraints, but those recommendations should not mutate facts by
+themselves. Fact mutation still goes through deterministic Experience Fact
+services.
+
+Only one open Fact Review thread should exist per experience fact. Resolving or
+archiving a thread should be an explicit transition.
+
+### 7. Experience AI Workflow Harness
 
 Build as CLI/dev workflow first:
 
@@ -172,13 +192,13 @@ Historical traceability should not be stored directly on the canonical fact. Mes
 
 Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, draft fact generation, drift checking, merge checking, clarification planning, and deterministic service transitions.
 
-### 7. TUI
+### 8. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.
 
 The TUI should present the already-working workflow. It should not own workflow logic.
 
-### 8. Future API Option
+### 9. Future API Option
 
 FastAPI can be added later as another interface adapter.
 
@@ -247,6 +267,13 @@ Source Analysis
   -> CLI
   -> tests
 
+Fact Review
+  -> model
+  -> repository
+  -> service
+  -> CLI
+  -> tests
+
 Experience Workflow
   -> question generator
   -> finding generator
@@ -263,4 +290,4 @@ LLM Boundary
   -> tests
 ```
 
-The immediate next foundation step is collaborative review of draft experience facts created or revised from accepted findings. That workflow should preserve user/assistant revision history, keep evidence append-only, and activate facts only through deterministic service transitions.
+The immediate next foundation step is applying fact review recommendations through deterministic workflows. That should likely start with assistant/user review messages recommending revision, evidence addition, split, rejection, activation, or constraint extraction while keeping actual fact mutation behind explicit service transitions.
