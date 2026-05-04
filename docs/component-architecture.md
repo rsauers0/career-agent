@@ -134,7 +134,7 @@ Examples of owned data:
 
 Role sources preserve submitted text exactly for traceability. They are separate from experience roles so the application can retain source evidence without mixing raw input into structured role facts.
 
-Future fact-related source additions should still remain role-owned source evidence. A later source-to-fact relationship can link a source to one or more experience facts, but that relationship is not implemented yet. When implemented, fact-related sources should still be analyzed against the role's existing facts to check for support, revision needs, duplication, contradiction, or unsafe merge pressure.
+Fact-related source additions should still remain role-owned source evidence. Raw role sources do not store semantic source-to-fact conclusions. Structured Source Analysis findings can later record whether a source appears to support, revise, contradict, duplicate, or create a fact. Canonical fact support is recorded only when an `ExperienceFact` references source ids through its evidence fields.
 
 ### Experience Facts
 
@@ -219,12 +219,15 @@ Examples of owned data:
 - source ids included in each analysis run
 - clarification questions generated during analysis
 - clarification message threads attached to a question
+- structured source findings produced by analysis
 - question and analysis lifecycle statuses
-- table-like JSON files for runs, questions, and messages
+- table-like JSON files for runs, questions, messages, and findings
 
-Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and draft experience fact generation. Canonical data changes should still be applied through deterministic services.
+Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, source findings, and draft experience fact generation. Canonical data changes should still be applied through deterministic services.
 
 Clarification messages are append-only conversation turns. They do not resolve questions by themselves; question closure requires an explicit `resolve` or `skip` transition.
+
+Source findings are structured analysis notes. They can indicate that a source appears to support, revise, contradict, duplicate, create, clarify, or be unrelated to a fact. Accepting a finding does not mutate canonical facts in the first implementation; later workflow steps should apply accepted findings through deterministic Experience Fact services.
 
 Only one active Source Analysis run may exist for a single experience role at a time. Separate roles may have active analysis runs simultaneously.
 
@@ -252,6 +255,7 @@ Examples of coordinated behavior:
 - generate structured clarification question proposals
 - start Source Analysis runs through `SourceAnalysisService`
 - save generated question proposals through `SourceAnalysisService`
+- manage structured source findings through `SourceAnalysisService`
 
 Experience Workflow does not own persistence. It coordinates component services and should not write directly to JSON files.
 

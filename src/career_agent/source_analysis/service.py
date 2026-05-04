@@ -6,11 +6,16 @@ from career_agent.errors import (
     ActiveAnalysisRunExistsError,
     AnalysisRunNotFoundError,
     ClarificationQuestionNotFoundError,
+    FactNotFoundError,
+    FactRoleMismatchError,
+    InvalidSourceFindingStatusTransitionError,
     RoleNotFoundError,
+    SourceFindingNotFoundError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
 )
+from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.source_analysis.models import (
@@ -20,8 +25,25 @@ from career_agent.source_analysis.models import (
     SourceClarificationMessage,
     SourceClarificationQuestion,
     SourceClarificationQuestionStatus,
+    SourceFinding,
+    SourceFindingStatus,
+    SourceFindingType,
 )
 from career_agent.source_analysis.repository import SourceAnalysisRepository
+
+ALLOWED_FINDING_STATUS_TRANSITIONS: dict[
+    SourceFindingStatus,
+    set[SourceFindingStatus],
+] = {
+    SourceFindingStatus.PROPOSED: {
+        SourceFindingStatus.ACCEPTED,
+        SourceFindingStatus.REJECTED,
+        SourceFindingStatus.ARCHIVED,
+    },
+    SourceFindingStatus.ACCEPTED: {SourceFindingStatus.ARCHIVED},
+    SourceFindingStatus.REJECTED: {SourceFindingStatus.ARCHIVED},
+    SourceFindingStatus.ARCHIVED: set(),
+}
 
 
 class SourceAnalysisService:
@@ -32,10 +54,12 @@ class SourceAnalysisService:
         analysis_repository: SourceAnalysisRepository,
         role_repository: ExperienceRoleRepository,
         source_repository: RoleSourceRepository,
+        fact_repository: ExperienceFactRepository,
     ) -> None:
         self.analysis_repository = analysis_repository
         self.role_repository = role_repository
         self.source_repository = source_repository
+        self.fact_repository = fact_repository
 
     def list_runs(self, role_id: str | None = None) -> list[SourceAnalysisRun]:
         """Return source analysis runs, optionally filtered by role id."""
@@ -56,6 +80,27 @@ class SourceAnalysisService:
         """Return clarification messages for one question."""
 
         return self.analysis_repository.list_messages(question_id)
+
+    def list_findings(
+        self,
+        analysis_run_id: str | None = None,
+        role_id: str | None = None,
+        source_id: str | None = None,
+        fact_id: str | None = None,
+    ) -> list[SourceFinding]:
+        """Return source findings, optionally filtered by relationship ids."""
+
+        return self.analysis_repository.list_findings(
+            analysis_run_id=analysis_run_id,
+            role_id=role_id,
+            source_id=source_id,
+            fact_id=fact_id,
+        )
+
+    def get_finding(self, finding_id: str) -> SourceFinding | None:
+        """Return one source finding if it exists."""
+
+        return self.analysis_repository.get_finding(finding_id)
 
     def start_run(self, role_id: str, source_ids: list[str]) -> SourceAnalysisRun:
         """Create a source analysis run for an existing role and valid sources."""
@@ -103,6 +148,57 @@ class SourceAnalysisService:
         )
         self.analysis_repository.save_message(message)
         return message
+
+    def add_finding(
+        self,
+        analysis_run_id: str,
+        source_id: str,
+        finding_type: SourceFindingType,
+        fact_id: str | None = None,
+        proposed_fact_text: str | None = None,
+        rationale: str | None = None,
+    ) -> SourceFinding:
+        """Create a structured finding for an existing source analysis run."""
+
+        run = self._get_required_run(analysis_run_id)
+        self._validate_finding_source(run=run, source_id=source_id)
+        if fact_id is not None:
+            self._validate_finding_fact(role_id=run.role_id, fact_id=fact_id)
+        finding = SourceFinding(
+            analysis_run_id=analysis_run_id,
+            role_id=run.role_id,
+            source_id=source_id,
+            fact_id=fact_id,
+            finding_type=finding_type,
+            proposed_fact_text=proposed_fact_text,
+            rationale=rationale,
+        )
+        self.analysis_repository.save_finding(finding)
+        return finding
+
+    def accept_finding(self, finding_id: str) -> SourceFinding:
+        """Accept a proposed source finding without mutating canonical facts."""
+
+        return self._set_finding_status(
+            finding_id=finding_id,
+            status=SourceFindingStatus.ACCEPTED,
+        )
+
+    def reject_finding(self, finding_id: str) -> SourceFinding:
+        """Reject a proposed source finding without mutating canonical facts."""
+
+        return self._set_finding_status(
+            finding_id=finding_id,
+            status=SourceFindingStatus.REJECTED,
+        )
+
+    def archive_finding(self, finding_id: str) -> SourceFinding:
+        """Archive a source finding."""
+
+        return self._set_finding_status(
+            finding_id=finding_id,
+            status=SourceFindingStatus.ARCHIVED,
+        )
 
     def resolve_question(self, question_id: str) -> SourceClarificationQuestion:
         """Mark a clarification question as resolved after explicit approval."""
@@ -175,6 +271,38 @@ class SourceAnalysisService:
             raise ClarificationQuestionNotFoundError(msg)
         return question
 
+    def _get_required_finding(self, finding_id: str) -> SourceFinding:
+        """Return one source finding or raise an application-level error."""
+
+        finding = self.analysis_repository.get_finding(finding_id)
+        if finding is None:
+            msg = f"Source finding does not exist: {finding_id}"
+            raise SourceFindingNotFoundError(msg)
+        return finding
+
+    def _validate_finding_source(self, run: SourceAnalysisRun, source_id: str) -> None:
+        """Validate that a finding source exists and is included in the run."""
+
+        self._validate_relevant_sources(run=run, relevant_source_ids=[source_id])
+        source = self.source_repository.get(source_id)
+        if source is None:
+            msg = f"Role source does not exist: {source_id}"
+            raise SourceNotFoundError(msg)
+        if source.role_id != run.role_id:
+            msg = f"Role source {source_id} does not belong to role: {run.role_id}"
+            raise SourceRoleMismatchError(msg)
+
+    def _validate_finding_fact(self, role_id: str, fact_id: str) -> None:
+        """Validate that an optional referenced fact exists and belongs to the role."""
+
+        fact = self.fact_repository.get(fact_id)
+        if fact is None:
+            msg = f"Experience fact does not exist: {fact_id}"
+            raise FactNotFoundError(msg)
+        if fact.role_id != role_id:
+            msg = f"Experience fact {fact_id} does not belong to role: {role_id}"
+            raise FactRoleMismatchError(msg)
+
     def _set_question_status(
         self,
         question_id: str,
@@ -191,3 +319,28 @@ class SourceAnalysisService:
         )
         self.analysis_repository.save_question(updated_question)
         return updated_question
+
+    def _set_finding_status(
+        self,
+        finding_id: str,
+        status: SourceFindingStatus,
+    ) -> SourceFinding:
+        """Persist an explicit source finding status transition."""
+
+        finding = self._get_required_finding(finding_id)
+        allowed_statuses = ALLOWED_FINDING_STATUS_TRANSITIONS[finding.status]
+        if status not in allowed_statuses:
+            msg = (
+                f"Cannot transition source finding {finding.id} "
+                f"from {finding.status.value} to {status.value}."
+            )
+            raise InvalidSourceFindingStatusTransitionError(msg)
+
+        updated_finding = finding.model_copy(
+            update={
+                "status": status,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self.analysis_repository.save_finding(updated_finding)
+        return updated_finding

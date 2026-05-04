@@ -67,3 +67,11 @@ class ClarificationQuestionNotFoundError(CareerAgentError):
 
 class SourceNotInAnalysisRunError(CareerAgentError):
     """Raised when a source is not part of the expected analysis run."""
+
+
+class SourceFindingNotFoundError(CareerAgentError):
+    """Raised when a referenced source finding does not exist."""
+
+
+class InvalidSourceFindingStatusTransitionError(CareerAgentError):
+    """Raised when a source finding status transition is not allowed."""

@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SourceAnalysisStatus(StrEnum):
@@ -30,6 +30,27 @@ class ClarificationMessageAuthor(StrEnum):
     ASSISTANT = "assistant"
     USER = "user"
     SYSTEM = "system"
+
+
+class SourceFindingType(StrEnum):
+    """Structured source analysis finding type."""
+
+    SUPPORTS_FACT = "supports_fact"
+    REVISES_FACT = "revises_fact"
+    CONTRADICTS_FACT = "contradicts_fact"
+    DUPLICATES_FACT = "duplicates_fact"
+    NEW_FACT = "new_fact"
+    UNCLEAR = "unclear"
+    UNRELATED = "unrelated"
+
+
+class SourceFindingStatus(StrEnum):
+    """Lifecycle status for a structured source finding."""
+
+    PROPOSED = "proposed"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
 
 
 class SourceAnalysisRun(BaseModel):
@@ -194,3 +215,103 @@ class SourceClarificationMessage(BaseModel):
             msg = "created_at must be timezone-aware."
             raise ValueError(msg)
         return value
+
+
+class SourceFinding(BaseModel):
+    """Structured analysis finding about what a source appears to mean."""
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Stable identifier for this source finding.",
+    )
+    analysis_run_id: str = Field(
+        min_length=1,
+        description="Identifier of the source analysis run that produced the finding.",
+    )
+    role_id: str = Field(
+        min_length=1,
+        description="Experience role identifier for this finding.",
+    )
+    source_id: str = Field(
+        min_length=1,
+        description="Source entry identifier evaluated by this finding.",
+    )
+    fact_id: str | None = Field(
+        default=None,
+        description="Existing experience fact identifier being compared, when applicable.",
+    )
+    finding_type: SourceFindingType = Field(
+        description="Structured type for this source finding.",
+    )
+    proposed_fact_text: str | None = Field(
+        default=None,
+        description="Candidate normalized fact text when the finding proposes a new fact.",
+    )
+    rationale: str | None = Field(
+        default=None,
+        description="Brief explanation for the finding.",
+    )
+    status: SourceFindingStatus = Field(
+        default=SourceFindingStatus.PROPOSED,
+        description="Lifecycle status for this source finding.",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="Timezone-aware UTC creation timestamp.",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="Timezone-aware UTC update timestamp.",
+    )
+
+    @field_validator(
+        "analysis_run_id",
+        "role_id",
+        "source_id",
+        "fact_id",
+        "proposed_fact_text",
+        "rationale",
+        mode="before",
+    )
+    @classmethod
+    def normalize_text_fields(cls, value: Any) -> Any:
+        """Trim text fields before normal Pydantic validation."""
+
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        return value
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def validate_timezone_aware(cls, value: datetime) -> datetime:
+        """Ensure timestamps are timezone-aware."""
+
+        if value.tzinfo is None:
+            msg = "timestamp values must be timezone-aware."
+            raise ValueError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def validate_finding_shape(self) -> SourceFinding:
+        """Enforce the finding fields required by each finding type."""
+
+        fact_comparison_types = {
+            SourceFindingType.SUPPORTS_FACT,
+            SourceFindingType.REVISES_FACT,
+            SourceFindingType.CONTRADICTS_FACT,
+            SourceFindingType.DUPLICATES_FACT,
+        }
+        if self.finding_type in fact_comparison_types and self.fact_id is None:
+            msg = f"{self.finding_type.value} findings require fact_id."
+            raise ValueError(msg)
+
+        if self.finding_type == SourceFindingType.NEW_FACT:
+            if self.fact_id is not None:
+                msg = "new_fact findings cannot reference an existing fact_id."
+                raise ValueError(msg)
+            if self.proposed_fact_text is None:
+                msg = "new_fact findings require proposed_fact_text."
+                raise ValueError(msg)
+
+        return self

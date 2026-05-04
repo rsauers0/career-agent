@@ -15,6 +15,9 @@ from career_agent.source_analysis.models import (
     SourceClarificationMessage,
     SourceClarificationQuestion,
     SourceClarificationQuestionStatus,
+    SourceFinding,
+    SourceFindingStatus,
+    SourceFindingType,
 )
 from career_agent.source_analysis.repository import SourceAnalysisRepository
 from career_agent.user_preferences.models import UserPreferences, WorkArrangement
@@ -1706,6 +1709,239 @@ def test_source_analysis_messages_list_renders_saved_messages(monkeypatch, tmp_p
     assert "user" in result.output
     assert "It reduced weekly reporting time" in result.output
     assert "final answer detail" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_findings_add_writes_new_fact_finding(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "findings",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-1",
+            "--finding-type",
+            "new_fact",
+            "--proposed-fact-text",
+            "Led reporting automation for recurring team metrics.",
+            "--rationale",
+            "The source describes a distinct automation responsibility.",
+        ],
+    )
+
+    findings = repository.list_findings(analysis_run_id="run-1")
+
+    assert result.exit_code == 0
+    assert "Saved source finding." in result.output
+    assert "Finding ID:" in result.output
+    assert len(findings) == 1
+    assert findings[0].finding_type == SourceFindingType.NEW_FACT
+    assert findings[0].role_id == "role-1"
+    assert findings[0].source_id == "source-1"
+    assert findings[0].fact_id is None
+    assert findings[0].proposed_fact_text == "Led reporting automation for recurring team metrics."
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_findings_add_writes_fact_finding(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+            text="Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "findings",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-1",
+            "--finding-type",
+            "supports_fact",
+            "--fact-id",
+            "fact-1",
+            "--rationale",
+            "The source directly supports the fact.",
+        ],
+    )
+
+    findings = repository.list_findings(fact_id="fact-1")
+
+    assert result.exit_code == 0
+    assert len(findings) == 1
+    assert findings[0].finding_type == SourceFindingType.SUPPORTS_FACT
+    assert findings[0].fact_id == "fact-1"
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_findings_add_reports_source_outside_run(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-2",
+            role_id="role-1",
+            source_text="- Built a service trend dashboard.",
+        )
+    )
+    SourceAnalysisRepository(tmp_path).save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "findings",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-2",
+            "--finding-type",
+            "new_fact",
+            "--proposed-fact-text",
+            "Built a service trend dashboard.",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Source source-2 is not part of analysis run: run-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_findings_list_renders_saved_findings(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            finding_type=SourceFindingType.NEW_FACT,
+            proposed_fact_text="Led reporting automation for recurring team metrics.",
+            rationale="The source describes a distinct automation responsibility.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["source-analysis", "findings", "list", "--run-id", "run-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Source Findings" in result.output
+    assert "Finding 1" in result.output
+    assert "finding-1" in result.output
+    assert "new_fact" in result.output
+    assert "Led reporting automation" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_findings_accept_updates_status(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            finding_type=SourceFindingType.NEW_FACT,
+            proposed_fact_text="Led reporting automation for recurring team metrics.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["source-analysis", "findings", "accept", "finding-1"])
+
+    findings = repository.list_findings()
+
+    assert result.exit_code == 0
+    assert "Accepted source finding." in result.output
+    assert findings[0].status == SourceFindingStatus.ACCEPTED
 
     get_settings.cache_clear()
 

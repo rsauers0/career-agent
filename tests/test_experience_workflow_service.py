@@ -52,6 +52,11 @@ class FakeRoleSourceRepository:
         return True
 
 
+class FakeExperienceFactRepository:
+    def get(self, fact_id: str):
+        return None
+
+
 class FakeSourceAnalysisRepository:
     def __init__(self) -> None:
         self.runs: dict[str, SourceAnalysisRun] = {}
@@ -122,12 +127,14 @@ def build_service() -> tuple[
     role_repository = FakeExperienceRoleRepository()
     source_repository = FakeRoleSourceRepository()
     analysis_repository = FakeSourceAnalysisRepository()
+    fact_repository = FakeExperienceFactRepository()
     role_service = ExperienceRoleService(role_repository)
     source_service = RoleSourceService(source_repository, role_repository)
     analysis_service = SourceAnalysisService(
         analysis_repository,
         role_repository,
         source_repository,
+        fact_repository,
     )
     workflow_service = ExperienceWorkflowService(
         role_service,
@@ -222,7 +229,12 @@ def test_experience_workflow_uses_injected_question_generator() -> None:
     service = ExperienceWorkflowService(
         ExperienceRoleService(role_repository),
         RoleSourceService(source_repository, role_repository),
-        SourceAnalysisService(analysis_repository, role_repository, source_repository),
+        SourceAnalysisService(
+            analysis_repository,
+            role_repository,
+            source_repository,
+            FakeExperienceFactRepository(),
+        ),
         question_generator=FakeQuestionGenerator(),
     )
 
@@ -252,7 +264,12 @@ def test_experience_workflow_does_not_start_run_when_question_generation_fails()
     service = ExperienceWorkflowService(
         ExperienceRoleService(role_repository),
         RoleSourceService(source_repository, role_repository),
-        SourceAnalysisService(analysis_repository, role_repository, source_repository),
+        SourceAnalysisService(
+            analysis_repository,
+            role_repository,
+            source_repository,
+            FakeExperienceFactRepository(),
+        ),
         question_generator=FailingQuestionGenerator(),
     )
 

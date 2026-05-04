@@ -53,6 +53,7 @@ storage shape is:
     analysis_runs.json
     clarification_questions.json
     clarification_messages.json
+    source_findings.json
   snapshots/
     user_preferences/
     experience_roles/
@@ -66,8 +67,8 @@ existing JSON file is replaced, the previous version is copied into the relevant
 `snapshots/` directory.
 
 Source Analysis data is workflow evidence. It may include clarification
-questions and message history entered during analysis, so it should be treated
-as career-sensitive local data.
+questions, message history, and source findings entered or generated during
+analysis, so it should be treated as career-sensitive local data.
 
 ## Verification Commands
 

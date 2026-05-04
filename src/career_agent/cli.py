@@ -20,10 +20,12 @@ from career_agent.errors import (
     FactRoleMismatchError,
     InvalidFactStatusTransitionError,
     InvalidLLMOutputError,
+    InvalidSourceFindingStatusTransitionError,
     LLMClientError,
     LLMConfigurationError,
     NoUnanalyzedSourcesError,
     RoleNotFoundError,
+    SourceFindingNotFoundError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
@@ -52,6 +54,8 @@ from career_agent.source_analysis.models import (
     SourceAnalysisRun,
     SourceClarificationMessage,
     SourceClarificationQuestion,
+    SourceFinding,
+    SourceFindingType,
 )
 from career_agent.source_analysis.repository import SourceAnalysisRepository
 from career_agent.source_analysis.service import SourceAnalysisService
@@ -75,6 +79,7 @@ source_analysis_app = typer.Typer(help="Manage source analysis workflow artifact
 analysis_runs_app = typer.Typer(help="Manage source analysis runs.")
 analysis_questions_app = typer.Typer(help="Manage source clarification questions.")
 analysis_messages_app = typer.Typer(help="Manage source clarification messages.")
+analysis_findings_app = typer.Typer(help="Manage structured source findings.")
 experience_workflow_app = typer.Typer(help="Run experience workflow harness commands.")
 console = Console()
 
@@ -122,6 +127,11 @@ def analysis_questions_cli() -> None:
 @analysis_messages_app.callback()
 def analysis_messages_cli() -> None:
     """Commands for working with source clarification messages."""
+
+
+@analysis_findings_app.callback()
+def analysis_findings_cli() -> None:
+    """Commands for working with structured source findings."""
 
 
 @experience_workflow_app.callback()
@@ -1006,6 +1016,139 @@ def add_source_analysis_message(
     console.print(f"Message ID: {message.id}")
 
 
+@analysis_findings_app.command("list")
+def list_source_analysis_findings(
+    run_id: str | None = typer.Option(None, help="Optional source analysis run id."),
+    role_id: str | None = typer.Option(None, help="Optional role id."),
+    source_id: str | None = typer.Option(None, help="Optional source id."),
+    fact_id: str | None = typer.Option(None, help="Optional fact id."),
+) -> None:
+    """List structured source findings."""
+
+    service = build_source_analysis_service()
+    findings = service.list_findings(
+        analysis_run_id=run_id,
+        role_id=role_id,
+        source_id=source_id,
+        fact_id=fact_id,
+    )
+    if not findings:
+        console.print("[yellow]No source findings saved yet.[/yellow]")
+        return
+
+    render_source_finding_list(findings)
+
+
+@analysis_findings_app.command("add")
+def add_source_analysis_finding(
+    run_id: str = typer.Option(..., help="Existing source analysis run id."),
+    source_id: str = typer.Option(..., help="Source id evaluated by this finding."),
+    finding_type: SourceFindingType = typer.Option(
+        ...,
+        help="Finding type.",
+    ),
+    fact_id: str | None = typer.Option(
+        None,
+        help="Existing fact id being compared, when applicable.",
+    ),
+    proposed_fact_text: str | None = typer.Option(
+        None,
+        help="Candidate normalized fact text for new_fact findings.",
+    ),
+    rationale: str | None = typer.Option(None, help="Optional rationale for the finding."),
+) -> None:
+    """Add a structured source finding to an existing source analysis run."""
+
+    service = build_source_analysis_service()
+    try:
+        finding = service.add_finding(
+            analysis_run_id=run_id,
+            source_id=source_id,
+            finding_type=finding_type,
+            fact_id=fact_id,
+            proposed_fact_text=proposed_fact_text,
+            rationale=rationale,
+        )
+    except (
+        AnalysisRunNotFoundError,
+        FactNotFoundError,
+        FactRoleMismatchError,
+        SourceNotFoundError,
+        SourceNotInAnalysisRunError,
+        SourceRoleMismatchError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save source finding.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved source finding.[/green]")
+    console.print(f"Finding ID: {finding.id}")
+
+
+@analysis_findings_app.command("accept")
+def accept_source_analysis_finding(
+    finding_id: str = typer.Argument(..., help="Source finding identifier."),
+) -> None:
+    """Accept a source finding without mutating canonical facts."""
+
+    service = build_source_analysis_service()
+    try:
+        finding = service.accept_finding(finding_id)
+    except (
+        InvalidSourceFindingStatusTransitionError,
+        SourceFindingNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Accepted source finding.[/green]")
+    console.print(f"Finding ID: {finding.id}")
+
+
+@analysis_findings_app.command("reject")
+def reject_source_analysis_finding(
+    finding_id: str = typer.Argument(..., help="Source finding identifier."),
+) -> None:
+    """Reject a source finding without mutating canonical facts."""
+
+    service = build_source_analysis_service()
+    try:
+        finding = service.reject_finding(finding_id)
+    except (
+        InvalidSourceFindingStatusTransitionError,
+        SourceFindingNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Rejected source finding.[/green]")
+    console.print(f"Finding ID: {finding.id}")
+
+
+@analysis_findings_app.command("archive")
+def archive_source_analysis_finding(
+    finding_id: str = typer.Argument(..., help="Source finding identifier."),
+) -> None:
+    """Archive a source finding."""
+
+    service = build_source_analysis_service()
+    try:
+        finding = service.archive_finding(finding_id)
+    except (
+        InvalidSourceFindingStatusTransitionError,
+        SourceFindingNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Archived source finding.[/green]")
+    console.print(f"Finding ID: {finding.id}")
+
+
 @experience_workflow_app.command("analyze-sources")
 def analyze_experience_sources(
     role_id: str = typer.Option(..., help="Existing experience role id."),
@@ -1082,7 +1225,13 @@ def build_source_analysis_service() -> SourceAnalysisService:
     analysis_repository = SourceAnalysisRepository(settings.data_dir)
     role_repository = ExperienceRoleRepository(settings.data_dir)
     source_repository = RoleSourceRepository(settings.data_dir)
-    return SourceAnalysisService(analysis_repository, role_repository, source_repository)
+    fact_repository = ExperienceFactRepository(settings.data_dir)
+    return SourceAnalysisService(
+        analysis_repository,
+        role_repository,
+        source_repository,
+        fact_repository,
+    )
 
 
 def build_experience_workflow_service() -> ExperienceWorkflowService:
@@ -1358,6 +1507,32 @@ def render_source_clarification_message_list(
         )
 
 
+def render_source_finding_list(findings: list[SourceFinding]) -> None:
+    """Render source findings as separated readable CLI blocks."""
+
+    console.print("[bold]Source Findings[/bold]")
+    for index, finding in enumerate(findings, start=1):
+        finding_details = Table.grid(expand=True, padding=(0, 2))
+        finding_details.add_column(no_wrap=True, style="bold")
+        finding_details.add_column(ratio=1)
+        finding_details.add_row("Type", finding.finding_type.value)
+        finding_details.add_row("Status", finding.status.value)
+        finding_details.add_row("ID", finding.id)
+        finding_details.add_row("Run ID", finding.analysis_run_id)
+        finding_details.add_row("Role ID", finding.role_id)
+        finding_details.add_row("Source ID", finding.source_id)
+        finding_details.add_row("Fact ID", finding.fact_id or "-")
+        finding_details.add_row("Proposed Fact", finding.proposed_fact_text or "-")
+        finding_details.add_row("Rationale", finding.rationale or "-")
+        console.print(
+            Panel(
+                finding_details,
+                title=f"Finding {index}",
+                expand=True,
+            )
+        )
+
+
 def preview_source_text(source_text: str, max_length: int = 80) -> str:
     """Return a one-line preview of submitted source text."""
 
@@ -1375,6 +1550,7 @@ app.add_typer(experience_workflow_app, name="experience-workflow")
 source_analysis_app.add_typer(analysis_runs_app, name="runs")
 source_analysis_app.add_typer(analysis_questions_app, name="questions")
 source_analysis_app.add_typer(analysis_messages_app, name="messages")
+source_analysis_app.add_typer(analysis_findings_app, name="findings")
 app.add_typer(source_analysis_app, name="source-analysis")
 
 

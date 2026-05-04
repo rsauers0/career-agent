@@ -4,6 +4,9 @@ This page contains Mermaid diagrams for the current `v2-foundation` architecture
 
 The diagrams are intentionally focused on implemented boundaries and near-term design direction. They should help explain the project without implying that the future LLM workflow is fully implemented.
 
+For a database-style view of the JSON records and relationships, see
+[Database-Style ER Diagram](er-diagram.md).
+
 ## Component Boundaries
 
 ```mermaid
@@ -11,7 +14,7 @@ flowchart LR
     UserPreferences["User Preferences<br/>Search and matching preferences"]
     ExperienceRoles["Experience Roles<br/>Structured role facts"]
     RoleSources["Role Sources<br/>Raw submitted evidence"]
-    SourceAnalysis["Source Analysis<br/>Runs, questions, messages"]
+    SourceAnalysis["Source Analysis<br/>Runs, questions,<br/>messages, findings"]
     ExperienceFacts["Experience Facts<br/>Canonical career facts"]
 
     ExperienceRoles -->|"role_id"| RoleSources
@@ -19,7 +22,7 @@ flowchart LR
     RoleSources -->|"source_ids"| SourceAnalysis
     ExperienceRoles -->|"role_id"| ExperienceFacts
     RoleSources -. "source_ids" .-> ExperienceFacts
-    SourceAnalysis -. "future clarification context" .-> ExperienceFacts
+    SourceAnalysis -. "findings and evidence context" .-> ExperienceFacts
 
     UserPreferences -. "future job matching context" .-> ExperienceRoles
 ```
@@ -79,6 +82,7 @@ flowchart TD
     Run["SourceAnalysisRun<br/>role_id, source_ids, status"]
     Question["SourceClarificationQuestion<br/>analysis_run_id, status"]
     Messages["SourceClarificationMessages<br/>one row per assistant/user/system turn"]
+    Findings["SourceFinding<br/>structured source analysis notes"]
     Resolve["resolve_question / skip_question<br/>explicit approval transition"]
 
     Role -->|"role_id"| Workflow
@@ -90,6 +94,8 @@ flowchart TD
     Run -. "only one active run per role_id" .-> Role
     Workflow -->|"save questions through SourceAnalysisService"| Question
     Question -->|"append one message at a time"| Messages
+    Run -->|"source finding lifecycle"| Findings
+    Sources -. "supports / revises / contradicts / new_fact" .-> Findings
     Messages -. "evidence for closure" .-> Resolve
     Resolve -->|"updates status"| Question
 ```
@@ -97,6 +103,10 @@ flowchart TD
 The important guardrail is that adding messages does not close a question. A future LLM workflow may decide it is ready to close a question, but it must call an explicit transition that can later include eval approval.
 
 The workflow generates and validates clarification question proposals before it creates the analysis run. This prevents malformed LLM output from creating an active run that blocks later attempts.
+
+Source findings are structured analysis notes. Accepting a finding records that
+the analysis artifact was accepted; it does not directly create or revise
+canonical experience facts.
 
 ## Canonical Data Vs Analysis Artifacts
 
@@ -129,7 +139,7 @@ experience facts before any persuasive resume or cover-letter writing happens.
 ```mermaid
 flowchart TD
     RawSources["Role Sources<br/>raw evidence"]
-    Analysis["Source Analysis<br/>questions and messages"]
+    Analysis["Source Analysis<br/>questions, messages,<br/>and source findings"]
     Orchestrator["LLM Orchestrator<br/>small structured steps"]
     Constraints["Scoped Constraints<br/>global, role, project, proposal"]
     DraftFacts["Draft Experience Facts<br/>grounded, generic, traceable"]

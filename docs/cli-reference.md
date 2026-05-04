@@ -20,6 +20,8 @@ uv run career-agent source-analysis --help
 uv run career-agent source-analysis runs start --help
 uv run career-agent source-analysis questions add --help
 uv run career-agent source-analysis messages add --help
+uv run career-agent source-analysis findings --help
+uv run career-agent source-analysis findings add --help
 uv run career-agent experience-workflow --help
 uv run career-agent experience-workflow analyze-sources --help
 ```
@@ -354,6 +356,41 @@ uv run career-agent source-analysis messages list --question-id <question-id>
 Clarification messages are appended one message at a time. Adding a message does
 not resolve a question automatically; use `questions resolve` or
 `questions skip` for explicit status transitions.
+
+Add a structured source finding:
+
+```bash
+uv run career-agent source-analysis findings add \
+  --run-id <run-id> \
+  --source-id <source-id> \
+  --finding-type new_fact \
+  --proposed-fact-text "Normalized draft fact candidate." \
+  --rationale "Why the source appears to support this finding."
+```
+
+Add a finding that compares a source to an existing fact:
+
+```bash
+uv run career-agent source-analysis findings add \
+  --run-id <run-id> \
+  --source-id <source-id> \
+  --finding-type supports_fact \
+  --fact-id <fact-id> \
+  --rationale "The source describes the same work as the existing fact."
+```
+
+List and transition source findings:
+
+```bash
+uv run career-agent source-analysis findings list --run-id <run-id>
+uv run career-agent source-analysis findings accept <finding-id>
+uv run career-agent source-analysis findings reject <finding-id>
+uv run career-agent source-analysis findings archive <finding-id>
+```
+
+Source findings are workflow artifacts. Accepting a finding does not create or
+revise an experience fact yet; canonical fact changes still go through
+`career-agent facts`.
 
 ## Experience Workflow
 
