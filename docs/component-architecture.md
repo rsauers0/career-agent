@@ -129,11 +129,12 @@ Examples of owned data:
 
 - role id
 - submitted source text
-- optional related experience fact ids when a user adds source material because of a specific fact
 - source analysis status
 - creation timestamp
 
-Role sources preserve submitted text exactly for traceability. They are separate from experience roles so the application can retain source evidence without mixing raw input into structured role facts. A source can be related to one or more experience facts, but it remains role-owned source evidence. Fact-related sources should still be analyzed against the role's existing facts to check for support, revision needs, duplication, contradiction, or unsafe merge pressure.
+Role sources preserve submitted text exactly for traceability. They are separate from experience roles so the application can retain source evidence without mixing raw input into structured role facts.
+
+Future fact-related source additions should still remain role-owned source evidence. A later source-to-fact relationship can link a source to one or more experience facts, but that relationship is not implemented yet. When implemented, fact-related sources should still be analyzed against the role's existing facts to check for support, revision needs, duplication, contradiction, or unsafe merge pressure.
 
 ### Experience Facts
 
@@ -221,7 +222,7 @@ Examples of owned data:
 - question and analysis lifecycle statuses
 - table-like JSON files for runs, questions, and messages
 
-Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and experience fact proposal generation. Canonical data changes should still be applied through deterministic services.
+Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, and draft experience fact generation. Canonical data changes should still be applied through deterministic services.
 
 Clarification messages are append-only conversation turns. They do not resolve questions by themselves; question closure requires an explicit `resolve` or `skip` transition.
 

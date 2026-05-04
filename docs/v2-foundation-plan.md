@@ -153,9 +153,9 @@ The next output layer should be draft experience facts, not final resume bullets
 
 Each draft fact should reference supporting sources, questions, and messages. Those references should be append-only so later revisions preserve the original evidence trail while adding new support. If the evidence is missing, unclear, or conflicting, the workflow should ask another question or record missing evidence instead of fabricating a fact.
 
-User review should be collaborative. A proposal may have a revision thread where the user corrects wording, supplies additional evidence, asks for a split, or rejects unsupported phrasing. Those messages should remain part of the historical chain for future analysis.
+User review should be collaborative. A draft fact may have a revision thread where the user corrects wording, supplies additional evidence, asks for a split, or rejects unsupported phrasing. Those messages should remain part of the historical chain for future analysis.
 
-When a user supplies new information during fact review, the durable evidence should be stored as role source material and may optionally link to related fact ids. Even fact-specific source additions should remain role-owned and should be analyzed against the role's existing facts for duplication, contradiction, support, revision needs, and merge risk.
+When a user supplies new information during fact review, the durable evidence should be stored as role source material. A future source-to-fact relationship may optionally link source entries to related fact ids, but that relationship is not implemented yet. Even fact-specific source additions should remain role-owned and should be analyzed against the role's existing facts for duplication, contradiction, support, revision needs, and merge risk.
 
 User corrections may create scoped constraints. A single correction can produce multiple durable rules, such as global writing preferences or role/project/proposal-specific hard rules. The first implementation should start with global and role scopes, then add more specific scopes as new components need them. Constraints should be linked to the source message and loaded by later LLM workflows that operate within the same scope.
 
@@ -163,7 +163,7 @@ Constraint extraction should separate preferences from hard rules. The LLM may p
 
 Historical traceability should not be stored directly on the canonical fact. Messages preserve conversational rationale, snapshots preserve file-level backups, and fact change event records preserve semantic changes with an `actor`, event type, summary, source message ids, status transition, related fact id, and timestamp. Actor values are `user`, `llm`, and `system`; UI workflows should set actor from context rather than exposing it as an end-user control.
 
-Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, fact proposal, drift checking, merge checking, clarification planning, and deterministic service transitions.
+Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, draft fact generation, drift checking, merge checking, clarification planning, and deterministic service transitions.
 
 ### 7. TUI
 
@@ -230,6 +230,7 @@ Experience Facts
   -> model
   -> repository
   -> service
+  -> CLI
   -> tests
 
 Source Analysis

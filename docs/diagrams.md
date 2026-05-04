@@ -133,7 +133,7 @@ flowchart TD
     Orchestrator["LLM Orchestrator<br/>small structured steps"]
     Constraints["Scoped Constraints<br/>global, role, project, proposal"]
     DraftFacts["Draft Experience Facts<br/>grounded, generic, traceable"]
-    Revision["Revision Thread<br/>user + assistant collaboration"]
+    Revision["Revision Thread<br/>user + LLM/system collaboration"]
     Events["FactChangeEvent<br/>actor, event type,<br/>summary, message ids"]
     ActiveFacts["Active Experience Facts<br/>canonical evidence,<br/>reference lists"]
     Derived["Derived Evidence Indexes<br/>cross-role skills,<br/>systems, capabilities"]
@@ -164,9 +164,9 @@ tools do not prove that two facts describe the same work. Unclear merges should
 remain separate until the user or evidence confirms they belong together.
 
 Future LLM behavior should be orchestrated as narrow checklist steps, such as
-response classification, constraint extraction, fact proposal, drift checking,
-merge checking, and clarification planning. Application services still own
-persistence and explicit state transitions.
+response classification, constraint extraction, draft fact generation, drift
+checking, merge checking, and clarification planning. Application services
+still own persistence and explicit state transitions.
 
 History has separate responsibilities: messages capture conversational rationale,
 change events capture semantic fact mutations and lifecycle transitions, and
@@ -211,6 +211,7 @@ flowchart TD
     DataDir --> Roles["experience_roles/experience_roles.json"]
     DataDir --> Sources["role_sources/role_sources.json"]
     DataDir --> Facts["experience_facts/experience_facts.json"]
+    DataDir --> FactEvents["experience_facts/fact_change_events.json"]
     DataDir --> Analysis["source_analysis/*.json"]
     DataDir --> Snapshots["snapshots/"]
 
@@ -218,5 +219,6 @@ flowchart TD
     Snapshots --> RoleSnapshots["experience_roles/<timestamp>-experience_roles.json"]
     Snapshots --> SourceSnapshots["role_sources/<timestamp>-role_sources.json"]
     Snapshots --> FactSnapshots["experience_facts/<timestamp>-experience_facts.json"]
+    Snapshots --> FactEventSnapshots["experience_facts/<timestamp>-fact_change_events.json"]
     Snapshots --> AnalysisSnapshots["source_analysis/<timestamp>-*.json"]
 ```

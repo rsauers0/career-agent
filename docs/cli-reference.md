@@ -14,6 +14,8 @@ uv run career-agent sources --help
 uv run career-agent sources add --help
 uv run career-agent facts --help
 uv run career-agent facts add --help
+uv run career-agent facts events --help
+uv run career-agent facts revise --help
 uv run career-agent source-analysis --help
 uv run career-agent source-analysis runs start --help
 uv run career-agent source-analysis questions add --help
