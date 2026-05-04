@@ -239,6 +239,11 @@ That relationship means analysis recorded a finding about what the source appear
 to mean. It is not canonical proof by itself. A new source cannot be treated as
 fact support until analysis and review determine what the source actually says.
 
+`experience-workflow generate-findings` is the current workflow command that
+creates Source Finding rows after clarification questions for an analysis run
+are resolved or skipped. It records analysis conclusions before any canonical
+Experience Fact is created or revised.
+
 If a user opens an existing fact and starts a revision conversation, that creates
 review context. It means the source or message was submitted while working on
 that fact. It still does not prove the source supports the fact. The workflow may

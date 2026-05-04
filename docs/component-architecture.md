@@ -239,6 +239,7 @@ Current files:
 
 ```text
 src/career_agent/experience_workflow/
+  factory.py
   finding_generator.py
   question_generator.py
   service.py
@@ -346,7 +347,7 @@ Expected flow:
 
 ```text
 raw role source material
-  -> source analysis questions and messages
+  -> source analysis questions, messages, and findings
   -> draft experience facts
   -> user/assistant revision thread
   -> active experience facts

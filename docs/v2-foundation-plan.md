@@ -246,6 +246,9 @@ Source Analysis
   -> tests
 
 Experience Workflow
+  -> question generator
+  -> finding generator
+  -> factory wiring
   -> service
   -> CLI
   -> tests
@@ -258,4 +261,4 @@ LLM Boundary
   -> tests
 ```
 
-The immediate next foundation step is the Experience AI workflow harness. It should remain CLI/dev-first and should use the existing services instead of writing directly to JSON files.
+The immediate next foundation step is applying accepted Source Findings through deterministic Experience Fact workflows. That step should create or revise draft facts, preserve fact change events, and keep accepted analysis artifacts separate from canonical fact support until the resulting fact text explicitly references its evidence.

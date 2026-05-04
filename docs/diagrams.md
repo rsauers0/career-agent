@@ -201,15 +201,15 @@ instead of embedding provider calls directly in workflow services.
 
 ```mermaid
 flowchart LR
-    WorkflowGenerator["LLMSourceQuestionGenerator"]
+    WorkflowGenerator["LLM Workflow Generators<br/>SourceQuestion + SourceFinding"]
     Factory["Generator Factory<br/>base URL set = LLM<br/>base URL unset = deterministic"]
-    Deterministic["DeterministicSourceQuestionGenerator"]
+    Deterministic["Deterministic Generators<br/>local validation"]
     LLMClient["LLMClient protocol"]
     FakeClient["FakeLLMClient<br/>test/dev implementation"]
     OpenAIClient["OpenAICompatibleLLMClient<br/>opt-in via configuration"]
     Request["LLMRequest"]
     Response["LLMResponse"]
-    Contract["GeneratedSourceQuestion[]<br/>validated JSON contract"]
+    Contract["GeneratedSourceQuestion[] / GeneratedSourceFinding[]<br/>validated JSON contracts"]
 
     Factory --> Deterministic
     Factory --> WorkflowGenerator
