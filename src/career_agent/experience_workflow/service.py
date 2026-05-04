@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import StrEnum
+
 from career_agent.errors import (
     AnalysisRunNotFoundError,
     NoUnanalyzedSourcesError,
@@ -9,6 +12,7 @@ from career_agent.errors import (
     SourceNotFoundError,
     SourceRoleMismatchError,
 )
+from career_agent.experience_facts.models import FactChangeActor
 from career_agent.experience_facts.service import ExperienceFactService
 from career_agent.experience_roles.service import ExperienceRoleService
 from career_agent.experience_workflow.finding_generator import (
@@ -23,10 +27,34 @@ from career_agent.role_sources.models import RoleSourceStatus
 from career_agent.role_sources.service import RoleSourceService
 from career_agent.source_analysis.models import (
     SourceAnalysisRun,
+    SourceClarificationMessage,
+    SourceClarificationQuestion,
     SourceClarificationQuestionStatus,
     SourceFinding,
+    SourceFindingStatus,
+    SourceFindingType,
 )
 from career_agent.source_analysis.service import SourceAnalysisService
+
+
+class AppliedSourceFindingAction(StrEnum):
+    """Canonical action taken while applying a source finding."""
+
+    CREATED_FACT = "created_fact"
+    REVISED_FACT = "revised_fact"
+    ADDED_EVIDENCE = "added_evidence"
+    SKIPPED = "skipped"
+
+
+@dataclass(frozen=True)
+class AppliedSourceFindingResult:
+    """Result for one accepted source finding application attempt."""
+
+    finding_id: str
+    finding_type: SourceFindingType
+    action: AppliedSourceFindingAction
+    fact_id: str | None = None
+    message: str | None = None
 
 
 class ExperienceWorkflowService:
@@ -158,3 +186,166 @@ class ExperienceWorkflowService:
                 )
             )
         return saved_findings
+
+    def apply_findings(
+        self,
+        analysis_run_id: str,
+        actor: FactChangeActor = FactChangeActor.SYSTEM,
+    ) -> list[AppliedSourceFindingResult]:
+        """Apply accepted source findings through deterministic fact services."""
+
+        run = self.analysis_service.get_run(analysis_run_id)
+        if run is None:
+            msg = f"Source analysis run does not exist: {analysis_run_id}"
+            raise AnalysisRunNotFoundError(msg)
+
+        questions = self.analysis_service.list_questions(run.id)
+        messages_by_question_id = {
+            question.id: self.analysis_service.list_messages(question.id) for question in questions
+        }
+        accepted_findings = [
+            finding
+            for finding in self.analysis_service.list_findings(analysis_run_id=run.id)
+            if finding.status == SourceFindingStatus.ACCEPTED
+        ]
+
+        results: list[AppliedSourceFindingResult] = []
+        for finding in accepted_findings:
+            question_ids, message_ids = self._evidence_ids_for_finding(
+                finding=finding,
+                questions=questions,
+                messages_by_question_id=messages_by_question_id,
+            )
+            summary = self._finding_summary(finding)
+
+            if finding.finding_type == SourceFindingType.NEW_FACT:
+                fact = self.fact_service.add_fact(
+                    role_id=finding.role_id,
+                    text=finding.proposed_fact_text or "",
+                    source_ids=[finding.source_id],
+                    question_ids=question_ids,
+                    message_ids=message_ids,
+                    actor=actor,
+                    summary=summary,
+                    source_message_ids=message_ids,
+                )
+                applied_finding = self.analysis_service.apply_finding(
+                    finding_id=finding.id,
+                    applied_fact_id=fact.id,
+                )
+                results.append(
+                    AppliedSourceFindingResult(
+                        finding_id=applied_finding.id,
+                        finding_type=applied_finding.finding_type,
+                        action=AppliedSourceFindingAction.CREATED_FACT,
+                        fact_id=fact.id,
+                        message="Created draft experience fact.",
+                    )
+                )
+                continue
+
+            if finding.finding_type == SourceFindingType.REVISES_FACT:
+                if finding.proposed_fact_text is None:
+                    results.append(
+                        AppliedSourceFindingResult(
+                            finding_id=finding.id,
+                            finding_type=finding.finding_type,
+                            action=AppliedSourceFindingAction.SKIPPED,
+                            fact_id=finding.fact_id,
+                            message="revises_fact findings require proposed_fact_text to apply.",
+                        )
+                    )
+                    continue
+
+                fact = self.fact_service.revise_fact(
+                    fact_id=finding.fact_id or "",
+                    text=finding.proposed_fact_text,
+                    source_ids=[finding.source_id],
+                    question_ids=question_ids,
+                    message_ids=message_ids,
+                    actor=actor,
+                    summary=summary,
+                    source_message_ids=message_ids,
+                )
+                applied_finding = self.analysis_service.apply_finding(
+                    finding_id=finding.id,
+                    applied_fact_id=fact.id,
+                )
+                results.append(
+                    AppliedSourceFindingResult(
+                        finding_id=applied_finding.id,
+                        finding_type=applied_finding.finding_type,
+                        action=AppliedSourceFindingAction.REVISED_FACT,
+                        fact_id=fact.id,
+                        message="Created or updated draft fact revision.",
+                    )
+                )
+                continue
+
+            if finding.finding_type == SourceFindingType.SUPPORTS_FACT:
+                fact = self.fact_service.add_evidence(
+                    fact_id=finding.fact_id or "",
+                    source_ids=[finding.source_id],
+                    question_ids=question_ids,
+                    message_ids=message_ids,
+                    actor=actor,
+                    summary=summary,
+                    source_message_ids=message_ids,
+                )
+                applied_finding = self.analysis_service.apply_finding(
+                    finding_id=finding.id,
+                    applied_fact_id=fact.id,
+                )
+                results.append(
+                    AppliedSourceFindingResult(
+                        finding_id=applied_finding.id,
+                        finding_type=applied_finding.finding_type,
+                        action=AppliedSourceFindingAction.ADDED_EVIDENCE,
+                        fact_id=fact.id,
+                        message="Applied supporting evidence to fact.",
+                    )
+                )
+                continue
+
+            results.append(
+                AppliedSourceFindingResult(
+                    finding_id=finding.id,
+                    finding_type=finding.finding_type,
+                    action=AppliedSourceFindingAction.SKIPPED,
+                    fact_id=finding.fact_id,
+                    message=(
+                        f"{finding.finding_type.value} findings are retained as "
+                        "analysis artifacts and are not applied automatically."
+                    ),
+                )
+            )
+
+        return results
+
+    def _evidence_ids_for_finding(
+        self,
+        finding: SourceFinding,
+        questions: list[SourceClarificationQuestion],
+        messages_by_question_id: dict[str, list[SourceClarificationMessage]],
+    ) -> tuple[list[str], list[str]]:
+        """Return conservative question/message evidence ids for one source finding."""
+
+        question_ids = [
+            question.id
+            for question in questions
+            if finding.source_id in question.relevant_source_ids
+        ]
+        message_ids = [
+            message.id
+            for question_id in question_ids
+            for message in messages_by_question_id[question_id]
+        ]
+        return question_ids, message_ids
+
+    def _finding_summary(self, finding: SourceFinding) -> str:
+        """Build a fact change event summary from a source finding."""
+
+        summary = f"Applied source finding {finding.id} ({finding.finding_type.value})."
+        if finding.rationale is None:
+            return summary
+        return f"{summary} {finding.rationale}"

@@ -87,6 +87,12 @@ Generate source findings after clarification questions are resolved or skipped:
 uv run career-agent experience-workflow generate-findings --run-id <run-id>
 ```
 
+Apply accepted source findings through deterministic fact workflows:
+
+```bash
+uv run career-agent experience-workflow apply-findings --run-id <run-id>
+```
+
 Run tests:
 
 ```bash

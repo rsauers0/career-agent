@@ -339,6 +339,56 @@ class ExperienceFactService:
         msg = f"Experience fact cannot be revised while status is {fact.status.value}."
         raise FactRevisionNotAllowedError(msg)
 
+    def add_evidence(
+        self,
+        fact_id: str,
+        source_ids: list[str] | None = None,
+        question_ids: list[str] | None = None,
+        message_ids: list[str] | None = None,
+        actor: FactChangeActor = FactChangeActor.USER,
+        summary: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ExperienceFact:
+        """Append evidence references to a fact through an explicit workflow."""
+
+        fact = self._get_required_fact(fact_id)
+        if fact.status in {
+            ExperienceFactStatus.REJECTED,
+            ExperienceFactStatus.SUPERSEDED,
+            ExperienceFactStatus.ARCHIVED,
+        }:
+            msg = f"Experience fact cannot have evidence added while status is {fact.status.value}."
+            raise FactRevisionNotAllowedError(msg)
+
+        source_ids = source_ids or []
+        question_ids = question_ids or []
+        message_ids = message_ids or []
+        source_message_ids = source_message_ids or []
+        self._validate_role_and_sources(role_id=fact.role_id, source_ids=source_ids)
+        updated_fact = fact.model_copy(
+            update={
+                "source_ids": self._merge_values(fact.source_ids, source_ids),
+                "question_ids": self._merge_values(fact.question_ids, question_ids),
+                "message_ids": self._merge_values(fact.message_ids, message_ids),
+                "updated_at": self._now(),
+            }
+        )
+
+        if not self._has_added_evidence(fact, updated_fact):
+            return fact
+
+        self.fact_repository.save(updated_fact)
+        self._record_change_event(
+            fact=updated_fact,
+            event_type=FactChangeEventType.EVIDENCE_ADDED,
+            actor=actor,
+            summary=summary,
+            source_message_ids=source_message_ids,
+            from_status=fact.status,
+            to_status=updated_fact.status,
+        )
+        return updated_fact
+
     def delete_fact(self, fact_id: str) -> bool:
         """Delete one saved fact by identifier."""
 

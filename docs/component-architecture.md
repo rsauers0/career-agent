@@ -227,7 +227,7 @@ Source Analysis is not canonical career data. It is workflow evidence that suppo
 
 Clarification messages are append-only conversation turns. They do not resolve questions by themselves; question closure requires an explicit `resolve` or `skip` transition.
 
-Source findings are structured analysis notes. They can indicate that a source appears to support, revise, contradict, duplicate, create, clarify, or be unrelated to a fact. Accepting a finding does not mutate canonical facts in the first implementation; later workflow steps should apply accepted findings through deterministic Experience Fact services.
+Source findings are structured analysis notes. They can indicate that a source appears to support, revise, contradict, duplicate, create, be unclear, or be unrelated to a fact. Accepting a finding records review approval but does not directly mutate canonical facts. The Experience Workflow applies accepted findings through deterministic Experience Fact services and records `applied_fact_id` when a finding creates or updates a fact.
 
 Only one active Source Analysis run may exist for a single experience role at a time. Separate roles may have active analysis runs simultaneously.
 
@@ -259,6 +259,7 @@ Examples of coordinated behavior:
 - save generated question proposals through `SourceAnalysisService`
 - generate structured source finding proposals after clarification questions close
 - manage structured source findings through `SourceAnalysisService`
+- apply accepted source findings through `ExperienceFactService`
 
 Experience Workflow does not own persistence. It coordinates component services and should not write directly to JSON files.
 
@@ -271,6 +272,8 @@ Experience Workflow checks for an existing active run before question generation
 Finding generation is behind a `SourceFindingGenerator` protocol. The deterministic finder is only for local plumbing validation and emits placeholder `unclear` findings. The LLM-backed finder is the real semantic implementation; it uses the extraction LLM configuration, expects JSON output, validates source and fact references, rejects duplicate generated findings, and never mutates canonical facts directly.
 
 Experience Workflow only generates findings for an existing analysis run when all clarification questions are resolved or skipped. Runs with zero questions are allowed. If findings already exist for the run, generation is blocked so the workflow does not create duplicate finding batches.
+
+Experience Workflow applies only accepted findings. `new_fact` creates draft facts, `revises_fact` uses fact revision rules, and `supports_fact` adds evidence through an explicit fact service method. Contradiction, duplicate, unclear, and unrelated findings remain accepted analysis artifacts until a future review workflow handles them.
 
 Factory wiring selects deterministic generators when no LLM base URL is configured. If an LLM base URL is configured, it selects the LLM-backed generators and requires an LLM model. Extraction workflow settings can override the default LLM settings.
 

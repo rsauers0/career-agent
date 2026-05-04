@@ -50,7 +50,10 @@ from career_agent.experience_workflow.factory import (
     build_source_finding_generator,
     build_source_question_generator,
 )
-from career_agent.experience_workflow.service import ExperienceWorkflowService
+from career_agent.experience_workflow.service import (
+    AppliedSourceFindingResult,
+    ExperienceWorkflowService,
+)
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.role_sources.service import RoleSourceService
@@ -1224,6 +1227,48 @@ def generate_experience_findings(
     console.print(f"Finding IDs: {', '.join(finding.id for finding in findings)}")
 
 
+@experience_workflow_app.command("apply-findings")
+def apply_experience_findings(
+    run_id: str = typer.Option(..., help="Existing source analysis run id."),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.SYSTEM,
+        help="Workflow actor recorded for fact change events.",
+    ),
+) -> None:
+    """Apply accepted source findings through deterministic fact workflows."""
+
+    try:
+        service = build_experience_workflow_service()
+        results = service.apply_findings(run_id, actor=actor)
+    except (
+        AnalysisRunNotFoundError,
+        EvidenceReferenceRemovalError,
+        FactNotFoundError,
+        FactRevisionNotAllowedError,
+        FactRoleMismatchError,
+        InvalidFactStatusTransitionError,
+        InvalidSourceFindingStatusTransitionError,
+        RoleNotFoundError,
+        SourceFindingNotFoundError,
+        SourceNotFoundError,
+        SourceRoleMismatchError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not apply source findings.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    if not results:
+        console.print("[yellow]No accepted source findings to apply.[/yellow]")
+        return
+
+    console.print("[green]Applied source findings.[/green]")
+    render_applied_source_finding_results(results)
+
+
 def build_user_preferences_service() -> UserPreferencesService:
     """Build the user preferences service from configured settings."""
 
@@ -1567,6 +1612,7 @@ def render_source_finding_list(findings: list[SourceFinding]) -> None:
         finding_details.add_row("Role ID", finding.role_id)
         finding_details.add_row("Source ID", finding.source_id)
         finding_details.add_row("Fact ID", finding.fact_id or "-")
+        finding_details.add_row("Applied Fact ID", finding.applied_fact_id or "-")
         finding_details.add_row("Proposed Fact", finding.proposed_fact_text or "-")
         finding_details.add_row("Rationale", finding.rationale or "-")
         console.print(
@@ -1576,6 +1622,26 @@ def render_source_finding_list(findings: list[SourceFinding]) -> None:
                 expand=True,
             )
         )
+
+
+def render_applied_source_finding_results(results: list[AppliedSourceFindingResult]) -> None:
+    """Render source finding application results."""
+
+    table = Table(title="Applied Source Findings")
+    table.add_column("Finding ID")
+    table.add_column("Type")
+    table.add_column("Action")
+    table.add_column("Fact ID")
+    table.add_column("Message")
+    for result in results:
+        table.add_row(
+            result.finding_id,
+            result.finding_type.value,
+            result.action.value,
+            result.fact_id or "-",
+            result.message or "-",
+        )
+    console.print(table)
 
 
 def preview_source_text(source_text: str, max_length: int = 80) -> str:

@@ -91,7 +91,9 @@ Source Analysis artifacts are stored as table-like JSON files:
 Source findings are structured analysis notes about what a source appears to
 mean. They can record support, revision, contradiction, duplication, possible new
 fact, unclear, or unrelated findings. They are workflow artifacts, not canonical
-fact support by themselves.
+fact support by themselves. Applied findings store `applied_fact_id` so the
+workflow can trace which fact was created or updated and avoid duplicate
+application.
 
 ## Snapshot Behavior
 

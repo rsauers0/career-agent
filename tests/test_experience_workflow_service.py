@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from career_agent.errors import (
@@ -10,13 +12,21 @@ from career_agent.errors import (
     SourceNotFoundError,
     SourceRoleMismatchError,
 )
-from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.models import (
+    ExperienceFact,
+    ExperienceFactStatus,
+    FactChangeEvent,
+    FactChangeEventType,
+)
 from career_agent.experience_facts.service import ExperienceFactService
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.service import ExperienceRoleService
 from career_agent.experience_workflow.finding_generator import GeneratedSourceFinding
 from career_agent.experience_workflow.question_generator import GeneratedSourceQuestion
-from career_agent.experience_workflow.service import ExperienceWorkflowService
+from career_agent.experience_workflow.service import (
+    AppliedSourceFindingAction,
+    ExperienceWorkflowService,
+)
 from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.role_sources.service import RoleSourceService
 from career_agent.source_analysis.models import (
@@ -26,6 +36,7 @@ from career_agent.source_analysis.models import (
     SourceClarificationQuestion,
     SourceClarificationQuestionStatus,
     SourceFinding,
+    SourceFindingStatus,
     SourceFindingType,
 )
 from career_agent.source_analysis.service import SourceAnalysisService
@@ -68,6 +79,7 @@ class FakeRoleSourceRepository:
 class FakeExperienceFactRepository:
     def __init__(self) -> None:
         self.facts: dict[str, ExperienceFact] = {}
+        self.change_events: list[FactChangeEvent] = []
 
     def list(self, role_id: str | None = None) -> list[ExperienceFact]:
         facts = list(self.facts.values())
@@ -80,6 +92,21 @@ class FakeExperienceFactRepository:
 
     def save(self, fact: ExperienceFact) -> None:
         self.facts[fact.id] = fact
+
+    def list_change_events(
+        self,
+        fact_id: str | None = None,
+        role_id: str | None = None,
+    ) -> list[FactChangeEvent]:
+        events = self.change_events
+        if fact_id is not None:
+            events = [event for event in events if event.fact_id == fact_id]
+        if role_id is not None:
+            events = [event for event in events if event.role_id == role_id]
+        return events
+
+    def save_change_event(self, event: FactChangeEvent) -> None:
+        self.change_events.append(event)
 
 
 class FakeSourceAnalysisRepository:
@@ -171,12 +198,17 @@ def build_source(
     )
 
 
-def build_fact(fact_id: str = "fact-1", role_id: str = "role-1") -> ExperienceFact:
+def build_fact(
+    fact_id: str = "fact-1",
+    role_id: str = "role-1",
+    status: ExperienceFactStatus = ExperienceFactStatus.DRAFT,
+) -> ExperienceFact:
     return ExperienceFact(
         id=fact_id,
         role_id=role_id,
         source_ids=["source-1"],
         text="Led a reporting automation project.",
+        status=status,
     )
 
 
@@ -585,3 +617,273 @@ def test_experience_workflow_generate_findings_rejects_source_role_mismatch() ->
 
     with pytest.raises(SourceRoleMismatchError, match="source-1"):
         service.generate_findings("run-1")
+
+
+def test_experience_workflow_apply_findings_creates_draft_fact_from_new_fact() -> None:
+    service, role_repository, source_repository, analysis_repository, fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    question = SourceClarificationQuestion(
+        id="question-1",
+        analysis_run_id="run-1",
+        question_text="What was the impact?",
+        relevant_source_ids=["source-1"],
+        status=SourceClarificationQuestionStatus.RESOLVED,
+    )
+    message = SourceClarificationMessage(
+        id="message-1",
+        question_id="question-1",
+        author=ClarificationMessageAuthor.USER,
+        message_text="It reduced weekly reporting effort.",
+    )
+    finding = SourceFinding(
+        id="finding-1",
+        analysis_run_id="run-1",
+        role_id="role-1",
+        source_id="source-1",
+        finding_type=SourceFindingType.NEW_FACT,
+        proposed_fact_text="Reduced weekly reporting effort through automation.",
+        rationale="The source and answer describe a distinct fact.",
+        status=SourceFindingStatus.ACCEPTED,
+    )
+    analysis_repository.save_question(question)
+    analysis_repository.save_message(message)
+    analysis_repository.save_finding(finding)
+
+    results = service.apply_findings("run-1")
+
+    facts = fact_repository.list(role_id="role-1")
+    applied_finding = analysis_repository.get_finding("finding-1")
+
+    assert len(results) == 1
+    assert results[0].action == AppliedSourceFindingAction.CREATED_FACT
+    assert len(facts) == 1
+    assert facts[0].status == ExperienceFactStatus.DRAFT
+    assert facts[0].source_ids == ["source-1"]
+    assert facts[0].question_ids == ["question-1"]
+    assert facts[0].message_ids == ["message-1"]
+    assert facts[0].text == "Reduced weekly reporting effort through automation."
+    assert applied_finding.status == SourceFindingStatus.APPLIED
+    assert applied_finding.applied_fact_id == facts[0].id
+    assert fact_repository.change_events[-1].event_type == FactChangeEventType.CREATED
+    assert fact_repository.change_events[-1].actor.value == "system"
+    assert fact_repository.change_events[-1].source_message_ids == ["message-1"]
+    assert "finding-1" in fact_repository.change_events[-1].summary
+
+
+def test_experience_workflow_apply_findings_adds_supporting_evidence() -> None:
+    service, role_repository, source_repository, analysis_repository, fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    source_repository.save(build_source("source-2"))
+    fact_repository.save(
+        build_fact(
+            fact_id="fact-1",
+            status=ExperienceFactStatus.ACTIVE,
+        )
+    )
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-2"],
+        )
+    )
+    analysis_repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What confirms the fact?",
+            relevant_source_ids=["source-2"],
+            status=SourceClarificationQuestionStatus.RESOLVED,
+        )
+    )
+    analysis_repository.save_message(
+        SourceClarificationMessage(
+            id="message-1",
+            question_id="question-1",
+            author=ClarificationMessageAuthor.USER,
+            message_text="The source describes the same automation project.",
+        )
+    )
+    analysis_repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-2",
+            fact_id="fact-1",
+            finding_type=SourceFindingType.SUPPORTS_FACT,
+            rationale="The source supports the existing fact.",
+            status=SourceFindingStatus.ACCEPTED,
+        )
+    )
+
+    results = service.apply_findings("run-1")
+
+    fact = fact_repository.get("fact-1")
+    applied_finding = analysis_repository.get_finding("finding-1")
+
+    assert results[0].action == AppliedSourceFindingAction.ADDED_EVIDENCE
+    assert fact.source_ids == ["source-1", "source-2"]
+    assert fact.question_ids == ["question-1"]
+    assert fact.message_ids == ["message-1"]
+    assert fact.status == ExperienceFactStatus.ACTIVE
+    assert applied_finding.status == SourceFindingStatus.APPLIED
+    assert applied_finding.applied_fact_id == "fact-1"
+    assert fact_repository.change_events[-1].event_type == FactChangeEventType.EVIDENCE_ADDED
+
+
+def test_experience_workflow_apply_findings_revises_active_fact_as_draft() -> None:
+    service, role_repository, source_repository, analysis_repository, fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    source_repository.save(build_source("source-2"))
+    fact_repository.save(
+        build_fact(
+            fact_id="fact-1",
+            status=ExperienceFactStatus.ACTIVE,
+        )
+    )
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-2"],
+        )
+    )
+    analysis_repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-2",
+            fact_id="fact-1",
+            finding_type=SourceFindingType.REVISES_FACT,
+            proposed_fact_text="Led reporting automation that reduced weekly reporting effort.",
+            rationale="The source adds supported impact detail.",
+            status=SourceFindingStatus.ACCEPTED,
+        )
+    )
+
+    results = service.apply_findings("run-1")
+
+    draft_revisions = [
+        fact
+        for fact in fact_repository.list(role_id="role-1")
+        if fact.supersedes_fact_id == "fact-1"
+    ]
+    applied_finding = analysis_repository.get_finding("finding-1")
+
+    assert results[0].action == AppliedSourceFindingAction.REVISED_FACT
+    assert len(draft_revisions) == 1
+    assert draft_revisions[0].status == ExperienceFactStatus.DRAFT
+    assert draft_revisions[0].source_ids == ["source-1", "source-2"]
+    assert draft_revisions[0].text == (
+        "Led reporting automation that reduced weekly reporting effort."
+    )
+    assert fact_repository.get("fact-1").status == ExperienceFactStatus.ACTIVE
+    assert applied_finding.status == SourceFindingStatus.APPLIED
+    assert applied_finding.applied_fact_id == draft_revisions[0].id
+    assert FactChangeEventType.REVISED in {
+        event.event_type for event in fact_repository.change_events
+    }
+
+
+def test_experience_workflow_apply_findings_skips_unapplied_artifact_types() -> None:
+    service, role_repository, source_repository, analysis_repository, fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    fact_repository.save(build_fact(fact_id="fact-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            fact_id="fact-1",
+            finding_type=SourceFindingType.CONTRADICTS_FACT,
+            status=SourceFindingStatus.ACCEPTED,
+        )
+    )
+    analysis_repository.save_finding(
+        SourceFinding(
+            id="finding-2",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            fact_id="fact-1",
+            finding_type=SourceFindingType.REVISES_FACT,
+            status=SourceFindingStatus.ACCEPTED,
+        )
+    )
+
+    results = service.apply_findings("run-1")
+
+    assert [result.action for result in results] == [
+        AppliedSourceFindingAction.SKIPPED,
+        AppliedSourceFindingAction.SKIPPED,
+    ]
+    assert analysis_repository.get_finding("finding-1").status == SourceFindingStatus.ACCEPTED
+    assert analysis_repository.get_finding("finding-2").status == SourceFindingStatus.ACCEPTED
+
+
+def test_experience_workflow_apply_findings_ignores_already_applied_findings() -> None:
+    service, role_repository, source_repository, analysis_repository, fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    fact_repository.save(build_fact(fact_id="fact-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            fact_id="fact-1",
+            finding_type=SourceFindingType.SUPPORTS_FACT,
+            status=SourceFindingStatus.APPLIED,
+            applied_fact_id="fact-1",
+        )
+    )
+
+    assert service.apply_findings("run-1") == []
+
+
+def test_experience_workflow_apply_findings_rejects_missing_run() -> None:
+    service, _role_repository, _source_repository, _analysis_repository, _fact_repository = (
+        build_service()
+    )
+
+    with pytest.raises(AnalysisRunNotFoundError, match="run-1"):
+        service.apply_findings("run-1")

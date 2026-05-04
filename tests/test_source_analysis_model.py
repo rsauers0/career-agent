@@ -215,6 +215,7 @@ def test_source_finding_normalizes_text_fields() -> None:
         finding_type=SourceFindingType.REVISES_FACT,
         proposed_fact_text="  Revised fact text.  ",
         rationale="  Adds the missing metric.  ",
+        applied_fact_id="  applied-fact-1  ",
     )
 
     assert finding.analysis_run_id == "run-1"
@@ -223,6 +224,34 @@ def test_source_finding_normalizes_text_fields() -> None:
     assert finding.fact_id == "fact-1"
     assert finding.proposed_fact_text == "Revised fact text."
     assert finding.rationale == "Adds the missing metric."
+    assert finding.applied_fact_id == "applied-fact-1"
+
+
+def test_source_finding_applied_status_requires_applied_fact_id() -> None:
+    with pytest.raises(ValidationError, match="require applied_fact_id"):
+        SourceFinding(
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            fact_id="fact-1",
+            finding_type=SourceFindingType.SUPPORTS_FACT,
+            status=SourceFindingStatus.APPLIED,
+        )
+
+
+def test_source_finding_records_applied_fact_id() -> None:
+    finding = SourceFinding(
+        analysis_run_id="run-1",
+        role_id="role-1",
+        source_id="source-1",
+        fact_id="fact-1",
+        finding_type=SourceFindingType.SUPPORTS_FACT,
+        status=SourceFindingStatus.APPLIED,
+        applied_fact_id="fact-1",
+    )
+
+    assert finding.status == SourceFindingStatus.APPLIED
+    assert finding.applied_fact_id == "fact-1"
 
 
 def test_source_finding_requires_fact_id_for_fact_comparison_types() -> None:

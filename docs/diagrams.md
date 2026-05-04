@@ -84,6 +84,9 @@ flowchart TD
     Question["SourceClarificationQuestion<br/>analysis_run_id, status"]
     Messages["SourceClarificationMessages<br/>one row per assistant/user/system turn"]
     Findings["SourceFinding<br/>structured source analysis notes"]
+    Apply["apply-findings<br/>accepted findings only"]
+    FactService["ExperienceFactService<br/>deterministic fact writes"]
+    Facts["ExperienceFact<br/>drafts, revisions,<br/>evidence additions"]
     Resolve["resolve_question / skip_question<br/>explicit approval transition"]
     FindingGate["Finding Gate<br/>no open questions,<br/>no existing findings"]
 
@@ -101,6 +104,10 @@ flowchart TD
     FindingGate -->|"role + sources + questions + messages + facts"| FindingGenerator
     FindingGenerator -->|"GeneratedSourceFinding[]"| Workflow
     Workflow -->|"save findings through SourceAnalysisService"| Findings
+    Findings -->|"accepted new_fact / revises_fact / supports_fact"| Apply
+    Apply -->|"validated service calls"| FactService
+    FactService -->|"draft fact / revision / evidence event"| Facts
+    Apply -->|"mark finding applied<br/>with applied_fact_id"| Findings
     Sources -. "supports / revises / contradicts / new_fact" .-> Findings
     Messages -. "evidence for closure" .-> Resolve
     Resolve -->|"updates status"| Question
@@ -111,13 +118,17 @@ The important guardrail is that adding messages does not close a question. A fut
 The workflow generates and validates clarification question proposals before it creates the analysis run. This prevents malformed LLM output from creating an active run that blocks later attempts.
 
 Source findings are structured analysis notes. Accepting a finding records that
-the analysis artifact was accepted; it does not directly create or revise
-canonical experience facts.
+the analysis artifact was accepted; canonical fact changes happen only when the
+workflow applies accepted findings through `ExperienceFactService`.
 
 Finding generation is blocked while any clarification question for the run is
 open, and it is also blocked if findings already exist for the run. The
 deterministic finder is only a local validation harness; the LLM-backed finder
 performs the real source extraction and classification.
+
+Applying findings is repeat-safe because applied findings move to `applied`
+status and store `applied_fact_id`. Unsupported accepted finding types stay as
+analysis artifacts and are not automatically canonicalized.
 
 ## Canonical Data Vs Analysis Artifacts
 

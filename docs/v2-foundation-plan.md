@@ -158,9 +158,11 @@ User review should be collaborative. A draft fact may have a revision thread whe
 
 When a user supplies new information during fact review, the durable evidence should be stored as role source material. Even fact-specific source additions should remain role-owned and should be analyzed against the role's existing facts for duplication, contradiction, support, revision needs, and merge risk.
 
-Source Analysis owns structured source findings for that analysis layer. A finding can record that a source appears to support, revise, contradict, duplicate, create, clarify, or be unrelated to a fact. Findings are analysis artifacts, not canonical proof. A source becomes canonical fact support only when accepted fact text references it through `ExperienceFact.source_ids`.
+Source Analysis owns structured source findings for that analysis layer. A finding can record that a source appears to support, revise, contradict, duplicate, create, be unclear, or be unrelated to a fact. Findings are analysis artifacts, not canonical proof. A source becomes canonical fact support only when accepted fact text references it through `ExperienceFact.source_ids`.
 
 Finding generation should run only after a Source Analysis run exists and all clarification questions for that run are resolved or skipped. A run with zero questions may proceed to findings. If findings already exist for the run, generation should be blocked until an explicit future rerun/archive workflow exists. The deterministic finding generator exists only for local validation; the LLM-backed finder is the real source extraction and classification implementation.
+
+Finding application should process only accepted findings and should mark successfully applied findings with `applied_fact_id` and `applied` status. `new_fact` creates draft experience facts, `revises_fact` uses fact revision rules, and `supports_fact` appends evidence through an explicit fact service method. Contradictions, duplicates, unclear findings, and unrelated findings remain accepted analysis artifacts until a later review workflow handles them.
 
 User corrections may create scoped constraints. A single correction can produce multiple durable rules, such as global writing preferences or role/project/proposal-specific hard rules. The first implementation should start with global and role scopes, then add more specific scopes as new components need them. Constraints should be linked to the source message and loaded by later LLM workflows that operate within the same scope.
 
@@ -261,4 +263,4 @@ LLM Boundary
   -> tests
 ```
 
-The immediate next foundation step is applying accepted Source Findings through deterministic Experience Fact workflows. That step should create or revise draft facts, preserve fact change events, and keep accepted analysis artifacts separate from canonical fact support until the resulting fact text explicitly references its evidence.
+The immediate next foundation step is collaborative review of draft experience facts created or revised from accepted findings. That workflow should preserve user/assistant revision history, keep evidence append-only, and activate facts only through deterministic service transitions.

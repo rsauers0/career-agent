@@ -2234,3 +2234,123 @@ def test_experience_workflow_generate_findings_reports_existing_findings(
     assert "Source findings already exist for analysis run: run-1" in result.output
 
     get_settings.cache_clear()
+
+
+def test_experience_workflow_apply_findings_creates_fact(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
+    monkeypatch.setenv("CAREER_AGENT_LLM_EXTRACTION_BASE_URL", "")
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Reduced weekly reporting effort through automation.",
+        )
+    )
+    analysis_repository = SourceAnalysisRepository(tmp_path)
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What was the impact?",
+            relevant_source_ids=["source-1"],
+            status=SourceClarificationQuestionStatus.RESOLVED,
+        )
+    )
+    analysis_repository.save_message(
+        SourceClarificationMessage(
+            id="message-1",
+            question_id="question-1",
+            author=ClarificationMessageAuthor.USER,
+            message_text="It reduced weekly reporting effort.",
+        )
+    )
+    analysis_repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            finding_type=SourceFindingType.NEW_FACT,
+            proposed_fact_text="Reduced weekly reporting effort through automation.",
+            status=SourceFindingStatus.ACCEPTED,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "apply-findings", "--run-id", "run-1"],
+        env={"COLUMNS": "180"},
+    )
+
+    fact_repository = ExperienceFactRepository(tmp_path)
+    facts = fact_repository.list(role_id="role-1")
+    applied_finding = analysis_repository.get_finding("finding-1")
+    events = fact_repository.list_change_events(role_id="role-1")
+
+    assert result.exit_code == 0
+    assert "Applied source findings." in result.output
+    assert "created_fact" in result.output
+    assert len(facts) == 1
+    assert facts[0].source_ids == ["source-1"]
+    assert facts[0].question_ids == ["question-1"]
+    assert facts[0].message_ids == ["message-1"]
+    assert applied_finding.status == SourceFindingStatus.APPLIED
+    assert applied_finding.applied_fact_id == facts[0].id
+    assert events[-1].actor.value == "system"
+    assert events[-1].source_message_ids == ["message-1"]
+
+    get_settings.cache_clear()
+
+
+def test_experience_workflow_apply_findings_reports_no_accepted_findings(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    SourceAnalysisRepository(tmp_path).save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "apply-findings", "--run-id", "run-1"],
+    )
+
+    assert result.exit_code == 0
+    assert "No accepted source findings to apply." in result.output
+
+    get_settings.cache_clear()

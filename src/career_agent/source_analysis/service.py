@@ -40,7 +40,11 @@ ALLOWED_FINDING_STATUS_TRANSITIONS: dict[
         SourceFindingStatus.REJECTED,
         SourceFindingStatus.ARCHIVED,
     },
-    SourceFindingStatus.ACCEPTED: {SourceFindingStatus.ARCHIVED},
+    SourceFindingStatus.ACCEPTED: {
+        SourceFindingStatus.APPLIED,
+        SourceFindingStatus.ARCHIVED,
+    },
+    SourceFindingStatus.APPLIED: {SourceFindingStatus.ARCHIVED},
     SourceFindingStatus.REJECTED: {SourceFindingStatus.ARCHIVED},
     SourceFindingStatus.ARCHIVED: set(),
 }
@@ -200,6 +204,17 @@ class SourceAnalysisService:
             status=SourceFindingStatus.ARCHIVED,
         )
 
+    def apply_finding(self, finding_id: str, applied_fact_id: str) -> SourceFinding:
+        """Mark an accepted source finding as applied to a canonical fact."""
+
+        finding = self._get_required_finding(finding_id)
+        self._validate_finding_fact(role_id=finding.role_id, fact_id=applied_fact_id)
+        return self._set_finding_status(
+            finding_id=finding_id,
+            status=SourceFindingStatus.APPLIED,
+            applied_fact_id=applied_fact_id,
+        )
+
     def resolve_question(self, question_id: str) -> SourceClarificationQuestion:
         """Mark a clarification question as resolved after explicit approval."""
 
@@ -324,6 +339,7 @@ class SourceAnalysisService:
         self,
         finding_id: str,
         status: SourceFindingStatus,
+        applied_fact_id: str | None = None,
     ) -> SourceFinding:
         """Persist an explicit source finding status transition."""
 
@@ -336,11 +352,13 @@ class SourceAnalysisService:
             )
             raise InvalidSourceFindingStatusTransitionError(msg)
 
-        updated_finding = finding.model_copy(
-            update={
-                "status": status,
-                "updated_at": datetime.now(UTC),
-            }
-        )
+        update_values = {
+            "status": status,
+            "updated_at": datetime.now(UTC),
+        }
+        if applied_fact_id is not None:
+            update_values["applied_fact_id"] = applied_fact_id
+
+        updated_finding = finding.model_copy(update=update_values)
         self.analysis_repository.save_finding(updated_finding)
         return updated_finding

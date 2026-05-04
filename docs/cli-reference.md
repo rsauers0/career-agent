@@ -25,6 +25,7 @@ uv run career-agent source-analysis findings add --help
 uv run career-agent experience-workflow --help
 uv run career-agent experience-workflow analyze-sources --help
 uv run career-agent experience-workflow generate-findings --help
+uv run career-agent experience-workflow apply-findings --help
 ```
 
 ## Health Check
@@ -389,9 +390,9 @@ uv run career-agent source-analysis findings reject <finding-id>
 uv run career-agent source-analysis findings archive <finding-id>
 ```
 
-Source findings are workflow artifacts. Accepting a finding does not create or
-revise an experience fact yet; canonical fact changes still go through
-`career-agent facts`.
+Source findings are workflow artifacts. Accepting a finding records review
+approval but does not directly create or revise an experience fact. Canonical
+fact changes are applied later through deterministic fact workflows.
 
 ## Experience Workflow
 
@@ -427,6 +428,28 @@ placeholder `unclear` findings. If `CAREER_AGENT_LLM_BASE_URL` or
 `CAREER_AGENT_LLM_EXTRACTION_BASE_URL` is configured, this command uses the
 LLM-backed extraction generator and prints the selected finding generator before
 generation starts.
+
+Apply accepted source findings through deterministic fact workflows:
+
+```bash
+uv run career-agent experience-workflow apply-findings --run-id <run-id>
+```
+
+Only findings in `accepted` status are processed. Applied findings move to
+`applied` status and record `applied_fact_id`, which makes the command safe to
+run again without duplicating draft facts.
+
+Application behavior is intentionally conservative:
+
+- `new_fact` creates a draft experience fact.
+- `revises_fact` revises the referenced fact through `ExperienceFactService`.
+  Active facts become draft revisions; draft and needs-clarification facts may
+  be revised in place according to fact lifecycle rules.
+- `supports_fact` appends source/question/message evidence through an explicit
+  fact service method and records a fact change event when new evidence is
+  added.
+- `contradicts_fact`, `duplicates_fact`, `unclear`, and `unrelated` remain
+  accepted analysis artifacts and are not automatically applied.
 
 ## Configuration
 

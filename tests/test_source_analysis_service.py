@@ -583,11 +583,12 @@ def test_source_analysis_service_rejects_finding_for_fact_role_mismatch() -> Non
 
 
 def test_source_analysis_service_updates_finding_status_explicitly() -> None:
-    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+    service, _analysis_repository, role_repository, source_repository, fact_repository = (
         build_service()
     )
     role_repository.save(build_role())
     source_repository.save(build_source())
+    fact_repository.save(build_fact())
     run = service.start_run(role_id="role-1", source_ids=["source-1"])
     finding = service.add_finding(
         analysis_run_id=run.id,
@@ -597,11 +598,15 @@ def test_source_analysis_service_updates_finding_status_explicitly() -> None:
     )
 
     accepted_finding = service.accept_finding(finding.id)
-    archived_finding = service.archive_finding(accepted_finding.id)
+    applied_finding = service.apply_finding(accepted_finding.id, applied_fact_id="fact-1")
+    archived_finding = service.archive_finding(applied_finding.id)
 
     assert accepted_finding.status == SourceFindingStatus.ACCEPTED
     assert accepted_finding.updated_at >= finding.updated_at
+    assert applied_finding.status == SourceFindingStatus.APPLIED
+    assert applied_finding.applied_fact_id == "fact-1"
     assert archived_finding.status == SourceFindingStatus.ARCHIVED
+    assert archived_finding.applied_fact_id == "fact-1"
 
 
 def test_source_analysis_service_rejects_invalid_finding_status_transition() -> None:

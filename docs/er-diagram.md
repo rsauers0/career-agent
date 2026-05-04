@@ -42,7 +42,7 @@ flowchart LR
 
     Messages["SOURCE_CLARIFICATION_MESSAGES<br/>id PK<br/>question_id FK<br/>author<br/>message_text<br/>created_at"]
 
-    Findings["SOURCE_FINDINGS<br/>id PK<br/>analysis_run_id FK<br/>role_id FK<br/>source_id FK<br/>fact_id FK<br/>finding_type<br/>proposed_fact_text<br/>rationale<br/>status<br/>created_at<br/>updated_at"]
+    Findings["SOURCE_FINDINGS<br/>id PK<br/>analysis_run_id FK<br/>role_id FK<br/>source_id FK<br/>fact_id FK<br/>finding_type<br/>proposed_fact_text<br/>rationale<br/>applied_fact_id FK<br/>status<br/>created_at<br/>updated_at"]
 
     Facts["EXPERIENCE_FACTS<br/>id PK"]
 
@@ -54,6 +54,7 @@ flowchart LR
     Sources -. "relevant_source_ids on question<br/>motivated question" .-> Questions
     Sources -->|"source_id"| Findings
     Facts -. "fact_id when comparing<br/>existing facts" .-> Findings
+    Findings -. "applied_fact_id after application" .-> Facts
     Questions -->|"question_id"| Messages
 ```
 
@@ -69,7 +70,7 @@ flowchart LR
     Events["FACT_CHANGE_EVENTS<br/>semantic history<br/>source_message_ids"]
 
     Sources -->|"analyzed into<br/>supports / revises / contradicts / new_fact"| Findings
-    Findings -. "accepted finding can drive<br/>later deterministic action" .-> Facts
+    Findings -. "applied_fact_id after<br/>deterministic action" .-> Facts
     Sources -->|"source_ids<br/>supports accepted fact text"| Facts
     Questions -->|"question_ids<br/>clarification context"| Facts
     Messages -->|"message_ids<br/>evidence from answers or revision thread"| Facts
@@ -189,7 +190,8 @@ flowchart LR
 | `finding_type` | enum | | `supports_fact`, `revises_fact`, `contradicts_fact`, `duplicates_fact`, `new_fact`, `unclear`, `unrelated`. |
 | `proposed_fact_text` | string/null | | Candidate normalized fact text for `new_fact` findings. |
 | `rationale` | string/null | | Explanation for the finding. |
-| `status` | enum | | `proposed`, `accepted`, `rejected`, `archived`. |
+| `applied_fact_id` | string/null | `ExperienceFact.id` | Fact created or updated when the finding is applied. |
+| `status` | enum | | `proposed`, `accepted`, `applied`, `rejected`, `archived`. |
 | `created_at` | datetime | | UTC timestamp. |
 | `updated_at` | datetime | | UTC timestamp. |
 
@@ -208,6 +210,7 @@ flowchart LR
 | `SourceFinding` | `role_id` | `ExperienceRole.id` | Finding is scoped to a role. |
 | `SourceFinding` | `source_id` | `RoleSourceEntry.id` | Finding analyzes one source. |
 | `SourceFinding` | `fact_id` | `ExperienceFact.id` | Finding compares to an existing fact, when applicable. |
+| `SourceFinding` | `applied_fact_id` | `ExperienceFact.id` | Finding created or updated this fact when applied. |
 | `ExperienceFact` | `source_ids` | `RoleSourceEntry.id` | Sources that support the accepted fact text. |
 | `ExperienceFact` | `question_ids` | `SourceClarificationQuestion.id` | Questions used as fact evidence/context. |
 | `ExperienceFact` | `message_ids` | `SourceClarificationMessage.id` | Messages used as fact evidence/context. |
@@ -233,6 +236,7 @@ The current model also has a Source Analysis artifact for structured findings:
 ```text
 SourceFinding.source_id -> RoleSourceEntry.id
 SourceFinding.fact_id -> ExperienceFact.id when applicable
+SourceFinding.applied_fact_id -> ExperienceFact.id after application
 ```
 
 That relationship means analysis recorded a finding about what the source appears
@@ -241,8 +245,10 @@ fact support until analysis and review determine what the source actually says.
 
 `experience-workflow generate-findings` is the current workflow command that
 creates Source Finding rows after clarification questions for an analysis run
-are resolved or skipped. It records analysis conclusions before any canonical
-Experience Fact is created or revised.
+are resolved or skipped. `experience-workflow apply-findings` applies accepted
+findings through deterministic fact services. Applied findings record
+`applied_fact_id` and move to `applied` status so rerunning the command does not
+create duplicate draft facts.
 
 If a user opens an existing fact and starts a revision conversation, that creates
 review context. It means the source or message was submitted while working on

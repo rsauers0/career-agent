@@ -49,6 +49,7 @@ class SourceFindingStatus(StrEnum):
 
     PROPOSED = "proposed"
     ACCEPTED = "accepted"
+    APPLIED = "applied"
     REJECTED = "rejected"
     ARCHIVED = "archived"
 
@@ -251,6 +252,10 @@ class SourceFinding(BaseModel):
         default=None,
         description="Brief explanation for the finding.",
     )
+    applied_fact_id: str | None = Field(
+        default=None,
+        description="Experience fact id created or updated when this finding is applied.",
+    )
     status: SourceFindingStatus = Field(
         default=SourceFindingStatus.PROPOSED,
         description="Lifecycle status for this source finding.",
@@ -271,6 +276,7 @@ class SourceFinding(BaseModel):
         "fact_id",
         "proposed_fact_text",
         "rationale",
+        "applied_fact_id",
         mode="before",
     )
     @classmethod
@@ -313,5 +319,9 @@ class SourceFinding(BaseModel):
             if self.proposed_fact_text is None:
                 msg = "new_fact findings require proposed_fact_text."
                 raise ValueError(msg)
+
+        if self.status == SourceFindingStatus.APPLIED and self.applied_fact_id is None:
+            msg = "applied findings require applied_fact_id."
+            raise ValueError(msg)
 
         return self

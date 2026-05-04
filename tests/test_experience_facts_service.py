@@ -494,6 +494,81 @@ def test_experience_fact_service_revises_active_fact_as_new_draft() -> None:
     assert service.get_fact(active_fact.id).status == ExperienceFactStatus.ACTIVE
 
 
+def test_experience_fact_service_adds_evidence_to_active_fact() -> None:
+    service, fact_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    fact = service.add_fact(
+        role_id="role-1",
+        source_ids=["source-1"],
+        text="Automated reporting workflows.",
+    )
+    active_fact = service.activate_fact(fact.id)
+
+    updated_fact = service.add_evidence(
+        fact_id=active_fact.id,
+        source_ids=["source-2"],
+        question_ids=["question-1"],
+        message_ids=["message-1"],
+        actor=FactChangeActor.SYSTEM,
+        summary="Accepted source finding supports this fact.",
+        source_message_ids=["message-1"],
+    )
+
+    assert updated_fact.status == ExperienceFactStatus.ACTIVE
+    assert updated_fact.source_ids == ["source-1", "source-2"]
+    assert updated_fact.question_ids == ["question-1"]
+    assert updated_fact.message_ids == ["message-1"]
+    assert fact_repository.change_events[-1].event_type == FactChangeEventType.EVIDENCE_ADDED
+    assert fact_repository.change_events[-1].actor == FactChangeActor.SYSTEM
+    assert (
+        fact_repository.change_events[-1].summary == "Accepted source finding supports this fact."
+    )
+    assert fact_repository.change_events[-1].source_message_ids == ["message-1"]
+
+
+def test_experience_fact_service_add_evidence_does_not_duplicate_existing_ids() -> None:
+    service, fact_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    fact = service.add_fact(
+        role_id="role-1",
+        source_ids=["source-1"],
+        question_ids=["question-1"],
+        message_ids=["message-1"],
+        text="Automated reporting workflows.",
+    )
+    event_count = len(fact_repository.change_events)
+
+    updated_fact = service.add_evidence(
+        fact_id=fact.id,
+        source_ids=["source-1"],
+        question_ids=["question-1"],
+        message_ids=["message-1"],
+    )
+
+    assert updated_fact == fact
+    assert len(fact_repository.change_events) == event_count
+
+
+def test_experience_fact_service_rejects_evidence_addition_for_terminal_status() -> None:
+    service, _fact_repository, role_repository, source_repository = build_service()
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    fact = service.add_fact(
+        role_id="role-1",
+        text="Automated reporting workflows.",
+    )
+    rejected_fact = service.reject_fact(fact.id)
+
+    with pytest.raises(FactRevisionNotAllowedError, match="rejected"):
+        service.add_evidence(
+            fact_id=rejected_fact.id,
+            source_ids=["source-1"],
+        )
+
+
 def test_experience_fact_service_activation_supersedes_prior_active_fact() -> None:
     service, _fact_repository, role_repository, _source_repository = build_service()
     role_repository.save(build_role())
