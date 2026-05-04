@@ -2,18 +2,31 @@ import pytest
 
 from career_agent.errors import (
     ActiveAnalysisRunExistsError,
+    AnalysisRunNotFoundError,
     InvalidLLMOutputError,
     NoUnanalyzedSourcesError,
+    OpenClarificationQuestionsError,
+    SourceFindingsAlreadyExistError,
+    SourceNotFoundError,
+    SourceRoleMismatchError,
 )
+from career_agent.experience_facts.models import ExperienceFact
+from career_agent.experience_facts.service import ExperienceFactService
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.service import ExperienceRoleService
+from career_agent.experience_workflow.finding_generator import GeneratedSourceFinding
 from career_agent.experience_workflow.question_generator import GeneratedSourceQuestion
 from career_agent.experience_workflow.service import ExperienceWorkflowService
 from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.role_sources.service import RoleSourceService
 from career_agent.source_analysis.models import (
+    ClarificationMessageAuthor,
     SourceAnalysisRun,
+    SourceClarificationMessage,
     SourceClarificationQuestion,
+    SourceClarificationQuestionStatus,
+    SourceFinding,
+    SourceFindingType,
 )
 from career_agent.source_analysis.service import SourceAnalysisService
 
@@ -53,14 +66,28 @@ class FakeRoleSourceRepository:
 
 
 class FakeExperienceFactRepository:
-    def get(self, fact_id: str):
-        return None
+    def __init__(self) -> None:
+        self.facts: dict[str, ExperienceFact] = {}
+
+    def list(self, role_id: str | None = None) -> list[ExperienceFact]:
+        facts = list(self.facts.values())
+        if role_id is None:
+            return facts
+        return [fact for fact in facts if fact.role_id == role_id]
+
+    def get(self, fact_id: str) -> ExperienceFact | None:
+        return self.facts.get(fact_id)
+
+    def save(self, fact: ExperienceFact) -> None:
+        self.facts[fact.id] = fact
 
 
 class FakeSourceAnalysisRepository:
     def __init__(self) -> None:
         self.runs: dict[str, SourceAnalysisRun] = {}
         self.questions: dict[str, SourceClarificationQuestion] = {}
+        self.messages: dict[str, SourceClarificationMessage] = {}
+        self.findings: dict[str, SourceFinding] = {}
 
     def list_runs(self, role_id: str | None = None) -> list[SourceAnalysisRun]:
         runs = list(self.runs.values())
@@ -87,11 +114,37 @@ class FakeSourceAnalysisRepository:
     def save_question(self, question: SourceClarificationQuestion) -> None:
         self.questions[question.id] = question
 
-    def list_messages(self, question_id: str):
-        return []
+    def list_messages(self, question_id: str) -> list[SourceClarificationMessage]:
+        return [message for message in self.messages.values() if message.question_id == question_id]
 
-    def save_message(self, message) -> None:
-        raise NotImplementedError
+    def save_message(self, message: SourceClarificationMessage) -> None:
+        self.messages[message.id] = message
+
+    def list_findings(
+        self,
+        analysis_run_id: str | None = None,
+        role_id: str | None = None,
+        source_id: str | None = None,
+        fact_id: str | None = None,
+    ) -> list[SourceFinding]:
+        findings = list(self.findings.values())
+        if analysis_run_id is not None:
+            findings = [
+                finding for finding in findings if finding.analysis_run_id == analysis_run_id
+            ]
+        if role_id is not None:
+            findings = [finding for finding in findings if finding.role_id == role_id]
+        if source_id is not None:
+            findings = [finding for finding in findings if finding.source_id == source_id]
+        if fact_id is not None:
+            findings = [finding for finding in findings if finding.fact_id == fact_id]
+        return findings
+
+    def get_finding(self, finding_id: str) -> SourceFinding | None:
+        return self.findings.get(finding_id)
+
+    def save_finding(self, finding: SourceFinding) -> None:
+        self.findings[finding.id] = finding
 
 
 def build_role(role_id: str = "role-1") -> ExperienceRole:
@@ -118,11 +171,21 @@ def build_source(
     )
 
 
+def build_fact(fact_id: str = "fact-1", role_id: str = "role-1") -> ExperienceFact:
+    return ExperienceFact(
+        id=fact_id,
+        role_id=role_id,
+        source_ids=["source-1"],
+        text="Led a reporting automation project.",
+    )
+
+
 def build_service() -> tuple[
     ExperienceWorkflowService,
     FakeExperienceRoleRepository,
     FakeRoleSourceRepository,
     FakeSourceAnalysisRepository,
+    FakeExperienceFactRepository,
 ]:
     role_repository = FakeExperienceRoleRepository()
     source_repository = FakeRoleSourceRepository()
@@ -136,16 +199,30 @@ def build_service() -> tuple[
         source_repository,
         fact_repository,
     )
+    fact_service = ExperienceFactService(
+        fact_repository,
+        role_repository,
+        source_repository,
+    )
     workflow_service = ExperienceWorkflowService(
         role_service,
         source_service,
         analysis_service,
+        fact_service,
     )
-    return workflow_service, role_repository, source_repository, analysis_repository
+    return (
+        workflow_service,
+        role_repository,
+        source_repository,
+        analysis_repository,
+        fact_repository,
+    )
 
 
 def test_experience_workflow_analyzes_only_unanalyzed_sources() -> None:
-    service, role_repository, source_repository, analysis_repository = build_service()
+    service, role_repository, source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
     role_repository.save(build_role())
     source_repository.save(build_source("source-1"))
     source_repository.save(build_source("source-2", status=RoleSourceStatus.ANALYZED))
@@ -164,7 +241,9 @@ def test_experience_workflow_analyzes_only_unanalyzed_sources() -> None:
 
 
 def test_experience_workflow_does_not_mark_sources_analyzed() -> None:
-    service, role_repository, source_repository, _analysis_repository = build_service()
+    service, role_repository, source_repository, _analysis_repository, _fact_repository = (
+        build_service()
+    )
     role_repository.save(build_role())
     source_repository.save(build_source("source-1"))
 
@@ -174,7 +253,9 @@ def test_experience_workflow_does_not_mark_sources_analyzed() -> None:
 
 
 def test_experience_workflow_rejects_role_without_unanalyzed_sources() -> None:
-    service, role_repository, source_repository, _analysis_repository = build_service()
+    service, role_repository, source_repository, _analysis_repository, _fact_repository = (
+        build_service()
+    )
     role_repository.save(build_role())
     source_repository.save(build_source("source-1", status=RoleSourceStatus.ANALYZED))
 
@@ -191,7 +272,9 @@ def test_experience_workflow_rejects_when_active_run_exists_for_role() -> None:
         def generate_questions(self, role, sources):
             raise AssertionError("Question generator should not run when a role has an active run.")
 
-    service, role_repository, source_repository, analysis_repository = build_service()
+    service, role_repository, source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
     role_repository.save(build_role())
     source_repository.save(build_source("source-1"))
     analysis_repository.save_run(
@@ -224,6 +307,7 @@ def test_experience_workflow_uses_injected_question_generator() -> None:
     role_repository = FakeExperienceRoleRepository()
     source_repository = FakeRoleSourceRepository()
     analysis_repository = FakeSourceAnalysisRepository()
+    fact_repository = FakeExperienceFactRepository()
     role_repository.save(build_role())
     source_repository.save(build_source("source-1"))
     service = ExperienceWorkflowService(
@@ -233,8 +317,9 @@ def test_experience_workflow_uses_injected_question_generator() -> None:
             analysis_repository,
             role_repository,
             source_repository,
-            FakeExperienceFactRepository(),
+            fact_repository,
         ),
+        ExperienceFactService(fact_repository, role_repository, source_repository),
         question_generator=FakeQuestionGenerator(),
     )
 
@@ -259,6 +344,7 @@ def test_experience_workflow_does_not_start_run_when_question_generation_fails()
     role_repository = FakeExperienceRoleRepository()
     source_repository = FakeRoleSourceRepository()
     analysis_repository = FakeSourceAnalysisRepository()
+    fact_repository = FakeExperienceFactRepository()
     role_repository.save(build_role())
     source_repository.save(build_source("source-1"))
     service = ExperienceWorkflowService(
@@ -268,8 +354,9 @@ def test_experience_workflow_does_not_start_run_when_question_generation_fails()
             analysis_repository,
             role_repository,
             source_repository,
-            FakeExperienceFactRepository(),
+            fact_repository,
         ),
+        ExperienceFactService(fact_repository, role_repository, source_repository),
         question_generator=FailingQuestionGenerator(),
     )
 
@@ -277,3 +364,224 @@ def test_experience_workflow_does_not_start_run_when_question_generation_fails()
         service.analyze_sources("role-1")
 
     assert analysis_repository.list_runs(role_id="role-1") == []
+
+
+def test_experience_workflow_generates_findings_for_run_without_questions() -> None:
+    service, role_repository, source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+
+    findings = service.generate_findings("run-1")
+
+    assert service.finding_generator_name == "deterministic"
+    assert len(findings) == 1
+    assert findings[0].analysis_run_id == "run-1"
+    assert findings[0].source_id == "source-1"
+    assert findings[0].finding_type == SourceFindingType.UNCLEAR
+    assert analysis_repository.list_findings(analysis_run_id="run-1") == findings
+
+
+def test_experience_workflow_generate_findings_uses_injected_generator_context() -> None:
+    class FakeFindingGenerator:
+        def __init__(self) -> None:
+            self.received_context = None
+
+        @property
+        def generator_name(self) -> str:
+            return "fake-finding"
+
+        def generate_findings(self, role, sources, questions, messages, facts):
+            self.received_context = {
+                "role": role,
+                "sources": sources,
+                "questions": questions,
+                "messages": messages,
+                "facts": facts,
+            }
+            return [
+                GeneratedSourceFinding(
+                    source_id="source-1",
+                    finding_type=SourceFindingType.SUPPORTS_FACT,
+                    fact_id="fact-1",
+                    rationale="The source directly supports the existing fact.",
+                )
+            ]
+
+    service, role_repository, source_repository, analysis_repository, fact_repository = (
+        build_service()
+    )
+    generator = FakeFindingGenerator()
+    service.finding_generator = generator
+    role = build_role()
+    role_repository.save(role)
+    source = build_source("source-1")
+    source_repository.save(source)
+    fact = build_fact()
+    fact_repository.save(fact)
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    question = SourceClarificationQuestion(
+        id="question-1",
+        analysis_run_id="run-1",
+        question_text="What was the impact?",
+        relevant_source_ids=["source-1"],
+        status=SourceClarificationQuestionStatus.RESOLVED,
+    )
+    message = SourceClarificationMessage(
+        id="message-1",
+        question_id="question-1",
+        author=ClarificationMessageAuthor.USER,
+        message_text="It reduced weekly reporting time.",
+    )
+    analysis_repository.save_question(question)
+    analysis_repository.save_message(message)
+
+    findings = service.generate_findings("run-1")
+
+    assert service.finding_generator_name == "fake-finding"
+    assert findings[0].finding_type == SourceFindingType.SUPPORTS_FACT
+    assert findings[0].fact_id == "fact-1"
+    assert generator.received_context == {
+        "role": role,
+        "sources": [source],
+        "questions": [question],
+        "messages": [message],
+        "facts": [fact],
+    }
+
+
+def test_experience_workflow_generate_findings_allows_skipped_questions() -> None:
+    service, role_repository, source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What was the impact?",
+            status=SourceClarificationQuestionStatus.SKIPPED,
+        )
+    )
+
+    findings = service.generate_findings("run-1")
+
+    assert len(findings) == 1
+
+
+def test_experience_workflow_generate_findings_rejects_missing_run() -> None:
+    service, _role_repository, _source_repository, _analysis_repository, _fact_repository = (
+        build_service()
+    )
+
+    with pytest.raises(AnalysisRunNotFoundError, match="run-1"):
+        service.generate_findings("run-1")
+
+
+def test_experience_workflow_generate_findings_rejects_open_questions() -> None:
+    service, role_repository, source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What was the impact?",
+        )
+    )
+
+    with pytest.raises(OpenClarificationQuestionsError, match="question-1"):
+        service.generate_findings("run-1")
+
+
+def test_experience_workflow_generate_findings_rejects_existing_findings() -> None:
+    service, role_repository, source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source("source-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            finding_type=SourceFindingType.UNCLEAR,
+        )
+    )
+
+    with pytest.raises(SourceFindingsAlreadyExistError, match="run-1"):
+        service.generate_findings("run-1")
+
+
+def test_experience_workflow_generate_findings_rejects_missing_source() -> None:
+    service, role_repository, _source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+
+    with pytest.raises(SourceNotFoundError, match="source-1"):
+        service.generate_findings("run-1")
+
+
+def test_experience_workflow_generate_findings_rejects_source_role_mismatch() -> None:
+    service, role_repository, source_repository, analysis_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role(role_id="role-1"))
+    source_repository.save(build_source("source-1", role_id="role-2"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+
+    with pytest.raises(SourceRoleMismatchError, match="source-1"):
+        service.generate_findings("run-1")

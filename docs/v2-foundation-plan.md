@@ -130,6 +130,7 @@ Build as CLI/dev workflow first:
 - use Source Analysis to create clarification questions
 - capture clarification messages
 - resolve or skip questions when enough evidence exists
+- generate structured source findings after clarification questions close
 - generate normalized draft experience facts
 - preserve user/assistant revision threads for draft facts
 - activate accepted experience facts through service methods
@@ -158,6 +159,8 @@ User review should be collaborative. A draft fact may have a revision thread whe
 When a user supplies new information during fact review, the durable evidence should be stored as role source material. Even fact-specific source additions should remain role-owned and should be analyzed against the role's existing facts for duplication, contradiction, support, revision needs, and merge risk.
 
 Source Analysis owns structured source findings for that analysis layer. A finding can record that a source appears to support, revise, contradict, duplicate, create, clarify, or be unrelated to a fact. Findings are analysis artifacts, not canonical proof. A source becomes canonical fact support only when accepted fact text references it through `ExperienceFact.source_ids`.
+
+Finding generation should run only after a Source Analysis run exists and all clarification questions for that run are resolved or skipped. A run with zero questions may proceed to findings. If findings already exist for the run, generation should be blocked until an explicit future rerun/archive workflow exists. The deterministic finding generator exists only for local validation; the LLM-backed finder is the real source extraction and classification implementation.
 
 User corrections may create scoped constraints. A single correction can produce multiple durable rules, such as global writing preferences or role/project/proposal-specific hard rules. The first implementation should start with global and role scopes, then add more specific scopes as new components need them. Constraints should be linked to the source message and loaded by later LLM workflows that operate within the same scope.
 

@@ -78,23 +78,29 @@ flowchart TD
     Sources["Role Sources<br/>not_analyzed source_ids"]
     Workflow["ExperienceWorkflowService<br/>orchestrates services"]
     ActiveRunGuard["Active Run Guard<br/>one active run per role"]
-    Generator["SourceQuestionGenerator<br/>structured question proposals"]
+    QuestionGenerator["SourceQuestionGenerator<br/>structured question proposals"]
+    FindingGenerator["SourceFindingGenerator<br/>structured finding proposals"]
     Run["SourceAnalysisRun<br/>role_id, source_ids, status"]
     Question["SourceClarificationQuestion<br/>analysis_run_id, status"]
     Messages["SourceClarificationMessages<br/>one row per assistant/user/system turn"]
     Findings["SourceFinding<br/>structured source analysis notes"]
     Resolve["resolve_question / skip_question<br/>explicit approval transition"]
+    FindingGate["Finding Gate<br/>no open questions,<br/>no existing findings"]
 
     Role -->|"role_id"| Workflow
     Sources -->|"select only not_analyzed"| Workflow
     Workflow -->|"ensure no active run"| ActiveRunGuard
-    Workflow -->|"role + sources"| Generator
-    Generator -->|"GeneratedSourceQuestion[]"| Workflow
+    Workflow -->|"role + sources"| QuestionGenerator
+    QuestionGenerator -->|"GeneratedSourceQuestion[]"| Workflow
     Workflow -->|"start run after valid proposals"| Run
     Run -. "only one active run per role_id" .-> Role
     Workflow -->|"save questions through SourceAnalysisService"| Question
     Question -->|"append one message at a time"| Messages
-    Run -->|"source finding lifecycle"| Findings
+    Run -->|"generate-findings"| FindingGate
+    Question -->|"resolved or skipped"| FindingGate
+    FindingGate -->|"role + sources + questions + messages + facts"| FindingGenerator
+    FindingGenerator -->|"GeneratedSourceFinding[]"| Workflow
+    Workflow -->|"save findings through SourceAnalysisService"| Findings
     Sources -. "supports / revises / contradicts / new_fact" .-> Findings
     Messages -. "evidence for closure" .-> Resolve
     Resolve -->|"updates status"| Question
@@ -107,6 +113,11 @@ The workflow generates and validates clarification question proposals before it 
 Source findings are structured analysis notes. Accepting a finding records that
 the analysis artifact was accepted; it does not directly create or revise
 canonical experience facts.
+
+Finding generation is blocked while any clarification question for the run is
+open, and it is also blocked if findings already exist for the run. The
+deterministic finder is only a local validation harness; the LLM-backed finder
+performs the real source extraction and classification.
 
 ## Canonical Data Vs Analysis Artifacts
 

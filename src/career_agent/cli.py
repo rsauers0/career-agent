@@ -24,8 +24,10 @@ from career_agent.errors import (
     LLMClientError,
     LLMConfigurationError,
     NoUnanalyzedSourcesError,
+    OpenClarificationQuestionsError,
     RoleNotFoundError,
     SourceFindingNotFoundError,
+    SourceFindingsAlreadyExistError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
@@ -44,7 +46,10 @@ from career_agent.experience_roles.models import (
 )
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.experience_roles.service import ExperienceRoleService
-from career_agent.experience_workflow.factory import build_source_question_generator
+from career_agent.experience_workflow.factory import (
+    build_source_finding_generator,
+    build_source_question_generator,
+)
 from career_agent.experience_workflow.service import ExperienceWorkflowService
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
@@ -1183,6 +1188,42 @@ def analyze_experience_sources(
     console.print(f"Question IDs: {', '.join(question.id for question in questions)}")
 
 
+@experience_workflow_app.command("generate-findings")
+def generate_experience_findings(
+    run_id: str = typer.Option(..., help="Existing source analysis run id."),
+) -> None:
+    """Generate source findings for a closed source analysis run."""
+
+    try:
+        service = build_experience_workflow_service()
+        console.print(f"Finding Generator: {service.finding_generator_name}")
+        findings = service.generate_findings(run_id)
+    except (
+        AnalysisRunNotFoundError,
+        FactNotFoundError,
+        FactRoleMismatchError,
+        OpenClarificationQuestionsError,
+        RoleNotFoundError,
+        SourceFindingsAlreadyExistError,
+        SourceNotFoundError,
+        SourceNotInAnalysisRunError,
+        SourceRoleMismatchError,
+        InvalidLLMOutputError,
+        LLMClientError,
+        LLMConfigurationError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not generate source findings.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Generated source findings.[/green]")
+    console.print(f"Finding IDs: {', '.join(finding.id for finding in findings)}")
+
+
 def build_user_preferences_service() -> UserPreferencesService:
     """Build the user preferences service from configured settings."""
 
@@ -1241,12 +1282,16 @@ def build_experience_workflow_service() -> ExperienceWorkflowService:
     role_service = build_experience_role_service()
     source_service = build_role_source_service()
     analysis_service = build_source_analysis_service()
+    fact_service = build_experience_fact_service()
     question_generator = build_source_question_generator(settings)
+    finding_generator = build_source_finding_generator(settings)
     return ExperienceWorkflowService(
         role_service,
         source_service,
         analysis_service,
+        fact_service,
         question_generator=question_generator,
+        finding_generator=finding_generator,
     )
 
 

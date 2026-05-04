@@ -75,3 +75,11 @@ class SourceFindingNotFoundError(CareerAgentError):
 
 class InvalidSourceFindingStatusTransitionError(CareerAgentError):
     """Raised when a source finding status transition is not allowed."""
+
+
+class OpenClarificationQuestionsError(CareerAgentError):
+    """Raised when a workflow requires closed clarification questions."""
+
+
+class SourceFindingsAlreadyExistError(CareerAgentError):
+    """Raised when findings already exist for a source analysis run."""

@@ -2077,3 +2077,160 @@ def test_experience_workflow_analyze_sources_reports_incomplete_llm_config(
     assert "CAREER_AGENT_LLM_MODEL" in result.output
 
     get_settings.cache_clear()
+
+
+def test_experience_workflow_generate_findings_writes_findings(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
+    monkeypatch.setenv("CAREER_AGENT_LLM_EXTRACTION_BASE_URL", "")
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "generate-findings", "--run-id", "run-1"],
+    )
+
+    findings = repository.list_findings(analysis_run_id="run-1")
+
+    assert result.exit_code == 0
+    assert "Finding Generator: deterministic" in result.output
+    assert "Generated source findings." in result.output
+    assert "Finding IDs:" in result.output
+    assert len(findings) == 1
+    assert findings[0].finding_type == SourceFindingType.UNCLEAR
+    assert findings[0].source_id == "source-1"
+
+    get_settings.cache_clear()
+
+
+def test_experience_workflow_generate_findings_reports_open_questions(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
+    monkeypatch.setenv("CAREER_AGENT_LLM_EXTRACTION_BASE_URL", "")
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What was the impact?",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "generate-findings", "--run-id", "run-1"],
+    )
+
+    assert result.exit_code != 0
+    assert "Finding Generator: deterministic" in result.output
+    assert "Cannot generate findings while clarification questions are open" in result.output
+    assert "question-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_experience_workflow_generate_findings_reports_existing_findings(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
+    monkeypatch.setenv("CAREER_AGENT_LLM_EXTRACTION_BASE_URL", "")
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    repository.save_finding(
+        SourceFinding(
+            id="finding-1",
+            analysis_run_id="run-1",
+            role_id="role-1",
+            source_id="source-1",
+            finding_type=SourceFindingType.UNCLEAR,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["experience-workflow", "generate-findings", "--run-id", "run-1"],
+    )
+
+    assert result.exit_code != 0
+    assert "Source findings already exist for analysis run: run-1" in result.output
+
+    get_settings.cache_clear()

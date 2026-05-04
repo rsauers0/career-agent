@@ -239,6 +239,7 @@ Current files:
 
 ```text
 src/career_agent/experience_workflow/
+  finding_generator.py
   question_generator.py
   service.py
 ```
@@ -255,6 +256,7 @@ Examples of coordinated behavior:
 - generate structured clarification question proposals
 - start Source Analysis runs through `SourceAnalysisService`
 - save generated question proposals through `SourceAnalysisService`
+- generate structured source finding proposals after clarification questions close
 - manage structured source findings through `SourceAnalysisService`
 
 Experience Workflow does not own persistence. It coordinates component services and should not write directly to JSON files.
@@ -265,7 +267,11 @@ Question generation is behind a small `SourceQuestionGenerator` protocol. The de
 
 Experience Workflow checks for an existing active run before question generation. It then generates and validates question proposals before creating a Source Analysis run, so malformed LLM output does not leave behind an active run with no usable questions.
 
-Factory wiring selects the deterministic generator when no LLM base URL is configured. If an LLM base URL is configured, it selects the LLM-backed generator and requires an LLM model.
+Finding generation is behind a `SourceFindingGenerator` protocol. The deterministic finder is only for local plumbing validation and emits placeholder `unclear` findings. The LLM-backed finder is the real semantic implementation; it uses the extraction LLM configuration, expects JSON output, validates source and fact references, rejects duplicate generated findings, and never mutates canonical facts directly.
+
+Experience Workflow only generates findings for an existing analysis run when all clarification questions are resolved or skipped. Runs with zero questions are allowed. If findings already exist for the run, generation is blocked so the workflow does not create duplicate finding batches.
+
+Factory wiring selects deterministic generators when no LLM base URL is configured. If an LLM base URL is configured, it selects the LLM-backed generators and requires an LLM model. Extraction workflow settings can override the default LLM settings.
 
 ### LLM Boundary
 

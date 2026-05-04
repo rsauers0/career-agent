@@ -24,6 +24,7 @@ uv run career-agent source-analysis findings --help
 uv run career-agent source-analysis findings add --help
 uv run career-agent experience-workflow --help
 uv run career-agent experience-workflow analyze-sources --help
+uv run career-agent experience-workflow generate-findings --help
 ```
 
 ## Health Check
@@ -409,6 +410,23 @@ If `CAREER_AGENT_LLM_BASE_URL` is configured, this command uses the LLM-backed
 source question generator. If it is unset, it uses deterministic local question
 generation. The command prints the selected question generator before analysis
 starts.
+
+Generate source findings for a source analysis run:
+
+```bash
+uv run career-agent experience-workflow generate-findings --run-id <run-id>
+```
+
+Finding generation requires all clarification questions for the run to be
+resolved or skipped. Runs with zero questions are allowed. If any source findings
+already exist for the run, the command exits instead of creating a second
+finding batch.
+
+The deterministic finding generator is only a local validation harness and emits
+placeholder `unclear` findings. If `CAREER_AGENT_LLM_BASE_URL` or
+`CAREER_AGENT_LLM_EXTRACTION_BASE_URL` is configured, this command uses the
+LLM-backed extraction generator and prints the selected finding generator before
+generation starts.
 
 ## Configuration
 
