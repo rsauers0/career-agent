@@ -212,8 +212,8 @@ snapshots remain file-level recovery artifacts.
 
 Fact Review messages are workflow evidence. Message recommendations do not
 mutate facts by themselves. Structured review actions can be applied, but they
-still call deterministic fact services for revision, rejection, activation, and
-evidence updates.
+still call deterministic services for revision, rejection, activation, evidence
+updates, and proposed scoped constraint creation.
 
 ## LLM Boundary
 

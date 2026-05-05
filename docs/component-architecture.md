@@ -304,9 +304,11 @@ messages to mutate canonical fact text. Recommended actions such as
 `revise_fact`, `add_evidence`, `split_fact`, `reject_fact`, `activate_fact`, and
 `propose_constraint` remain message metadata. Structured review actions can apply
 the first deterministic action types: `revise_fact`, `add_evidence`,
-`reject_fact`, and `activate_fact`. Applying an action calls Experience Fact
-services and records the returned `applied_fact_id`; Fact Change Events still
-record the canonical mutation.
+`reject_fact`, `activate_fact`, and `propose_constraint`. Fact actions call
+Experience Fact services and record the returned `applied_fact_id`; Fact Change
+Events still record canonical fact mutations. Constraint actions call Scoped
+Constraint services, create proposed constraints, and record
+`applied_constraint_id` without activating the constraint.
 
 Only one open Fact Review thread may exist for a single fact at a time. Messages
 are append-only. Resolving or archiving a thread is an explicit status

@@ -138,8 +138,10 @@ Fact Review is workflow evidence, not canonical career data. Review messages can
 recommend revising, adding evidence, splitting, rejecting, activating, or
 proposing constraints, but those recommendations do not mutate facts by
 themselves. Structured review actions can apply the first deterministic action
-types: activation, rejection, revision, and evidence addition. Fact mutation
-still goes through Experience Fact services and records Fact Change Events.
+types: activation, rejection, revision, evidence addition, and scoped constraint
+proposal. Fact mutation still goes through Experience Fact services and records
+Fact Change Events. Constraint proposal creates a proposed Scoped Constraint and
+does not activate it automatically.
 
 Only one open Fact Review thread should exist per experience fact. Resolving or
 archiving a thread should be an explicit transition.
@@ -323,5 +325,6 @@ The immediate next foundation step is broader fact review orchestration: using
 review conversation to propose structured actions and scoped constraints, then
 routing those proposals through deterministic workflows. Split actions and LLM
 constraint extraction are still future work; current action application covers
-activation, rejection, revision, and evidence addition, and scoped constraints
-provide the shared storage target for durable rules and preferences.
+activation, rejection, revision, evidence addition, and creating proposed scoped
+constraints. Scoped constraints provide the shared storage target for durable
+rules and preferences.

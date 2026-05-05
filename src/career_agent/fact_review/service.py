@@ -23,6 +23,11 @@ from career_agent.fact_review.models import (
     FactReviewThreadStatus,
 )
 from career_agent.fact_review.repository import FactReviewRepository
+from career_agent.scoped_constraints.models import (
+    ConstraintScopeType,
+    ConstraintType,
+    ScopedConstraint,
+)
 
 ALLOWED_FACT_REVIEW_THREAD_STATUS_TRANSITIONS: dict[
     FactReviewThreadStatus,
@@ -111,6 +116,21 @@ class ExperienceFactMutationService(Protocol):
         ...
 
 
+class ScopedConstraintCreationService(Protocol):
+    """Subset of ScopedConstraintService used by fact review actions."""
+
+    def add_constraint(
+        self,
+        scope_type: ConstraintScopeType,
+        constraint_type: ConstraintType,
+        rule_text: str,
+        scope_id: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ScopedConstraint:
+        """Add a proposed scoped constraint."""
+        ...
+
+
 class FactReviewService:
     """Application behavior for fact review workflow artifacts."""
 
@@ -118,9 +138,11 @@ class FactReviewService:
         self,
         review_repository: FactReviewRepository,
         fact_service: ExperienceFactMutationService,
+        constraint_service: ScopedConstraintCreationService,
     ) -> None:
         self.review_repository = review_repository
         self.fact_service = fact_service
+        self.constraint_service = constraint_service
 
     def list_threads(
         self,
@@ -202,6 +224,10 @@ class FactReviewService:
         source_ids: list[str] | None = None,
         question_ids: list[str] | None = None,
         message_ids: list[str] | None = None,
+        constraint_scope_type: ConstraintScopeType | None = None,
+        constraint_scope_id: str | None = None,
+        constraint_type: ConstraintType | None = None,
+        rule_text: str | None = None,
     ) -> FactReviewAction:
         """Add a structured action proposal to a fact review thread."""
 
@@ -217,6 +243,10 @@ class FactReviewService:
             source_ids=source_ids or [],
             question_ids=question_ids or [],
             message_ids=message_ids or [],
+            constraint_scope_type=constraint_scope_type,
+            constraint_scope_id=constraint_scope_id,
+            constraint_type=constraint_type,
+            rule_text=rule_text,
         )
         self.review_repository.save_action(action)
         return action
@@ -226,13 +256,23 @@ class FactReviewService:
         action_id: str,
         actor: FactChangeActor = FactChangeActor.SYSTEM,
     ) -> FactReviewAction:
-        """Apply one proposed review action through deterministic fact services."""
+        """Apply one proposed review action through deterministic services."""
 
         action = self._get_required_action(action_id)
         if action.status != FactReviewActionStatus.PROPOSED:
             self._raise_invalid_action_transition(action, FactReviewActionStatus.APPLIED)
 
-        applied_fact = self._apply_proposed_action(action=action, actor=actor)
+        if action.action_type == FactReviewActionType.PROPOSE_CONSTRAINT:
+            applied_constraint = self._apply_constraint_action(action)
+            applied_action = self._build_action_update(
+                action,
+                status=FactReviewActionStatus.APPLIED,
+                applied_constraint_id=applied_constraint.id,
+            )
+            self.review_repository.save_action(applied_action)
+            return applied_action
+
+        applied_fact = self._apply_fact_action(action=action, actor=actor)
         applied_action = self._build_action_update(
             action,
             status=FactReviewActionStatus.APPLIED,
@@ -340,7 +380,7 @@ class FactReviewService:
         self.review_repository.save_action(updated_action)
         return updated_action
 
-    def _apply_proposed_action(
+    def _apply_fact_action(
         self,
         action: FactReviewAction,
         actor: FactChangeActor,
@@ -387,11 +427,34 @@ class FactReviewService:
                 source_message_ids=action.source_message_ids,
             )
 
+        msg = f"Fact review action is not a fact action: {action.action_type.value}"
+        raise ValueError(msg)
+
+    def _apply_constraint_action(self, action: FactReviewAction) -> ScopedConstraint:
+        """Create a proposed scoped constraint from a review action."""
+
+        if (
+            action.constraint_scope_type is None
+            or action.constraint_type is None
+            or action.rule_text is None
+        ):
+            msg = f"Fact review action is missing constraint fields: {action.id}"
+            raise ValueError(msg)
+
+        return self.constraint_service.add_constraint(
+            scope_type=action.constraint_scope_type,
+            scope_id=action.constraint_scope_id,
+            constraint_type=action.constraint_type,
+            rule_text=action.rule_text,
+            source_message_ids=action.source_message_ids,
+        )
+
     def _build_action_update(
         self,
         action: FactReviewAction,
         status: FactReviewActionStatus,
         applied_fact_id: str | None = None,
+        applied_constraint_id: str | None = None,
     ) -> FactReviewAction:
         """Build a validated copy of a fact review action with updated status."""
 
@@ -404,6 +467,8 @@ class FactReviewService:
         )
         if applied_fact_id is not None:
             action_data["applied_fact_id"] = applied_fact_id
+        if applied_constraint_id is not None:
+            action_data["applied_constraint_id"] = applied_constraint_id
         return FactReviewAction.model_validate(action_data)
 
     def _raise_invalid_action_transition(

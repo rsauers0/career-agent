@@ -24,6 +24,11 @@ from career_agent.fact_review.models import (
     FactReviewThreadStatus,
 )
 from career_agent.fact_review.service import FactReviewService
+from career_agent.scoped_constraints.models import (
+    ConstraintScopeType,
+    ConstraintType,
+    ScopedConstraint,
+)
 
 
 class FakeFactReviewRepository:
@@ -173,6 +178,29 @@ class FakeExperienceFactService:
         return fact
 
 
+class FakeScopedConstraintService:
+    def __init__(self) -> None:
+        self.constraints: dict[str, ScopedConstraint] = {}
+
+    def add_constraint(
+        self,
+        scope_type: ConstraintScopeType,
+        constraint_type: ConstraintType,
+        rule_text: str,
+        scope_id: str | None = None,
+        source_message_ids: list[str] | None = None,
+    ) -> ScopedConstraint:
+        constraint = ScopedConstraint(
+            scope_type=scope_type,
+            scope_id=scope_id,
+            constraint_type=constraint_type,
+            rule_text=rule_text,
+            source_message_ids=source_message_ids or [],
+        )
+        self.constraints[constraint.id] = constraint
+        return constraint
+
+
 def build_fact(fact_id: str = "fact-1", role_id: str = "role-1") -> ExperienceFact:
     return ExperienceFact(
         id=fact_id,
@@ -188,7 +216,29 @@ def build_service() -> tuple[
 ]:
     review_repository = FakeFactReviewRepository()
     fact_service = FakeExperienceFactService()
-    return FactReviewService(review_repository, fact_service), review_repository, fact_service
+    constraint_service = FakeScopedConstraintService()
+    return (
+        FactReviewService(review_repository, fact_service, constraint_service),
+        review_repository,
+        fact_service,
+    )
+
+
+def build_service_with_constraint_service() -> tuple[
+    FactReviewService,
+    FakeFactReviewRepository,
+    FakeExperienceFactService,
+    FakeScopedConstraintService,
+]:
+    review_repository = FakeFactReviewRepository()
+    fact_service = FakeExperienceFactService()
+    constraint_service = FakeScopedConstraintService()
+    return (
+        FactReviewService(review_repository, fact_service, constraint_service),
+        review_repository,
+        fact_service,
+        constraint_service,
+    )
 
 
 def test_fact_review_service_starts_thread_for_existing_fact() -> None:
@@ -421,6 +471,36 @@ def test_fact_review_service_applies_add_evidence_action() -> None:
     assert fact.question_ids == ["question-1"]
     assert fact.message_ids == ["message-1"]
     assert fact_service.calls[-1][0] == "add_evidence"
+
+
+def test_fact_review_service_applies_propose_constraint_action() -> None:
+    service, review_repository, fact_service, constraint_service = (
+        build_service_with_constraint_service()
+    )
+    fact_service.save(build_fact())
+    thread = service.start_thread("fact-1")
+    action = service.add_action(
+        thread_id=thread.id,
+        action_type=FactReviewActionType.PROPOSE_CONSTRAINT,
+        source_message_ids=["review-message-1"],
+        constraint_scope_type=ConstraintScopeType.ROLE,
+        constraint_scope_id="role-1",
+        constraint_type=ConstraintType.HARD_RULE,
+        rule_text="Do not describe this role as enterprise-level.",
+    )
+
+    applied_action = service.apply_action(action.id)
+    constraint = constraint_service.constraints[applied_action.applied_constraint_id]
+
+    assert applied_action.status == FactReviewActionStatus.APPLIED
+    assert applied_action.applied_constraint_id == constraint.id
+    assert applied_action.applied_fact_id is None
+    assert review_repository.get_action(action.id) == applied_action
+    assert constraint.scope_type == ConstraintScopeType.ROLE
+    assert constraint.scope_id == "role-1"
+    assert constraint.constraint_type == ConstraintType.HARD_RULE
+    assert constraint.rule_text == "Do not describe this role as enterprise-level."
+    assert constraint.source_message_ids == ["review-message-1"]
 
 
 def test_fact_review_service_rejects_apply_for_non_proposed_action() -> None:

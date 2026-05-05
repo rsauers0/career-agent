@@ -1533,7 +1533,10 @@ def add_fact_review_action(
     thread_id: str = typer.Option(..., help="Existing fact review thread id."),
     action_type: FactReviewActionType = typer.Option(
         ...,
-        help="Action type: activate_fact, reject_fact, revise_fact, or add_evidence.",
+        help=(
+            "Action type: activate_fact, reject_fact, revise_fact, "
+            "add_evidence, or propose_constraint."
+        ),
     ),
     rationale: str | None = typer.Option(None, help="Rationale for the proposed action."),
     source_message_ids: list[str] = typer.Option(
@@ -1560,6 +1563,22 @@ def add_fact_review_action(
         "--message-id",
         help="Clarification message id to add as evidence. Can be provided more than once.",
     ),
+    constraint_scope_type: ConstraintScopeType | None = typer.Option(
+        None,
+        help="Required scope type for propose_constraint actions.",
+    ),
+    constraint_scope_id: str | None = typer.Option(
+        None,
+        help="Scope id for role and fact propose_constraint actions.",
+    ),
+    constraint_type: ConstraintType | None = typer.Option(
+        None,
+        help="Required constraint type for propose_constraint actions.",
+    ),
+    rule_text: str | None = typer.Option(
+        None,
+        help="Required rule or preference text for propose_constraint actions.",
+    ),
 ) -> None:
     """Add a structured action proposal to a fact review thread."""
 
@@ -1574,6 +1593,10 @@ def add_fact_review_action(
             source_ids=source_ids,
             question_ids=question_ids,
             message_ids=message_ids,
+            constraint_scope_type=constraint_scope_type,
+            constraint_scope_id=constraint_scope_id,
+            constraint_type=constraint_type,
+            rule_text=rule_text,
         )
     except FactReviewThreadNotFoundError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -1596,7 +1619,7 @@ def apply_fact_review_action(
         help="Workflow actor recorded for the change event.",
     ),
 ) -> None:
-    """Apply one proposed fact review action through deterministic fact services."""
+    """Apply one proposed fact review action through deterministic services."""
 
     service = build_fact_review_service()
     try:
@@ -1611,13 +1634,17 @@ def apply_fact_review_action(
         RoleNotFoundError,
         SourceNotFoundError,
         SourceRoleMismatchError,
+        ValidationError,
     ) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
 
     console.print("[green]Applied fact review action.[/green]")
     console.print(f"Action ID: {action.id}")
-    console.print(f"Applied Fact ID: {action.applied_fact_id}")
+    if action.applied_fact_id is not None:
+        console.print(f"Applied Fact ID: {action.applied_fact_id}")
+    if action.applied_constraint_id is not None:
+        console.print(f"Applied Constraint ID: {action.applied_constraint_id}")
 
 
 @fact_review_actions_app.command("reject")
@@ -1843,7 +1870,8 @@ def build_fact_review_service() -> FactReviewService:
     settings = get_settings()
     review_repository = FactReviewRepository(settings.data_dir)
     fact_service = build_experience_fact_service()
-    return FactReviewService(review_repository, fact_service)
+    constraint_service = build_scoped_constraint_service()
+    return FactReviewService(review_repository, fact_service, constraint_service)
 
 
 def build_experience_workflow_service() -> ExperienceWorkflowService:
@@ -2234,12 +2262,23 @@ def render_fact_review_action_list(actions: list[FactReviewAction]) -> None:
         action_details.add_row("Fact ID", action.fact_id)
         action_details.add_row("Role ID", action.role_id)
         action_details.add_row("Applied Fact ID", action.applied_fact_id or "-")
+        action_details.add_row("Applied Constraint ID", action.applied_constraint_id or "-")
         action_details.add_row("Rationale", action.rationale or "-")
         action_details.add_row("Review Message IDs", ", ".join(action.source_message_ids) or "-")
         action_details.add_row("Source IDs", ", ".join(action.source_ids) or "-")
         action_details.add_row("Question IDs", ", ".join(action.question_ids) or "-")
         action_details.add_row("Message IDs", ", ".join(action.message_ids) or "-")
         action_details.add_row("Revised Text", action.revised_text or "-")
+        action_details.add_row(
+            "Constraint Scope",
+            action.constraint_scope_type.value if action.constraint_scope_type else "-",
+        )
+        action_details.add_row("Constraint Scope ID", action.constraint_scope_id or "-")
+        action_details.add_row(
+            "Constraint Type",
+            action.constraint_type.value if action.constraint_type else "-",
+        )
+        action_details.add_row("Rule Text", action.rule_text or "-")
         console.print(
             Panel(
                 action_details,

@@ -100,6 +100,9 @@ uv run career-agent fact-review actions add \
 uv run career-agent fact-review actions apply <action-id>
 ```
 
+Fact review actions can also propose scoped constraints; applying that action
+creates a proposed constraint that still requires explicit activation.
+
 Run source analysis for unanalyzed role sources:
 
 ```bash

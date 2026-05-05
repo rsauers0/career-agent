@@ -40,7 +40,9 @@ flowchart LR
 
     Messages["FACT_REVIEW_MESSAGES<br/>id PK<br/>thread_id FK<br/>author<br/>message_text<br/>recommended_action<br/>created_at"]
 
-    Actions["FACT_REVIEW_ACTIONS<br/>id PK<br/>thread_id FK<br/>fact_id FK<br/>role_id FK<br/>action_type<br/>status<br/>rationale<br/>source_message_ids<br/>revised_text<br/>source_ids<br/>question_ids<br/>message_ids<br/>applied_fact_id FK<br/>created_at<br/>updated_at"]
+    Actions["FACT_REVIEW_ACTIONS<br/>id PK<br/>thread_id FK<br/>fact_id FK<br/>role_id FK<br/>action_type<br/>status<br/>rationale<br/>source_message_ids<br/>revised_text<br/>source_ids<br/>question_ids<br/>message_ids<br/>constraint_scope_type<br/>constraint_scope_id<br/>constraint_type<br/>rule_text<br/>applied_fact_id FK<br/>applied_constraint_id FK<br/>created_at<br/>updated_at"]
+
+    Constraints["SCOPED_CONSTRAINTS<br/>id PK"]
 
     Roles -->|"role_id"| Facts
     Roles -->|"role_id"| Threads
@@ -50,6 +52,7 @@ flowchart LR
     Threads -->|"thread_id"| Messages
     Threads -->|"thread_id"| Actions
     Messages -. "source_message_ids" .-> Actions
+    Actions -. "applied_constraint_id" .-> Constraints
 ```
 
 ## Scoped Constraint Data
@@ -213,7 +216,7 @@ flowchart LR
 | `thread_id` | string | `FactReviewThread.id` | Action belongs to one review thread. |
 | `fact_id` | string | `ExperienceFact.id` | Fact targeted by the action. |
 | `role_id` | string | `ExperienceRole.id` | Role scope for filtering. |
-| `action_type` | enum | | `activate_fact`, `reject_fact`, `revise_fact`, or `add_evidence`. |
+| `action_type` | enum | | `activate_fact`, `reject_fact`, `revise_fact`, `add_evidence`, or `propose_constraint`. |
 | `status` | enum | | `proposed`, `applied`, `rejected`, or `archived`. |
 | `rationale` | string/null | | Human-readable reason for the proposal. |
 | `source_message_ids` | list[string] | `FactReviewMessage.id` | Review messages that explain/support the action. |
@@ -221,7 +224,12 @@ flowchart LR
 | `source_ids` | list[string] | `RoleSourceEntry.id` | Sources to add or preserve when applying. |
 | `question_ids` | list[string] | `SourceClarificationQuestion.id` | Questions to add as evidence when applying. |
 | `message_ids` | list[string] | `SourceClarificationMessage.id` | Clarification messages to add as evidence when applying. |
+| `constraint_scope_type` | enum/null | | Required for `propose_constraint` actions. |
+| `constraint_scope_id` | string/null | `ExperienceRole.id` or `ExperienceFact.id` | Required for role/fact constraint proposals. |
+| `constraint_type` | enum/null | | `hard_rule` or `preference`; required for `propose_constraint`. |
+| `rule_text` | string/null | | Rule text required for `propose_constraint`. |
 | `applied_fact_id` | string/null | `ExperienceFact.id` | Fact returned by deterministic action application. |
+| `applied_constraint_id` | string/null | `ScopedConstraint.id` | Proposed constraint created by action application. |
 | `created_at` | datetime | | UTC timestamp. |
 | `updated_at` | datetime | | UTC timestamp. |
 
@@ -307,6 +315,7 @@ flowchart LR
 | `FactReviewAction` | `role_id` | `ExperienceRole.id` | Action is scoped to a role. |
 | `FactReviewAction` | `source_message_ids` | `FactReviewMessage.id` | Review messages that explain/support the action. |
 | `FactReviewAction` | `applied_fact_id` | `ExperienceFact.id` | Fact returned by action application. |
+| `FactReviewAction` | `applied_constraint_id` | `ScopedConstraint.id` | Constraint created by action application. |
 | `ScopedConstraint` | `scope_id` | `ExperienceRole.id` | Role constraint applies to a role when `scope_type=role`. |
 | `ScopedConstraint` | `scope_id` | `ExperienceFact.id` | Fact constraint applies to a fact when `scope_type=fact`. |
 | `SourceAnalysisRun` | `role_id` | `ExperienceRole.id` | Analysis run is scoped to a role. |

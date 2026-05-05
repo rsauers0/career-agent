@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from career_agent.scoped_constraints.models import ConstraintScopeType, ConstraintType
+
 
 class FactReviewThreadStatus(StrEnum):
     """Lifecycle status for a fact review thread."""
@@ -43,6 +45,7 @@ class FactReviewActionType(StrEnum):
     REJECT_FACT = "reject_fact"
     REVISE_FACT = "revise_fact"
     ADD_EVIDENCE = "add_evidence"
+    PROPOSE_CONSTRAINT = "propose_constraint"
 
 
 class FactReviewActionStatus(StrEnum):
@@ -199,9 +202,29 @@ class FactReviewAction(BaseModel):
         default_factory=list,
         description="Clarification message ids to add as evidence.",
     )
+    constraint_scope_type: ConstraintScopeType | None = Field(
+        default=None,
+        description="Scope type for propose_constraint actions.",
+    )
+    constraint_scope_id: str | None = Field(
+        default=None,
+        description="Scope id for propose_constraint actions.",
+    )
+    constraint_type: ConstraintType | None = Field(
+        default=None,
+        description="Constraint type for propose_constraint actions.",
+    )
+    rule_text: str | None = Field(
+        default=None,
+        description="Rule or preference text for propose_constraint actions.",
+    )
     applied_fact_id: str | None = Field(
         default=None,
         description="Fact id returned by deterministic application, when applied.",
+    )
+    applied_constraint_id: str | None = Field(
+        default=None,
+        description="Constraint id returned by deterministic application, when applied.",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
@@ -218,7 +241,10 @@ class FactReviewAction(BaseModel):
         "role_id",
         "rationale",
         "revised_text",
+        "constraint_scope_id",
+        "rule_text",
         "applied_fact_id",
+        "applied_constraint_id",
         mode="before",
     )
     @classmethod
@@ -272,8 +298,55 @@ class FactReviewAction(BaseModel):
             msg = "add_evidence actions require at least one evidence reference."
             raise ValueError(msg)
 
-        if self.status == FactReviewActionStatus.APPLIED and self.applied_fact_id is None:
+        if self.action_type == FactReviewActionType.PROPOSE_CONSTRAINT:
+            self._validate_propose_constraint_fields()
+
+        if (
+            self.status == FactReviewActionStatus.APPLIED
+            and self.action_type == FactReviewActionType.PROPOSE_CONSTRAINT
+            and self.applied_constraint_id is None
+        ):
+            msg = "applied_constraint_id is required for applied propose_constraint actions."
+            raise ValueError(msg)
+
+        if (
+            self.status == FactReviewActionStatus.APPLIED
+            and self.action_type != FactReviewActionType.PROPOSE_CONSTRAINT
+            and self.applied_fact_id is None
+        ):
             msg = "applied_fact_id is required for applied actions."
             raise ValueError(msg)
 
         return self
+
+    def _validate_propose_constraint_fields(self) -> None:
+        """Validate constraint proposal fields for propose_constraint actions."""
+
+        if self.constraint_scope_type is None:
+            msg = "constraint_scope_type is required for propose_constraint actions."
+            raise ValueError(msg)
+
+        if self.constraint_type is None:
+            msg = "constraint_type is required for propose_constraint actions."
+            raise ValueError(msg)
+
+        if self.rule_text is None:
+            msg = "rule_text is required for propose_constraint actions."
+            raise ValueError(msg)
+
+        if (
+            self.constraint_scope_type == ConstraintScopeType.GLOBAL
+            and self.constraint_scope_id is not None
+        ):
+            msg = "global constraint actions cannot have constraint_scope_id."
+            raise ValueError(msg)
+
+        if (
+            self.constraint_scope_type != ConstraintScopeType.GLOBAL
+            and self.constraint_scope_id is None
+        ):
+            msg = (
+                f"{self.constraint_scope_type.value} constraint actions "
+                "require constraint_scope_id."
+            )
+            raise ValueError(msg)

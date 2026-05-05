@@ -391,9 +391,27 @@ uv run career-agent fact-review actions add \
   --revised-text "Revised grounded fact text."
 ```
 
-The first action types are `activate_fact`, `reject_fact`, `revise_fact`, and
-`add_evidence`. `revise_fact` requires `--revised-text`. `add_evidence` requires
-at least one `--source-id`, `--question-id`, or `--message-id`.
+The first action types are `activate_fact`, `reject_fact`, `revise_fact`,
+`add_evidence`, and `propose_constraint`. `revise_fact` requires
+`--revised-text`. `add_evidence` requires at least one `--source-id`,
+`--question-id`, or `--message-id`.
+
+Propose a scoped constraint from a review action:
+
+```bash
+uv run career-agent fact-review actions add \
+  --thread-id <thread-id> \
+  --action-type propose_constraint \
+  --source-message-id <review-message-id> \
+  --constraint-scope-type role \
+  --constraint-scope-id <role-id> \
+  --constraint-type hard_rule \
+  --rule-text "Do not describe this role as enterprise-level."
+```
+
+Applying a `propose_constraint` action creates a proposed scoped constraint. It
+does not activate the constraint; use `constraints activate <constraint-id>` when
+the proposed rule should become active.
 
 List and apply review actions:
 
@@ -418,10 +436,10 @@ uv run career-agent fact-review threads archive <thread-id>
 ```
 
 Fact review messages are append-only workflow artifacts. Recommended actions on
-messages are metadata. Structured review actions are separate records that can be
-applied through deterministic Experience Fact services. Applying an action
-records the resulting `applied_fact_id` and any canonical mutation is captured in
-Fact Change Events.
+messages are metadata. Structured review actions are separate records. Fact
+actions apply through deterministic Experience Fact services and record
+`applied_fact_id`; constraint actions create proposed Scoped Constraints and
+record `applied_constraint_id`.
 
 ## Source Analysis
 

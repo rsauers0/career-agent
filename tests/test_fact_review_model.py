@@ -11,6 +11,7 @@ from career_agent.fact_review.models import (
     FactReviewThread,
     FactReviewThreadStatus,
 )
+from career_agent.scoped_constraints.models import ConstraintScopeType, ConstraintType
 
 
 def test_fact_review_thread_json_round_trip() -> None:
@@ -137,6 +138,22 @@ def test_fact_review_action_normalizes_text_and_list_fields() -> None:
     assert action.message_ids == ["clarification-message-1"]
 
 
+def test_fact_review_action_normalizes_constraint_fields() -> None:
+    action = FactReviewAction(
+        thread_id="thread-1",
+        fact_id="fact-1",
+        role_id="role-1",
+        action_type=FactReviewActionType.PROPOSE_CONSTRAINT,
+        constraint_scope_type=ConstraintScopeType.ROLE,
+        constraint_scope_id="  role-1  ",
+        constraint_type=ConstraintType.HARD_RULE,
+        rule_text="  Do not describe this role as enterprise-level.  ",
+    )
+
+    assert action.constraint_scope_id == "role-1"
+    assert action.rule_text == "Do not describe this role as enterprise-level."
+
+
 def test_fact_review_action_requires_revised_text_for_revise_fact() -> None:
     with pytest.raises(ValidationError, match="revised_text is required"):
         FactReviewAction(
@@ -164,6 +181,57 @@ def test_fact_review_action_requires_applied_fact_id_when_applied() -> None:
             fact_id="fact-1",
             role_id="role-1",
             action_type=FactReviewActionType.ACTIVATE_FACT,
+            status=FactReviewActionStatus.APPLIED,
+        )
+
+
+def test_fact_review_action_requires_constraint_fields_for_propose_constraint() -> None:
+    with pytest.raises(ValidationError, match="constraint_scope_type is required"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.PROPOSE_CONSTRAINT,
+        )
+
+
+def test_fact_review_action_rejects_global_constraint_scope_id() -> None:
+    with pytest.raises(ValidationError, match="global constraint actions cannot have"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.PROPOSE_CONSTRAINT,
+            constraint_scope_type=ConstraintScopeType.GLOBAL,
+            constraint_scope_id="role-1",
+            constraint_type=ConstraintType.HARD_RULE,
+            rule_text="Do not use em dashes.",
+        )
+
+
+def test_fact_review_action_requires_constraint_scope_id_for_role_constraint() -> None:
+    with pytest.raises(ValidationError, match="role constraint actions require"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.PROPOSE_CONSTRAINT,
+            constraint_scope_type=ConstraintScopeType.ROLE,
+            constraint_type=ConstraintType.HARD_RULE,
+            rule_text="Do not describe this role as enterprise-level.",
+        )
+
+
+def test_fact_review_action_requires_applied_constraint_id_when_applied() -> None:
+    with pytest.raises(ValidationError, match="applied_constraint_id is required"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.PROPOSE_CONSTRAINT,
+            constraint_scope_type=ConstraintScopeType.GLOBAL,
+            constraint_type=ConstraintType.PREFERENCE,
+            rule_text="Prefer direct wording.",
             status=FactReviewActionStatus.APPLIED,
         )
 

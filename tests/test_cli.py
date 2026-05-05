@@ -2835,6 +2835,57 @@ def test_fact_review_actions_add_writes_action(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
 
 
+def test_fact_review_actions_add_writes_constraint_action(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "fact-review",
+            "actions",
+            "add",
+            "--thread-id",
+            "thread-1",
+            "--action-type",
+            "propose_constraint",
+            "--source-message-id",
+            "review-message-1",
+            "--constraint-scope-type",
+            "role",
+            "--constraint-scope-id",
+            "role-1",
+            "--constraint-type",
+            "hard_rule",
+            "--rule-text",
+            "Do not describe this role as enterprise-level.",
+        ],
+    )
+
+    actions = repository.list_actions(thread_id="thread-1")
+
+    assert result.exit_code == 0
+    assert "Saved fact review action." in result.output
+    assert len(actions) == 1
+    assert actions[0].action_type == FactReviewActionType.PROPOSE_CONSTRAINT
+    assert actions[0].constraint_scope_type == ConstraintScopeType.ROLE
+    assert actions[0].constraint_scope_id == "role-1"
+    assert actions[0].constraint_type == ConstraintType.HARD_RULE
+    assert actions[0].rule_text == "Do not describe this role as enterprise-level."
+    assert actions[0].source_message_ids == ["review-message-1"]
+
+    get_settings.cache_clear()
+
+
 def test_fact_review_actions_list_renders_actions(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
@@ -2924,6 +2975,55 @@ def test_fact_review_actions_apply_activates_fact(monkeypatch, tmp_path) -> None
     assert events[-1].actor == FactChangeActor.LLM
     assert events[-1].summary == "Fact is supported."
     assert events[-1].source_message_ids == ["review-message-1"]
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_actions_apply_creates_proposed_constraint(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Systems Analyst",
+            start_date="01/2020",
+            end_date="02/2024",
+        )
+    )
+    repository = FactReviewRepository(tmp_path)
+    repository.save_action(
+        FactReviewAction(
+            id="action-1",
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.PROPOSE_CONSTRAINT,
+            source_message_ids=["review-message-1"],
+            constraint_scope_type=ConstraintScopeType.ROLE,
+            constraint_scope_id="role-1",
+            constraint_type=ConstraintType.HARD_RULE,
+            rule_text="Do not describe this role as enterprise-level.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["fact-review", "actions", "apply", "action-1"])
+
+    action = repository.get_action("action-1")
+    constraints = ScopedConstraintRepository(tmp_path).list(scope_id="role-1")
+
+    assert result.exit_code == 0
+    assert "Applied fact review action." in result.output
+    assert "Applied Constraint ID:" in result.output
+    assert action.status == FactReviewActionStatus.APPLIED
+    assert len(constraints) == 1
+    assert constraints[0].id == action.applied_constraint_id
+    assert constraints[0].status == ScopedConstraintStatus.PROPOSED
+    assert constraints[0].scope_type == ConstraintScopeType.ROLE
+    assert constraints[0].constraint_type == ConstraintType.HARD_RULE
+    assert constraints[0].rule_text == "Do not describe this role as enterprise-level."
+    assert constraints[0].source_message_ids == ["review-message-1"]
 
     get_settings.cache_clear()
 
