@@ -8,15 +8,19 @@ from career_agent.errors import (
     ClarificationQuestionNotFoundError,
     FactNotFoundError,
     FactRoleMismatchError,
+    InvalidSourceAnalysisRunStatusTransitionError,
     InvalidSourceFindingStatusTransitionError,
+    OpenClarificationQuestionsError,
     RoleNotFoundError,
     SourceFindingNotFoundError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
+    UnappliedAcceptedSourceFindingsError,
 )
 from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.repository import ExperienceRoleRepository
+from career_agent.role_sources.models import RoleSourceStatus
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
@@ -47,6 +51,18 @@ ALLOWED_FINDING_STATUS_TRANSITIONS: dict[
     SourceFindingStatus.APPLIED: {SourceFindingStatus.ARCHIVED},
     SourceFindingStatus.REJECTED: {SourceFindingStatus.ARCHIVED},
     SourceFindingStatus.ARCHIVED: set(),
+}
+
+ALLOWED_RUN_STATUS_TRANSITIONS: dict[
+    SourceAnalysisStatus,
+    set[SourceAnalysisStatus],
+] = {
+    SourceAnalysisStatus.ACTIVE: {
+        SourceAnalysisStatus.COMPLETED,
+        SourceAnalysisStatus.ARCHIVED,
+    },
+    SourceAnalysisStatus.COMPLETED: {SourceAnalysisStatus.ARCHIVED},
+    SourceAnalysisStatus.ARCHIVED: set(),
 }
 
 
@@ -114,6 +130,42 @@ class SourceAnalysisService:
         run = SourceAnalysisRun(role_id=role_id, source_ids=source_ids)
         self.analysis_repository.save_run(run)
         return run
+
+    def complete_run(self, analysis_run_id: str) -> SourceAnalysisRun:
+        """Complete an analysis run and mark included role sources analyzed."""
+
+        run = self._get_required_run(analysis_run_id)
+        self._validate_run_transition(
+            run=run,
+            status=SourceAnalysisStatus.COMPLETED,
+        )
+        self._validate_run_completion(run)
+        updated_run = run.model_copy(
+            update={
+                "status": SourceAnalysisStatus.COMPLETED,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self.analysis_repository.save_run(updated_run)
+        self._mark_run_sources_analyzed(updated_run)
+        return updated_run
+
+    def archive_run(self, analysis_run_id: str) -> SourceAnalysisRun:
+        """Archive an active or completed analysis run."""
+
+        run = self._get_required_run(analysis_run_id)
+        self._validate_run_transition(
+            run=run,
+            status=SourceAnalysisStatus.ARCHIVED,
+        )
+        updated_run = run.model_copy(
+            update={
+                "status": SourceAnalysisStatus.ARCHIVED,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self.analysis_repository.save_run(updated_run)
+        return updated_run
 
     def add_question(
         self,
@@ -267,6 +319,67 @@ class SourceAnalysisService:
             if source_id not in run_source_ids:
                 msg = f"Source {source_id} is not part of analysis run: {run.id}"
                 raise SourceNotInAnalysisRunError(msg)
+
+    def _validate_run_transition(
+        self,
+        run: SourceAnalysisRun,
+        status: SourceAnalysisStatus,
+    ) -> None:
+        """Validate source analysis run lifecycle transitions."""
+
+        allowed_statuses = ALLOWED_RUN_STATUS_TRANSITIONS[run.status]
+        if status not in allowed_statuses:
+            msg = (
+                f"Cannot transition source analysis run {run.id} "
+                f"from {run.status.value} to {status.value}."
+            )
+            raise InvalidSourceAnalysisRunStatusTransitionError(msg)
+
+    def _validate_run_completion(self, run: SourceAnalysisRun) -> None:
+        """Validate that an active analysis run is settled enough to complete."""
+
+        open_questions = [
+            question
+            for question in self.analysis_repository.list_questions(run.id)
+            if question.status == SourceClarificationQuestionStatus.OPEN
+        ]
+        if open_questions:
+            question_ids = ", ".join(question.id for question in open_questions)
+            msg = (
+                "Cannot complete source analysis run while clarification questions "
+                f"are open: {question_ids}"
+            )
+            raise OpenClarificationQuestionsError(msg)
+
+        unapplied_findings = [
+            finding
+            for finding in self.analysis_repository.list_findings(analysis_run_id=run.id)
+            if finding.status == SourceFindingStatus.ACCEPTED and finding.applied_fact_id is None
+        ]
+        if unapplied_findings:
+            finding_ids = ", ".join(finding.id for finding in unapplied_findings)
+            msg = (
+                "Cannot complete source analysis run with accepted findings that "
+                f"have not been applied: {finding_ids}"
+            )
+            raise UnappliedAcceptedSourceFindingsError(msg)
+
+        self._validate_role_and_sources(role_id=run.role_id, source_ids=run.source_ids)
+
+    def _mark_run_sources_analyzed(self, run: SourceAnalysisRun) -> None:
+        """Mark all sources included in a completed analysis run as analyzed."""
+
+        for source_id in run.source_ids:
+            source = self.source_repository.get(source_id)
+            if source is None:
+                msg = f"Role source does not exist: {source_id}"
+                raise SourceNotFoundError(msg)
+            if source.role_id != run.role_id:
+                msg = f"Role source {source_id} does not belong to role: {run.role_id}"
+                raise SourceRoleMismatchError(msg)
+            self.source_repository.save(
+                source.model_copy(update={"status": RoleSourceStatus.ANALYZED})
+            )
 
     def _get_required_run(self, analysis_run_id: str) -> SourceAnalysisRun:
         """Return one run or raise an application-level error."""

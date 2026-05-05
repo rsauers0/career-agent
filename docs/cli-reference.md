@@ -493,6 +493,26 @@ List source analysis runs for one role:
 uv run career-agent source-analysis runs list --role-id <role-id>
 ```
 
+Complete a source analysis run after questions are closed and accepted findings
+have been applied:
+
+```bash
+uv run career-agent source-analysis runs complete <run-id>
+```
+
+Completion marks the run `completed` and marks every included role source
+`analyzed`. Completion is blocked while any clarification question is `open`, or
+while any accepted source finding has not been applied.
+
+Archive an active or completed run:
+
+```bash
+uv run career-agent source-analysis runs archive <run-id>
+```
+
+Archiving an active run does not mark its sources analyzed. Archiving a completed
+run leaves already-analyzed source status unchanged.
+
 Add a clarification question:
 
 ```bash
@@ -644,6 +664,13 @@ Application behavior is intentionally conservative:
   added.
 - `contradicts_fact`, `duplicates_fact`, `unclear`, and `unrelated` remain
   accepted analysis artifacts and are not automatically applied.
+
+After findings are generated, reviewed, and applied as needed, complete the
+analysis run to mark the included role sources analyzed:
+
+```bash
+uv run career-agent source-analysis runs complete <run-id>
+```
 
 ## Configuration
 

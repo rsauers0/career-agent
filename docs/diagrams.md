@@ -95,6 +95,8 @@ flowchart TD
     Facts["ExperienceFact<br/>drafts, revisions,<br/>evidence additions"]
     Resolve["resolve_question / skip_question<br/>explicit approval transition"]
     FindingGate["Finding Gate<br/>no open questions,<br/>no existing findings"]
+    Complete["complete run<br/>closed questions,<br/>no accepted unapplied findings"]
+    AnalyzedSources["Role Sources<br/>analyzed"]
 
     Role -->|"role_id"| Workflow
     Sources -->|"select only not_analyzed"| Workflow
@@ -114,6 +116,9 @@ flowchart TD
     Apply -->|"validated service calls"| FactService
     FactService -->|"draft fact / revision / evidence event"| Facts
     Apply -->|"mark finding applied<br/>with applied_fact_id"| Findings
+    Findings -->|"settled enough to close"| Complete
+    Question -->|"resolved or skipped"| Complete
+    Complete -->|"marks included source_ids"| AnalyzedSources
     Sources -. "supports / revises / contradicts / new_fact" .-> Findings
     Messages -. "evidence for closure" .-> Resolve
     Resolve -->|"updates status"| Question
@@ -133,8 +138,13 @@ deterministic finder is only a local validation harness; the LLM-backed finder
 performs the real source extraction and classification.
 
 Applying findings is repeat-safe because applied findings move to `applied`
-status and store `applied_fact_id`. Unsupported accepted finding types stay as
+status and record `applied_fact_id`. Unsupported accepted finding types stay as
 analysis artifacts and are not automatically canonicalized.
+
+A source analysis run is completed separately after questions are closed and
+accepted findings have been applied; completion marks the included role sources
+`analyzed`. Archiving an active run closes the run without marking sources
+analyzed.
 
 ## Canonical Data Vs Analysis Artifacts
 

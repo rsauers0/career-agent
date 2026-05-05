@@ -61,6 +61,10 @@ class ActiveAnalysisRunExistsError(CareerAgentError):
     """Raised when an active source analysis run already exists for a role."""
 
 
+class InvalidSourceAnalysisRunStatusTransitionError(CareerAgentError):
+    """Raised when a source analysis run status transition is not allowed."""
+
+
 class ClarificationQuestionNotFoundError(CareerAgentError):
     """Raised when a referenced clarification question does not exist."""
 
@@ -83,6 +87,10 @@ class OpenClarificationQuestionsError(CareerAgentError):
 
 class SourceFindingsAlreadyExistError(CareerAgentError):
     """Raised when findings already exist for a source analysis run."""
+
+
+class UnappliedAcceptedSourceFindingsError(CareerAgentError):
+    """Raised when accepted source findings still need to be applied."""
 
 
 class FactReviewThreadNotFoundError(CareerAgentError):

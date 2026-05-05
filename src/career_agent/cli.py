@@ -27,6 +27,7 @@ from career_agent.errors import (
     InvalidFactStatusTransitionError,
     InvalidLLMOutputError,
     InvalidScopedConstraintStatusTransitionError,
+    InvalidSourceAnalysisRunStatusTransitionError,
     InvalidSourceFindingStatusTransitionError,
     LLMClientError,
     LLMConfigurationError,
@@ -39,6 +40,7 @@ from career_agent.errors import (
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
+    UnappliedAcceptedSourceFindingsError,
 )
 from career_agent.experience_facts.models import (
     ExperienceFact,
@@ -1075,6 +1077,50 @@ def start_source_analysis_run(
         raise typer.Exit(1) from exc
 
     console.print("[green]Started source analysis run.[/green]")
+    console.print(f"Run ID: {run.id}")
+
+
+@analysis_runs_app.command("complete")
+def complete_source_analysis_run(
+    run_id: str = typer.Argument(..., help="Source analysis run identifier."),
+) -> None:
+    """Complete a source analysis run and mark included sources analyzed."""
+
+    service = build_source_analysis_service()
+    try:
+        run = service.complete_run(run_id)
+    except (
+        AnalysisRunNotFoundError,
+        InvalidSourceAnalysisRunStatusTransitionError,
+        OpenClarificationQuestionsError,
+        SourceNotFoundError,
+        SourceRoleMismatchError,
+        UnappliedAcceptedSourceFindingsError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Completed source analysis run.[/green]")
+    console.print(f"Run ID: {run.id}")
+
+
+@analysis_runs_app.command("archive")
+def archive_source_analysis_run(
+    run_id: str = typer.Argument(..., help="Source analysis run identifier."),
+) -> None:
+    """Archive an active or completed source analysis run."""
+
+    service = build_source_analysis_service()
+    try:
+        run = service.archive_run(run_id)
+    except (
+        AnalysisRunNotFoundError,
+        InvalidSourceAnalysisRunStatusTransitionError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Archived source analysis run.[/green]")
     console.print(f"Run ID: {run.id}")
 
 

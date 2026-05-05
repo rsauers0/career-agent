@@ -1537,6 +1537,158 @@ def test_source_analysis_runs_list_renders_saved_runs(monkeypatch, tmp_path) -> 
     get_settings.cache_clear()
 
 
+def test_source_analysis_runs_complete_marks_run_and_sources_analyzed(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    source_repository = RoleSourceRepository(tmp_path)
+    source_repository.save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    analysis_repository = SourceAnalysisRepository(tmp_path)
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+            status=SourceClarificationQuestionStatus.RESOLVED,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["source-analysis", "runs", "complete", "run-1"])
+
+    run = analysis_repository.get_run("run-1")
+    source = source_repository.get("source-1")
+
+    assert result.exit_code == 0
+    assert "Completed source analysis run." in result.output
+    assert run is not None
+    assert run.status == SourceAnalysisStatus.COMPLETED
+    assert source is not None
+    assert source.status == RoleSourceStatus.ANALYZED
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_runs_complete_reports_open_questions(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    source_repository = RoleSourceRepository(tmp_path)
+    source_repository.save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    analysis_repository = SourceAnalysisRepository(tmp_path)
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    analysis_repository.save_question(
+        SourceClarificationQuestion(
+            id="question-1",
+            analysis_run_id="run-1",
+            question_text="What measurable impact did this automation have?",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["source-analysis", "runs", "complete", "run-1"])
+
+    run = analysis_repository.get_run("run-1")
+    source = source_repository.get("source-1")
+
+    assert result.exit_code != 0
+    assert "Cannot complete source analysis run while clarification questions are open" in (
+        result.output
+    )
+    assert run is not None
+    assert run.status == SourceAnalysisStatus.ACTIVE
+    assert source is not None
+    assert source.status == RoleSourceStatus.NOT_ANALYZED
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_runs_archive_does_not_mark_sources_analyzed(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    source_repository = RoleSourceRepository(tmp_path)
+    source_repository.save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    analysis_repository = SourceAnalysisRepository(tmp_path)
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["source-analysis", "runs", "archive", "run-1"])
+
+    run = analysis_repository.get_run("run-1")
+    source = source_repository.get("source-1")
+
+    assert result.exit_code == 0
+    assert "Archived source analysis run." in result.output
+    assert run is not None
+    assert run.status == SourceAnalysisStatus.ARCHIVED
+    assert source is not None
+    assert source.status == RoleSourceStatus.NOT_ANALYZED
+
+    get_settings.cache_clear()
+
+
 def test_source_analysis_questions_add_writes_question(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))

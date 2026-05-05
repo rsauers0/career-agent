@@ -127,6 +127,13 @@ Apply accepted source findings through deterministic fact workflows:
 uv run career-agent experience-workflow apply-findings --run-id <run-id>
 ```
 
+Complete the source analysis run when questions are closed and accepted findings
+have been applied:
+
+```bash
+uv run career-agent source-analysis runs complete <run-id>
+```
+
 Run tests:
 
 ```bash

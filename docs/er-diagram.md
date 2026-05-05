@@ -262,6 +262,10 @@ flowchart LR
 | `created_at` | datetime | | UTC timestamp. |
 | `updated_at` | datetime | | UTC timestamp. |
 
+Run completion requires closed clarification questions and no accepted findings
+waiting to be applied. Completion marks all included role sources `analyzed`.
+Archiving an active run does not mark sources analyzed.
+
 ### `clarification_questions.json`
 
 | Column | Type | Relationship | Notes |
@@ -377,6 +381,11 @@ are resolved or skipped. `experience-workflow apply-findings` applies accepted
 findings through deterministic fact services. Applied findings record
 `applied_fact_id` and move to `applied` status so rerunning the command does not
 create duplicate draft facts.
+
+`source-analysis runs complete` closes a settled analysis run and marks its
+included role sources analyzed. `source-analysis runs archive` closes a run
+without changing source status unless the sources were already analyzed by a
+prior completion.
 
 If a user opens an existing fact and starts a revision conversation, that creates
 review context. It means the source or message was submitted while working on

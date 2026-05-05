@@ -7,16 +7,19 @@ from career_agent.errors import (
     ClarificationQuestionNotFoundError,
     FactNotFoundError,
     FactRoleMismatchError,
+    InvalidSourceAnalysisRunStatusTransitionError,
     InvalidSourceFindingStatusTransitionError,
+    OpenClarificationQuestionsError,
     RoleNotFoundError,
     SourceFindingNotFoundError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
+    UnappliedAcceptedSourceFindingsError,
 )
 from career_agent.experience_facts.models import ExperienceFact
 from career_agent.experience_roles.models import ExperienceRole
-from career_agent.role_sources.models import RoleSourceEntry
+from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
     SourceAnalysisRun,
@@ -249,6 +252,141 @@ def test_source_analysis_service_allows_new_run_after_prior_run_completed() -> N
 
     assert run.role_id == "role-1"
     assert run.source_ids == ["source-2"]
+
+
+def test_source_analysis_service_completes_run_and_marks_sources_analyzed() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    run = service.start_run(role_id="role-1", source_ids=["source-1", "source-2"])
+    resolved_question = service.add_question(
+        analysis_run_id=run.id,
+        question_text="What measurable impact did this automation have?",
+    )
+    skipped_question = service.add_question(
+        analysis_run_id=run.id,
+        question_text="Was this part of a larger modernization effort?",
+    )
+    service.resolve_question(resolved_question.id)
+    service.skip_question(skipped_question.id)
+    proposed_finding = service.add_finding(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        finding_type=SourceFindingType.UNCLEAR,
+        rationale="The source needs later semantic review.",
+    )
+
+    completed_run = service.complete_run(run.id)
+
+    assert completed_run.status == SourceAnalysisStatus.COMPLETED
+    assert completed_run.updated_at >= run.updated_at
+    assert source_repository.get("source-1").status == RoleSourceStatus.ANALYZED
+    assert source_repository.get("source-2").status == RoleSourceStatus.ANALYZED
+    assert service.get_finding(proposed_finding.id) == proposed_finding
+
+
+def test_source_analysis_service_rejects_complete_with_open_questions() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source())
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+    question = service.add_question(
+        analysis_run_id=run.id,
+        question_text="What measurable impact did this automation have?",
+    )
+
+    with pytest.raises(OpenClarificationQuestionsError, match=question.id):
+        service.complete_run(run.id)
+
+    assert service.get_run(run.id).status == SourceAnalysisStatus.ACTIVE
+    assert source_repository.get("source-1").status == RoleSourceStatus.NOT_ANALYZED
+
+
+def test_source_analysis_service_rejects_complete_with_unapplied_accepted_findings() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source())
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+    finding = service.add_finding(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        finding_type=SourceFindingType.NEW_FACT,
+        proposed_fact_text="Led reporting automation.",
+    )
+    accepted_finding = service.accept_finding(finding.id)
+
+    with pytest.raises(UnappliedAcceptedSourceFindingsError, match=accepted_finding.id):
+        service.complete_run(run.id)
+
+    assert service.get_run(run.id).status == SourceAnalysisStatus.ACTIVE
+    assert source_repository.get("source-1").status == RoleSourceStatus.NOT_ANALYZED
+
+
+def test_source_analysis_service_archives_active_run_without_marking_sources_analyzed() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+
+    archived_run = service.archive_run(run.id)
+    new_run = service.start_run(role_id="role-1", source_ids=["source-2"])
+
+    assert archived_run.status == SourceAnalysisStatus.ARCHIVED
+    assert archived_run.updated_at >= run.updated_at
+    assert source_repository.get("source-1").status == RoleSourceStatus.NOT_ANALYZED
+    assert new_run.source_ids == ["source-2"]
+
+
+def test_source_analysis_service_archives_completed_run() -> None:
+    service, analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    completed_run = SourceAnalysisRun(
+        id="run-1",
+        role_id="role-1",
+        source_ids=["source-1"],
+        status=SourceAnalysisStatus.COMPLETED,
+    )
+    analysis_repository.save_run(completed_run)
+
+    archived_run = service.archive_run("run-1")
+
+    assert archived_run.status == SourceAnalysisStatus.ARCHIVED
+    assert archived_run.updated_at >= completed_run.updated_at
+
+
+def test_source_analysis_service_rejects_transition_from_archived_run() -> None:
+    service, analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    analysis_repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+            status=SourceAnalysisStatus.ARCHIVED,
+        )
+    )
+
+    with pytest.raises(InvalidSourceAnalysisRunStatusTransitionError, match="run-1"):
+        service.complete_run("run-1")
+
+    with pytest.raises(InvalidSourceAnalysisRunStatusTransitionError, match="run-1"):
+        service.archive_run("run-1")
 
 
 def test_source_analysis_service_rejects_run_for_missing_role() -> None:

@@ -121,6 +121,12 @@ Source Analysis is workflow evidence, not canonical career data. It gives the fu
 
 Only one active Source Analysis run should exist per experience role. This prevents a user from starting a second analysis session for the same role before the existing one has been completed or archived.
 
+Completing a Source Analysis run should be explicit. Completion requires closed
+clarification questions and no accepted source findings waiting to be applied.
+Only completion marks the run's included role sources as `analyzed`; archiving an
+active run leaves source status unchanged so the same source material can be
+analyzed later.
+
 ### 6. Fact Review
 
 Build collaborative review artifacts before richer draft fact revision workflows:

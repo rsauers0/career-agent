@@ -251,6 +251,17 @@ Source findings are structured analysis notes. They can indicate that a source a
 
 Only one active Source Analysis run may exist for a single experience role at a time. Separate roles may have active analysis runs simultaneously.
 
+Analysis run completion is an explicit lifecycle transition. A run can move from
+`active` to `completed` only when all clarification questions are resolved or
+skipped and no accepted source findings remain unapplied. Completing the run
+marks each included `RoleSourceEntry` as `analyzed`, which allows future
+`experience-workflow analyze-sources` calls to focus only on newly added source
+material.
+
+Analysis runs may also be archived. Archiving an active run closes the run
+without marking its sources analyzed. Archiving a completed run leaves source
+status unchanged.
+
 ### Scoped Constraints
 
 Purpose: stores durable user rules and preferences that constrain later analysis,
