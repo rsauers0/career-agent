@@ -218,6 +218,11 @@ can be applied, but they still call deterministic services for revision,
 rejection, activation, evidence updates, and proposed scoped constraint
 creation.
 
+No-action generation is valid. It leaves the review thread open and leaves the
+fact unchanged, which allows paused or exploratory review conversations to be
+resumed later. LLM-generated activation proposals should eventually pass through
+an approval/eval flow before application.
+
 ## LLM Boundary
 
 The current LLM boundary has a provider-neutral client protocol plus an opt-in

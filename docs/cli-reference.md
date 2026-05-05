@@ -393,6 +393,10 @@ reject, or archive the current action batch before requesting another one. The
 current deterministic generator only uses explicit message recommendation
 metadata for local workflow validation.
 
+Generation may return no actions. In that case the thread stays `open`, the fact
+is unchanged, and the same thread can be resumed later. Thread resolution remains
+an explicit command.
+
 Add a structured review action:
 
 ```bash

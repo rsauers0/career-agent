@@ -342,6 +342,8 @@ Fact Review action generation does not add another table. A generated proposal i
 validated by the service and then saved as a normal `FactReviewAction` row in
 `proposed` status. The generator reads the target fact, owning role, thread
 messages, existing thread actions, and applicable active scoped constraints.
+When generation returns no actions, no rows are saved; the review thread remains
+open and the fact remains unchanged.
 
 ## Source-To-Fact Reading
 

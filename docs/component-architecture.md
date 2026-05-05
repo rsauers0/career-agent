@@ -319,10 +319,25 @@ references. Generation is blocked while any proposed action already exists for a
 thread. The current deterministic generator is for local workflow validation and
 only proposes actions from explicit message recommendation metadata.
 
+LLM-backed Fact Review action generation should use the default conversational
+LLM configuration (`CAREER_AGENT_LLM_MODEL`) instead of extraction-specific
+configuration. It operates on a small review context for one fact and should
+stay in fact-normalization mode, not resume-writing mode. A generator may return
+multiple actions when one review turn supports them, such as a `revise_fact`
+proposal plus a `propose_constraint` proposal. It may also return no actions; in
+that case no action rows are saved, the thread remains `open`, and the fact is
+unchanged.
+
+Generated `activate_fact` actions are still proposals. A future approval/eval
+flow should evaluate LLM-generated activation recommendations before they are
+applied. `split_fact` should remain message recommendation metadata until a
+deterministic split action exists.
+
 Only one open Fact Review thread may exist for a single fact at a time. Messages
 are append-only. Resolving or archiving a thread is an explicit status
-transition, and fact activation remains owned by Experience Facts even when
-started from a review action.
+transition. An open thread can mean active review or a paused conversation that
+the user will resume later. Fact activation remains owned by Experience Facts
+even when started from a review action.
 
 ### Experience Workflow
 
