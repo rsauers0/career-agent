@@ -231,6 +231,44 @@ Source findings are structured analysis notes. They can indicate that a source a
 
 Only one active Source Analysis run may exist for a single experience role at a time. Separate roles may have active analysis runs simultaneously.
 
+### Scoped Constraints
+
+Purpose: stores durable user rules and preferences that constrain later analysis,
+fact normalization, and document generation workflows.
+
+Current files:
+
+```text
+src/career_agent/scoped_constraints/
+  models.py
+  repository.py
+  service.py
+```
+
+Current CLI group:
+
+```bash
+career-agent constraints
+```
+
+Examples of owned data:
+
+- global, role, and fact scoped constraints
+- constraint type: hard rule or preference
+- proposed, active, rejected, and archived lifecycle statuses
+- workflow message ids that explain or support the constraint
+
+Scoped Constraints are shared workflow guardrails. They are not owned by Fact
+Review, resumes, cover letters, or any single downstream feature. Fact Review
+may propose constraints, but activated constraints live in this shared component
+so future workflows can ask for the active constraints that apply to a role or
+fact context.
+
+`global` constraints do not have `scope_id`. `role` and `fact` constraints must
+have `scope_id`, and services validate that the referenced role or fact exists.
+The first implementation intentionally avoids future scope types such as resume
+or cover letter until those persistent components exist.
+
 ### Fact Review
 
 Purpose: stores collaborative review artifacts for draft or revised experience facts.
@@ -422,17 +460,16 @@ Fact history should stay separate from the canonical fact record. Messages captu
 
 ### Scoped Constraints
 
-User corrections and hard preferences should become durable constraints when appropriate. Constraints may be global writing preferences or scoped evidence rules tied to a role, source, analysis run, proposal, fact, project, or message.
+User corrections and hard preferences should become durable constraints when appropriate. Constraints may be global writing preferences or scoped evidence rules tied to a role or fact. Later components may add additional scopes when they have persistent records to attach constraints to.
 
 Examples:
 
 - global: never use em dashes
 - global: avoid specific disliked words
 - role-scoped: do not describe this role as enterprise-level without explicit evidence
-- proposal-scoped: do not say the user deployed the system; describe the involvement as support oversight
-- project-scoped: do not merge two similarly measured automations unless they are confirmed to be the same project
+- fact-scoped: do not say the user deployed the system; describe the involvement as support oversight
 
-The first constraint scope types should be `global` and `role`; additional scopes such as cover letter, resume, proposal, fact, and project can be added when those components exist. Constraints should be represented as separate rule records rather than a single record containing multiple unrelated rules. A single user response may yield multiple constraints, all linked back to the source message for traceability.
+The current constraint scope types are `global`, `role`, and `fact`; additional scopes such as cover letter, resume, proposal, and project can be added when those components exist. Constraints should be represented as separate rule records rather than a single record containing multiple unrelated rules. A single user response may yield multiple constraints, all linked back to workflow messages for traceability.
 
 Constraints should distinguish `preference` from `hard_rule`. The LLM may propose severity during constraint extraction, but deterministic workflow and user approval should decide what becomes active.
 

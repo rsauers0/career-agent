@@ -52,6 +52,20 @@ flowchart LR
     Messages -. "source_message_ids" .-> Actions
 ```
 
+## Scoped Constraint Data
+
+```mermaid
+flowchart LR
+    Roles["EXPERIENCE_ROLES<br/>id PK"]
+
+    Facts["EXPERIENCE_FACTS<br/>id PK<br/>role_id FK"]
+
+    Constraints["SCOPED_CONSTRAINTS<br/>id PK<br/>scope_type<br/>scope_id FK/null<br/>constraint_type<br/>rule_text<br/>source_message_ids<br/>status<br/>created_at<br/>updated_at"]
+
+    Roles -. "scope_type=role<br/>scope_id" .-> Constraints
+    Facts -. "scope_type=fact<br/>scope_id" .-> Constraints
+```
+
 ## Source Analysis Data
 
 ```mermaid
@@ -211,6 +225,22 @@ flowchart LR
 | `created_at` | datetime | | UTC timestamp. |
 | `updated_at` | datetime | | UTC timestamp. |
 
+## Scoped Constraint Tables
+
+### `scoped_constraints.json`
+
+| Column | Type | Relationship | Notes |
+| --- | --- | --- | --- |
+| `id` | string | Primary key. | Stable constraint id. |
+| `scope_type` | enum | | `global`, `role`, or `fact`. |
+| `scope_id` | string/null | `ExperienceRole.id` or `ExperienceFact.id` | Must be null for `global`; required for `role` and `fact`. |
+| `constraint_type` | enum | | `hard_rule` or `preference`. |
+| `rule_text` | string | | Plain-language rule or preference text. |
+| `source_message_ids` | list[string] | Workflow message ids. | Messages that explain/support the constraint. |
+| `status` | enum | | `proposed`, `active`, `rejected`, or `archived`. |
+| `created_at` | datetime | | UTC timestamp. |
+| `updated_at` | datetime | | UTC timestamp. |
+
 ## Source Analysis Tables
 
 ### `analysis_runs.json`
@@ -277,6 +307,8 @@ flowchart LR
 | `FactReviewAction` | `role_id` | `ExperienceRole.id` | Action is scoped to a role. |
 | `FactReviewAction` | `source_message_ids` | `FactReviewMessage.id` | Review messages that explain/support the action. |
 | `FactReviewAction` | `applied_fact_id` | `ExperienceFact.id` | Fact returned by action application. |
+| `ScopedConstraint` | `scope_id` | `ExperienceRole.id` | Role constraint applies to a role when `scope_type=role`. |
+| `ScopedConstraint` | `scope_id` | `ExperienceFact.id` | Fact constraint applies to a fact when `scope_type=fact`. |
 | `SourceAnalysisRun` | `role_id` | `ExperienceRole.id` | Analysis run is scoped to a role. |
 | `SourceAnalysisRun` | `source_ids` | `RoleSourceEntry.id` | Sources included in an analysis run. |
 | `SourceClarificationQuestion` | `analysis_run_id` | `SourceAnalysisRun.id` | Question belongs to an analysis run. |

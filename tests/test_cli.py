@@ -23,6 +23,13 @@ from career_agent.fact_review.models import (
 from career_agent.fact_review.repository import FactReviewRepository
 from career_agent.role_sources.models import RoleSourceEntry, RoleSourceStatus
 from career_agent.role_sources.repository import RoleSourceRepository
+from career_agent.scoped_constraints.models import (
+    ConstraintScopeType,
+    ConstraintType,
+    ScopedConstraint,
+    ScopedConstraintStatus,
+)
+from career_agent.scoped_constraints.repository import ScopedConstraintRepository
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
     SourceAnalysisRun,
@@ -942,6 +949,212 @@ def test_facts_delete_removes_saved_fact(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0
     assert "Deleted experience fact." in result.output
     assert repository.get("fact-1") is None
+
+    get_settings.cache_clear()
+
+
+def test_constraints_add_writes_global_constraint(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "constraints",
+            "add",
+            "--scope-type",
+            "global",
+            "--constraint-type",
+            "hard_rule",
+            "--rule-text",
+            "Do not use em dashes.",
+            "--source-message-id",
+            "message-1",
+        ],
+    )
+
+    constraints = ScopedConstraintRepository(tmp_path).list()
+
+    assert result.exit_code == 0
+    assert "Saved scoped constraint." in result.output
+    assert len(constraints) == 1
+    assert constraints[0].scope_type == ConstraintScopeType.GLOBAL
+    assert constraints[0].scope_id is None
+    assert constraints[0].constraint_type == ConstraintType.HARD_RULE
+    assert constraints[0].rule_text == "Do not use em dashes."
+    assert constraints[0].source_message_ids == ["message-1"]
+    assert constraints[0].status == ScopedConstraintStatus.PROPOSED
+
+    get_settings.cache_clear()
+
+
+def test_constraints_add_reports_missing_role(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "constraints",
+            "add",
+            "--scope-type",
+            "role",
+            "--scope-id",
+            "role-1",
+            "--constraint-type",
+            "hard_rule",
+            "--rule-text",
+            "Do not describe this role as enterprise-level.",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Experience role does not exist: role-1" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_constraints_list_renders_constraints(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ScopedConstraintRepository(tmp_path).save(
+        ScopedConstraint(
+            id="constraint-1",
+            scope_type=ConstraintScopeType.GLOBAL,
+            constraint_type=ConstraintType.PREFERENCE,
+            rule_text="Prefer direct wording.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["constraints", "list", "--scope-type", "global"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Scoped Constraints" in result.output
+    assert "constraint-1" in result.output
+    assert "Prefer direct wording." in result.output
+    assert "preference" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_constraints_applicable_renders_active_context_constraints(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Senior Systems Analyst",
+            start_date="05/2021",
+            end_date="06/2024",
+        )
+    )
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Managed reporting workflows.",
+        )
+    )
+    repository = ScopedConstraintRepository(tmp_path)
+    repository.save(
+        ScopedConstraint(
+            id="constraint-1",
+            scope_type=ConstraintScopeType.GLOBAL,
+            constraint_type=ConstraintType.PREFERENCE,
+            rule_text="Prefer direct wording.",
+            status=ScopedConstraintStatus.ACTIVE,
+        )
+    )
+    repository.save(
+        ScopedConstraint(
+            id="constraint-2",
+            scope_type=ConstraintScopeType.ROLE,
+            scope_id="role-1",
+            constraint_type=ConstraintType.HARD_RULE,
+            rule_text="Do not describe this role as enterprise-level.",
+            status=ScopedConstraintStatus.ACTIVE,
+        )
+    )
+    repository.save(
+        ScopedConstraint(
+            id="constraint-3",
+            scope_type=ConstraintScopeType.FACT,
+            scope_id="fact-1",
+            constraint_type=ConstraintType.HARD_RULE,
+            rule_text="Do not imply organization-wide deployment.",
+            status=ScopedConstraintStatus.ACTIVE,
+        )
+    )
+    repository.save(
+        ScopedConstraint(
+            id="constraint-4",
+            scope_type=ConstraintScopeType.GLOBAL,
+            constraint_type=ConstraintType.PREFERENCE,
+            rule_text="Do not show proposed constraints.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["constraints", "applicable", "--fact-id", "fact-1"],
+        env={"COLUMNS": "180"},
+    )
+
+    assert result.exit_code == 0
+    assert "constraint-1" in result.output
+    assert "constraint-2" in result.output
+    assert "constraint-3" in result.output
+    assert "constraint-4" not in result.output
+
+    get_settings.cache_clear()
+
+
+def test_constraints_activate_reject_and_archive(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = ScopedConstraintRepository(tmp_path)
+    repository.save(
+        ScopedConstraint(
+            id="constraint-1",
+            scope_type=ConstraintScopeType.GLOBAL,
+            constraint_type=ConstraintType.PREFERENCE,
+            rule_text="Prefer direct wording.",
+        )
+    )
+    repository.save(
+        ScopedConstraint(
+            id="constraint-2",
+            scope_type=ConstraintScopeType.GLOBAL,
+            constraint_type=ConstraintType.HARD_RULE,
+            rule_text="Do not use em dashes.",
+        )
+    )
+    runner = CliRunner()
+
+    activate_result = runner.invoke(app, ["constraints", "activate", "constraint-1"])
+    archive_result = runner.invoke(app, ["constraints", "archive", "constraint-1"])
+    reject_result = runner.invoke(app, ["constraints", "reject", "constraint-2"])
+
+    assert activate_result.exit_code == 0
+    assert "Activated scoped constraint." in activate_result.output
+    assert archive_result.exit_code == 0
+    assert "Archived scoped constraint." in archive_result.output
+    assert reject_result.exit_code == 0
+    assert "Rejected scoped constraint." in reject_result.output
+    assert repository.get("constraint-1").status == ScopedConstraintStatus.ARCHIVED
+    assert repository.get("constraint-2").status == ScopedConstraintStatus.REJECTED
 
     get_settings.cache_clear()
 

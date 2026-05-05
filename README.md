@@ -13,7 +13,7 @@ Current scope:
 - keep the project runnable through a minimal Typer CLI
 - keep configuration loading through `pydantic-settings`
 - rebuild one component at a time
-- maintain component boundaries for User Preferences, Experience Roles, Role Sources, Experience Facts, Source Analysis, and Fact Review
+- maintain component boundaries for User Preferences, Experience Roles, Role Sources, Experience Facts, Scoped Constraints, Source Analysis, and Fact Review
 - use JSON persistence first
 - keep TUI deferred while validating workflow behavior through the CLI
 - support opt-in LLM-backed source question and source finding generation through an OpenAI-compatible endpoint
@@ -73,6 +73,15 @@ List saved source analysis runs:
 
 ```bash
 uv run career-agent source-analysis runs list
+```
+
+Add a global hard-rule constraint:
+
+```bash
+uv run career-agent constraints add \
+  --scope-type global \
+  --constraint-type hard_rule \
+  --rule-text "Do not use em dashes."
 ```
 
 Start a fact review thread:
@@ -163,9 +172,10 @@ The rebuild sequence is:
 4. Experience Fact model, JSON repository, service, CLI, and tests.
 5. Source Analysis model, JSON repository, service, CLI, and tests.
 6. Fact Review threads, messages, actions, JSON repository, service, CLI, and tests.
-7. Experience Workflow service, CLI/dev command, and tests.
-8. TUI presentation once the workflow is stable.
-9. Optional FastAPI interface later, using the same application services.
+7. Scoped Constraints model, JSON repository, service, CLI, and tests.
+8. Experience Workflow service, CLI/dev command, and tests.
+9. TUI presentation once the workflow is stable.
+10. Optional FastAPI interface later, using the same application services.
 
 The intended architecture remains:
 

@@ -49,6 +49,8 @@ storage shape is:
   experience_facts/
     experience_facts.json
     fact_change_events.json
+  scoped_constraints/
+    scoped_constraints.json
   fact_review/
     fact_review_threads.json
     fact_review_messages.json
@@ -63,6 +65,7 @@ storage shape is:
     experience_roles/
     role_sources/
     experience_facts/
+    scoped_constraints/
     fact_review/
     source_analysis/
 ```
@@ -78,6 +81,11 @@ analysis, so it should be treated as career-sensitive local data.
 Fact Review data is also workflow evidence. It may include user corrections,
 assistant recommendations, structured review actions, and review notes about
 draft facts, so it should be treated as career-sensitive local data.
+
+Scoped Constraints data may contain durable user writing preferences, hard
+rules, and corrections about the user's actual experience. It should be treated
+as career-sensitive local data and loaded only into workflows where the scope
+applies.
 
 ## Verification Commands
 

@@ -16,12 +16,15 @@ flowchart LR
     RoleSources["Role Sources<br/>Raw submitted evidence"]
     SourceAnalysis["Source Analysis<br/>Runs, questions,<br/>messages, findings"]
     ExperienceFacts["Experience Facts<br/>Canonical career facts"]
+    ScopedConstraints["Scoped Constraints<br/>Global, role,<br/>and fact guardrails"]
     FactReview["Fact Review<br/>Threads, messages,<br/>and actions"]
 
     ExperienceRoles -->|"role_id"| RoleSources
     ExperienceRoles -->|"role_id"| SourceAnalysis
     RoleSources -->|"source_ids"| SourceAnalysis
     ExperienceRoles -->|"role_id"| ExperienceFacts
+    ExperienceRoles -->|"role scope"| ScopedConstraints
+    ExperienceFacts -->|"fact scope"| ScopedConstraints
     ExperienceRoles -->|"role_id"| FactReview
     ExperienceFacts -->|"fact_id"| FactReview
     RoleSources -. "source_ids" .-> ExperienceFacts
@@ -252,6 +255,7 @@ flowchart TD
     DataDir --> Sources["role_sources/role_sources.json"]
     DataDir --> Facts["experience_facts/experience_facts.json"]
     DataDir --> FactEvents["experience_facts/fact_change_events.json"]
+    DataDir --> Constraints["scoped_constraints/scoped_constraints.json"]
     DataDir --> Review["fact_review/*.json"]
     DataDir --> Analysis["source_analysis/*.json"]
     DataDir --> Snapshots["snapshots/"]
@@ -261,6 +265,7 @@ flowchart TD
     Snapshots --> SourceSnapshots["role_sources/<timestamp>-role_sources.json"]
     Snapshots --> FactSnapshots["experience_facts/<timestamp>-experience_facts.json"]
     Snapshots --> FactEventSnapshots["experience_facts/<timestamp>-fact_change_events.json"]
+    Snapshots --> ConstraintSnapshots["scoped_constraints/<timestamp>-scoped_constraints.json"]
     Snapshots --> ReviewSnapshots["fact_review/<timestamp>-*.json"]
     Snapshots --> AnalysisSnapshots["source_analysis/<timestamp>-*.json"]
 ```

@@ -144,7 +144,26 @@ still goes through Experience Fact services and records Fact Change Events.
 Only one open Fact Review thread should exist per experience fact. Resolving or
 archiving a thread should be an explicit transition.
 
-### 7. Experience AI Workflow Harness
+### 7. Scoped Constraints
+
+Build shared workflow guardrails before richer LLM orchestration:
+
+- global, role, and fact scoped constraints
+- constraint type: hard rule or preference
+- lifecycle status: proposed, active, rejected, archived
+- workflow message ids for traceability
+- deterministic query for active constraints that apply to a role or fact context
+
+Scoped Constraints are not owned by Fact Review or future resume and cover letter
+components. Review conversations may propose constraints, but active constraints
+live in this shared component so later workflows can load applicable guardrails
+without duplicating storage.
+
+The first scope types are `global`, `role`, and `fact`. Future scopes such as
+cover letter, resume, proposal, or project should be added only when persistent
+components exist for them.
+
+### 8. Experience AI Workflow Harness
 
 Build as CLI/dev workflow first:
 
@@ -187,7 +206,7 @@ Finding generation should run only after a Source Analysis run exists and all cl
 
 Finding application should process only accepted findings and should mark successfully applied findings with `applied_fact_id` and `applied` status. `new_fact` creates draft experience facts, `revises_fact` uses fact revision rules, and `supports_fact` appends evidence through an explicit fact service method. Contradictions, duplicates, unclear findings, and unrelated findings remain accepted analysis artifacts until a later review workflow handles them.
 
-User corrections may create scoped constraints. A single correction can produce multiple durable rules, such as global writing preferences or role/project/proposal-specific hard rules. The first implementation should start with global and role scopes, then add more specific scopes as new components need them. Constraints should be linked to the source message and loaded by later LLM workflows that operate within the same scope.
+User corrections may create scoped constraints. A single correction can produce multiple durable rules, such as global writing preferences or role/fact-specific hard rules. The current implementation starts with global, role, and fact scopes; more specific scopes should be added as new components need them. Constraints should be linked to workflow messages and loaded by later LLM workflows that operate within the same scope.
 
 Constraint extraction should separate preferences from hard rules. The LLM may propose severity, but deterministic workflow and user approval decide what becomes active.
 
@@ -195,13 +214,13 @@ Historical traceability should not be stored directly on the canonical fact. Mes
 
 Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, draft fact generation, drift checking, merge checking, clarification planning, and deterministic service transitions.
 
-### 8. TUI
+### 9. TUI
 
 Add the TUI only after the workflow works from CLI/dev commands.
 
 The TUI should present the already-working workflow. It should not own workflow logic.
 
-### 9. Future API Option
+### 10. Future API Option
 
 FastAPI can be added later as another interface adapter.
 
@@ -277,6 +296,13 @@ Fact Review
   -> CLI
   -> tests
 
+Scoped Constraints
+  -> model
+  -> repository
+  -> service
+  -> CLI
+  -> tests
+
 Experience Workflow
   -> question generator
   -> finding generator
@@ -294,7 +320,8 @@ LLM Boundary
 ```
 
 The immediate next foundation step is broader fact review orchestration: using
-review conversation to propose structured actions and constraints, then routing
-those proposals through deterministic workflows. Split actions and constraint
-extraction are still future work; current action application covers activation,
-rejection, revision, and evidence addition.
+review conversation to propose structured actions and scoped constraints, then
+routing those proposals through deterministic workflows. Split actions and LLM
+constraint extraction are still future work; current action application covers
+activation, rejection, revision, and evidence addition, and scoped constraints
+provide the shared storage target for durable rules and preferences.

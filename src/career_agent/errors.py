@@ -103,3 +103,11 @@ class InvalidFactReviewThreadStatusTransitionError(CareerAgentError):
 
 class InvalidFactReviewActionStatusTransitionError(CareerAgentError):
     """Raised when a fact review action status transition is not allowed."""
+
+
+class ScopedConstraintNotFoundError(CareerAgentError):
+    """Raised when a referenced scoped constraint does not exist."""
+
+
+class InvalidScopedConstraintStatusTransitionError(CareerAgentError):
+    """Raised when a scoped constraint status transition is not allowed."""

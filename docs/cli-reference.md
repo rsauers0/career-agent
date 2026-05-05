@@ -16,6 +16,9 @@ uv run career-agent facts --help
 uv run career-agent facts add --help
 uv run career-agent facts events --help
 uv run career-agent facts revise --help
+uv run career-agent constraints --help
+uv run career-agent constraints add --help
+uv run career-agent constraints applicable --help
 uv run career-agent fact-review --help
 uv run career-agent fact-review threads start --help
 uv run career-agent fact-review messages add --help
@@ -277,6 +280,60 @@ Delete one saved fact:
 
 ```bash
 uv run career-agent facts delete <fact-id>
+```
+
+## Scoped Constraints
+
+Add a global constraint:
+
+```bash
+uv run career-agent constraints add \
+  --scope-type global \
+  --constraint-type hard_rule \
+  --rule-text "Do not use em dashes."
+```
+
+Add a role or fact constraint:
+
+```bash
+uv run career-agent constraints add \
+  --scope-type role \
+  --scope-id <role-id> \
+  --constraint-type hard_rule \
+  --rule-text "Do not describe this role as enterprise-level."
+
+uv run career-agent constraints add \
+  --scope-type fact \
+  --scope-id <fact-id> \
+  --constraint-type preference \
+  --rule-text "Prefer generic technology support terminology."
+```
+
+Initial scope types are `global`, `role`, and `fact`. `global` constraints must
+not include `--scope-id`; `role` and `fact` constraints require it. Constraint
+types are `hard_rule` and `preference`.
+
+List constraints:
+
+```bash
+uv run career-agent constraints list
+uv run career-agent constraints list --scope-type role --scope-id <role-id>
+uv run career-agent constraints list --status active
+```
+
+List active constraints that apply to a workflow context:
+
+```bash
+uv run career-agent constraints applicable --role-id <role-id>
+uv run career-agent constraints applicable --fact-id <fact-id>
+```
+
+Activate, reject, or archive constraints:
+
+```bash
+uv run career-agent constraints activate <constraint-id>
+uv run career-agent constraints reject <constraint-id>
+uv run career-agent constraints archive <constraint-id>
 ```
 
 ## Fact Review

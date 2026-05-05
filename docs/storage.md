@@ -92,6 +92,21 @@ Applying a review action calls deterministic Experience Fact services and record
 the returned `applied_fact_id`; canonical mutations remain in experience facts
 and fact change events.
 
+Scoped Constraints are stored as table-like JSON files:
+
+```text
+<data_dir>/
+  scoped_constraints/
+    scoped_constraints.json
+  snapshots/
+    scoped_constraints/
+      <timestamp>-scoped_constraints.json
+```
+
+Scoped constraints store global, role, and fact rules or preferences. They are
+shared guardrails for later workflows, not owned by a single review or document
+generation component.
+
 Source Analysis artifacts are stored as table-like JSON files:
 
 ```text

@@ -25,12 +25,14 @@ from career_agent.errors import (
     InvalidFactReviewThreadStatusTransitionError,
     InvalidFactStatusTransitionError,
     InvalidLLMOutputError,
+    InvalidScopedConstraintStatusTransitionError,
     InvalidSourceFindingStatusTransitionError,
     LLMClientError,
     LLMConfigurationError,
     NoUnanalyzedSourcesError,
     OpenClarificationQuestionsError,
     RoleNotFoundError,
+    ScopedConstraintNotFoundError,
     SourceFindingNotFoundError,
     SourceFindingsAlreadyExistError,
     SourceNotFoundError,
@@ -72,6 +74,14 @@ from career_agent.fact_review.service import FactReviewService
 from career_agent.role_sources.models import RoleSourceEntry
 from career_agent.role_sources.repository import RoleSourceRepository
 from career_agent.role_sources.service import RoleSourceService
+from career_agent.scoped_constraints.models import (
+    ConstraintScopeType,
+    ConstraintType,
+    ScopedConstraint,
+    ScopedConstraintStatus,
+)
+from career_agent.scoped_constraints.repository import ScopedConstraintRepository
+from career_agent.scoped_constraints.service import ScopedConstraintService
 from career_agent.source_analysis.models import (
     ClarificationMessageAuthor,
     SourceAnalysisRun,
@@ -98,6 +108,7 @@ preferences_app = typer.Typer(help="Manage user preferences.")
 roles_app = typer.Typer(help="Manage experience roles.")
 sources_app = typer.Typer(help="Manage role source entries.")
 facts_app = typer.Typer(help="Manage canonical experience facts.")
+constraints_app = typer.Typer(help="Manage scoped constraints.")
 source_analysis_app = typer.Typer(help="Manage source analysis workflow artifacts.")
 analysis_runs_app = typer.Typer(help="Manage source analysis runs.")
 analysis_questions_app = typer.Typer(help="Manage source clarification questions.")
@@ -134,6 +145,11 @@ def sources_cli() -> None:
 @facts_app.callback()
 def facts_cli() -> None:
     """Commands for working with canonical experience facts."""
+
+
+@constraints_app.callback()
+def constraints_cli() -> None:
+    """Commands for working with scoped constraints."""
 
 
 @source_analysis_app.callback()
@@ -855,6 +871,160 @@ def delete_fact(
         raise typer.Exit(1)
 
     console.print("[green]Deleted experience fact.[/green]")
+
+
+@constraints_app.command("list")
+def list_constraints(
+    scope_type: ConstraintScopeType | None = typer.Option(None, help="Optional scope type."),
+    scope_id: str | None = typer.Option(None, help="Optional scope id."),
+    status: ScopedConstraintStatus | None = typer.Option(None, help="Optional constraint status."),
+) -> None:
+    """List scoped constraints."""
+
+    service = build_scoped_constraint_service()
+    constraints = service.list_constraints(
+        scope_type=scope_type,
+        scope_id=scope_id,
+        status=status,
+    )
+    if not constraints:
+        console.print("[yellow]No scoped constraints saved yet.[/yellow]")
+        return
+
+    render_scoped_constraint_list(constraints)
+
+
+@constraints_app.command("applicable")
+def list_applicable_constraints(
+    role_id: str | None = typer.Option(None, help="Optional role id."),
+    fact_id: str | None = typer.Option(None, help="Optional fact id."),
+) -> None:
+    """List active constraints that apply to a workflow context."""
+
+    service = build_scoped_constraint_service()
+    try:
+        constraints = service.list_applicable_constraints(role_id=role_id, fact_id=fact_id)
+    except (
+        FactNotFoundError,
+        FactRoleMismatchError,
+        RoleNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    if not constraints:
+        console.print("[yellow]No applicable scoped constraints saved yet.[/yellow]")
+        return
+
+    render_scoped_constraint_list(constraints)
+
+
+@constraints_app.command("add")
+def add_constraint(
+    scope_type: ConstraintScopeType = typer.Option(
+        ...,
+        help="Scope type: global, role, or fact.",
+    ),
+    constraint_type: ConstraintType = typer.Option(
+        ...,
+        help="Constraint type: hard_rule or preference.",
+    ),
+    rule_text: str = typer.Option(..., help="Rule or preference text."),
+    scope_id: str | None = typer.Option(
+        None,
+        help="Required for role and fact scopes. Must be omitted for global scope.",
+    ),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Workflow message id that caused this constraint. Can be provided more than once.",
+    ),
+) -> None:
+    """Add a proposed scoped constraint."""
+
+    service = build_scoped_constraint_service()
+    try:
+        constraint = service.add_constraint(
+            scope_type=scope_type,
+            constraint_type=constraint_type,
+            rule_text=rule_text,
+            scope_id=scope_id,
+            source_message_ids=source_message_ids,
+        )
+    except (
+        FactNotFoundError,
+        RoleNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save scoped constraint.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved scoped constraint.[/green]")
+    console.print(f"Constraint ID: {constraint.id}")
+
+
+@constraints_app.command("activate")
+def activate_constraint(
+    constraint_id: str = typer.Argument(..., help="Scoped constraint identifier."),
+) -> None:
+    """Activate a proposed scoped constraint."""
+
+    service = build_scoped_constraint_service()
+    try:
+        constraint = service.activate_constraint(constraint_id)
+    except (
+        InvalidScopedConstraintStatusTransitionError,
+        ScopedConstraintNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Activated scoped constraint.[/green]")
+    console.print(f"Constraint ID: {constraint.id}")
+
+
+@constraints_app.command("reject")
+def reject_constraint(
+    constraint_id: str = typer.Argument(..., help="Scoped constraint identifier."),
+) -> None:
+    """Reject a proposed scoped constraint."""
+
+    service = build_scoped_constraint_service()
+    try:
+        constraint = service.reject_constraint(constraint_id)
+    except (
+        InvalidScopedConstraintStatusTransitionError,
+        ScopedConstraintNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Rejected scoped constraint.[/green]")
+    console.print(f"Constraint ID: {constraint.id}")
+
+
+@constraints_app.command("archive")
+def archive_constraint(
+    constraint_id: str = typer.Argument(..., help="Scoped constraint identifier."),
+) -> None:
+    """Archive a scoped constraint."""
+
+    service = build_scoped_constraint_service()
+    try:
+        constraint = service.archive_constraint(constraint_id)
+    except (
+        InvalidScopedConstraintStatusTransitionError,
+        ScopedConstraintNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Archived scoped constraint.[/green]")
+    console.print(f"Constraint ID: {constraint.id}")
 
 
 @analysis_runs_app.command("list")
@@ -1637,6 +1807,20 @@ def build_experience_fact_service() -> ExperienceFactService:
     return ExperienceFactService(fact_repository, role_repository, source_repository)
 
 
+def build_scoped_constraint_service() -> ScopedConstraintService:
+    """Build the scoped constraint service from configured settings."""
+
+    settings = get_settings()
+    constraint_repository = ScopedConstraintRepository(settings.data_dir)
+    role_repository = ExperienceRoleRepository(settings.data_dir)
+    fact_repository = ExperienceFactRepository(settings.data_dir)
+    return ScopedConstraintService(
+        constraint_repository,
+        role_repository,
+        fact_repository,
+    )
+
+
 def build_source_analysis_service() -> SourceAnalysisService:
     """Build the source analysis service from configured settings."""
 
@@ -1876,6 +2060,33 @@ def render_fact_change_event_list(events: list[FactChangeEvent]) -> None:
     console.print(table)
 
 
+def render_scoped_constraint_list(constraints: list[ScopedConstraint]) -> None:
+    """Render scoped constraints as separated readable CLI blocks."""
+
+    console.print("[bold]Scoped Constraints[/bold]")
+    for index, constraint in enumerate(constraints, start=1):
+        constraint_details = Table.grid(expand=True, padding=(0, 2))
+        constraint_details.add_column(no_wrap=True, style="bold")
+        constraint_details.add_column(ratio=1)
+        constraint_details.add_row("Rule", constraint.rule_text)
+        constraint_details.add_row("ID", constraint.id)
+        constraint_details.add_row("Scope", constraint.scope_type.value)
+        constraint_details.add_row("Scope ID", constraint.scope_id or "-")
+        constraint_details.add_row("Type", constraint.constraint_type.value)
+        constraint_details.add_row("Status", constraint.status.value)
+        constraint_details.add_row(
+            "Source Message IDs",
+            ", ".join(constraint.source_message_ids) or "-",
+        )
+        console.print(
+            Panel(
+                constraint_details,
+                title=f"Constraint {index}",
+                expand=True,
+            )
+        )
+
+
 def render_source_analysis_run_list(runs: list[SourceAnalysisRun]) -> None:
     """Render source analysis runs as a compact CLI table."""
 
@@ -2071,6 +2282,7 @@ app.add_typer(preferences_app, name="preferences")
 app.add_typer(roles_app, name="roles")
 app.add_typer(sources_app, name="sources")
 app.add_typer(facts_app, name="facts")
+app.add_typer(constraints_app, name="constraints")
 app.add_typer(fact_review_app, name="fact-review")
 app.add_typer(experience_workflow_app, name="experience-workflow")
 source_analysis_app.add_typer(analysis_runs_app, name="runs")
