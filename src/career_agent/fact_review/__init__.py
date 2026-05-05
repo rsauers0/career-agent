@@ -1,5 +1,10 @@
 """Fact review models and workflows."""
 
+from career_agent.fact_review.action_generator import (
+    DeterministicFactReviewActionGenerator,
+    FactReviewActionGenerator,
+    GeneratedFactReviewAction,
+)
 from career_agent.fact_review.models import (
     FactReviewAction,
     FactReviewActionStatus,
@@ -14,7 +19,9 @@ from career_agent.fact_review.repository import FactReviewRepository
 from career_agent.fact_review.service import FactReviewService
 
 __all__ = [
+    "DeterministicFactReviewActionGenerator",
     "FactReviewAction",
+    "FactReviewActionGenerator",
     "FactReviewActionStatus",
     "FactReviewActionType",
     "FactReviewMessage",
@@ -24,4 +31,5 @@ __all__ = [
     "FactReviewService",
     "FactReviewThread",
     "FactReviewThreadStatus",
+    "GeneratedFactReviewAction",
 ]

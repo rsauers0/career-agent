@@ -7,11 +7,21 @@ from career_agent.errors import (
     ActiveFactReviewThreadExistsError,
     FactNotFoundError,
     FactReviewActionNotFoundError,
+    FactReviewActionsAlreadyExistError,
     FactReviewThreadNotFoundError,
+    FactRoleMismatchError,
     InvalidFactReviewActionStatusTransitionError,
     InvalidFactReviewThreadStatusTransitionError,
+    InvalidLLMOutputError,
+    RoleNotFoundError,
 )
 from career_agent.experience_facts.models import ExperienceFact, FactChangeActor
+from career_agent.experience_roles.models import ExperienceRole
+from career_agent.fact_review.action_generator import (
+    DeterministicFactReviewActionGenerator,
+    FactReviewActionGenerator,
+    GeneratedFactReviewAction,
+)
 from career_agent.fact_review.models import (
     FactReviewAction,
     FactReviewActionStatus,
@@ -116,8 +126,24 @@ class ExperienceFactMutationService(Protocol):
         ...
 
 
-class ScopedConstraintCreationService(Protocol):
+class ExperienceRoleLookupService(Protocol):
+    """Subset of ExperienceRoleService used by fact review action generation."""
+
+    def get_role(self, role_id: str) -> ExperienceRole | None:
+        """Return one saved role if it exists."""
+        ...
+
+
+class ScopedConstraintWorkflowService(Protocol):
     """Subset of ScopedConstraintService used by fact review actions."""
+
+    def list_applicable_constraints(
+        self,
+        role_id: str | None = None,
+        fact_id: str | None = None,
+    ) -> list[ScopedConstraint]:
+        """Return active constraints applicable to a role or fact context."""
+        ...
 
     def add_constraint(
         self,
@@ -137,12 +163,22 @@ class FactReviewService:
     def __init__(
         self,
         review_repository: FactReviewRepository,
+        role_service: ExperienceRoleLookupService,
         fact_service: ExperienceFactMutationService,
-        constraint_service: ScopedConstraintCreationService,
+        constraint_service: ScopedConstraintWorkflowService,
+        action_generator: FactReviewActionGenerator | None = None,
     ) -> None:
         self.review_repository = review_repository
+        self.role_service = role_service
         self.fact_service = fact_service
         self.constraint_service = constraint_service
+        self.action_generator = action_generator or DeterministicFactReviewActionGenerator()
+
+    @property
+    def action_generator_name(self) -> str:
+        """Return the display name for the configured action generator."""
+
+        return self.action_generator.generator_name
 
     def list_threads(
         self,
@@ -250,6 +286,79 @@ class FactReviewService:
         )
         self.review_repository.save_action(action)
         return action
+
+    def generate_actions(self, thread_id: str) -> list[FactReviewAction]:
+        """Generate structured action proposals for one open fact review thread."""
+
+        thread = self._get_required_thread(thread_id)
+        if thread.status != FactReviewThreadStatus.OPEN:
+            msg = (
+                f"Cannot generate fact review actions for thread {thread.id} "
+                f"while status is {thread.status.value}."
+            )
+            raise InvalidFactReviewThreadStatusTransitionError(msg)
+
+        existing_actions = self.review_repository.list_actions(thread_id=thread.id)
+        proposed_actions = [
+            action
+            for action in existing_actions
+            if action.status == FactReviewActionStatus.PROPOSED
+        ]
+        if proposed_actions:
+            action_ids = ", ".join(action.id for action in proposed_actions)
+            msg = f"Proposed fact review actions already exist for thread {thread.id}: {action_ids}"
+            raise FactReviewActionsAlreadyExistError(msg)
+
+        fact = self.fact_service.get_fact(thread.fact_id)
+        if fact is None:
+            msg = f"Experience fact does not exist: {thread.fact_id}"
+            raise FactNotFoundError(msg)
+        if fact.role_id != thread.role_id:
+            msg = f"Experience fact {fact.id} does not belong to role: {thread.role_id}"
+            raise FactRoleMismatchError(msg)
+
+        role = self.role_service.get_role(thread.role_id)
+        if role is None:
+            msg = f"Experience role does not exist: {thread.role_id}"
+            raise RoleNotFoundError(msg)
+
+        messages = self.review_repository.list_messages(thread.id)
+        constraints = self.constraint_service.list_applicable_constraints(
+            role_id=thread.role_id,
+            fact_id=thread.fact_id,
+        )
+        generated_actions = self.action_generator.generate_actions(
+            role=role,
+            fact=fact,
+            thread=thread,
+            messages=messages,
+            existing_actions=existing_actions,
+            constraints=constraints,
+        )
+        self._validate_generated_actions(
+            generated_actions=generated_actions,
+            messages=messages,
+        )
+
+        saved_actions: list[FactReviewAction] = []
+        for generated_action in generated_actions:
+            saved_actions.append(
+                self.add_action(
+                    thread_id=thread.id,
+                    action_type=generated_action.action_type,
+                    rationale=generated_action.rationale,
+                    source_message_ids=generated_action.source_message_ids,
+                    revised_text=generated_action.revised_text,
+                    source_ids=generated_action.source_ids,
+                    question_ids=generated_action.question_ids,
+                    message_ids=generated_action.message_ids,
+                    constraint_scope_type=generated_action.constraint_scope_type,
+                    constraint_scope_id=generated_action.constraint_scope_id,
+                    constraint_type=generated_action.constraint_type,
+                    rule_text=generated_action.rule_text,
+                )
+            )
+        return saved_actions
 
     def apply_action(
         self,
@@ -483,3 +592,66 @@ class FactReviewService:
             f"from {action.status.value} to {status.value}."
         )
         raise InvalidFactReviewActionStatusTransitionError(msg)
+
+    def _validate_generated_actions(
+        self,
+        generated_actions: list[GeneratedFactReviewAction],
+        messages: list[FactReviewMessage],
+    ) -> None:
+        """Validate generated action proposals against the review thread context."""
+
+        message_ids = {message.id for message in messages}
+        seen_keys: set[
+            tuple[
+                str,
+                str | None,
+                tuple[str, ...],
+                tuple[str, ...],
+                tuple[str, ...],
+                str | None,
+                str | None,
+                str | None,
+                str | None,
+            ]
+        ] = set()
+        for generated_action in generated_actions:
+            for message_id in generated_action.source_message_ids:
+                if message_id not in message_ids:
+                    msg = f"Generated action referenced unknown review message id: {message_id}"
+                    raise InvalidLLMOutputError(msg)
+
+            key = self._generated_action_key(generated_action)
+            if key in seen_keys:
+                msg = "Generated action proposals contain duplicates."
+                raise InvalidLLMOutputError(msg)
+            seen_keys.add(key)
+
+    def _generated_action_key(
+        self,
+        generated_action: GeneratedFactReviewAction,
+    ) -> tuple[
+        str,
+        str | None,
+        tuple[str, ...],
+        tuple[str, ...],
+        tuple[str, ...],
+        str | None,
+        str | None,
+        str | None,
+        str | None,
+    ]:
+        """Return a semantic duplicate key for a generated action proposal."""
+
+        return (
+            generated_action.action_type.value,
+            generated_action.revised_text,
+            tuple(generated_action.source_ids),
+            tuple(generated_action.question_ids),
+            tuple(generated_action.message_ids),
+            generated_action.constraint_scope_type.value
+            if generated_action.constraint_scope_type
+            else None,
+            generated_action.constraint_scope_id,
+            generated_action.constraint_type.value if generated_action.constraint_type else None,
+            generated_action.rule_text,
+        )

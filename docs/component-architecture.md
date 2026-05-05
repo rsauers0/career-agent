@@ -277,6 +277,7 @@ Current files:
 
 ```text
 src/career_agent/fact_review/
+  action_generator.py
   models.py
   repository.py
   service.py
@@ -309,6 +310,14 @@ Experience Fact services and record the returned `applied_fact_id`; Fact Change
 Events still record canonical fact mutations. Constraint actions call Scoped
 Constraint services, create proposed constraints, and record
 `applied_constraint_id` without activating the constraint.
+
+Fact Review action generation uses a `FactReviewActionGenerator` boundary.
+Generated actions are proposal models that become saved `FactReviewAction` rows
+only after the service validates the review thread, target fact, owning role,
+active applicable constraints, existing action state, and source review message
+references. Generation is blocked while any proposed action already exists for a
+thread. The current deterministic generator is for local workflow validation and
+only proposes actions from explicit message recommendation metadata.
 
 Only one open Fact Review thread may exist for a single fact at a time. Messages
 are append-only. Resolving or archiving a thread is an explicit status

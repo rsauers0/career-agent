@@ -338,6 +338,11 @@ flowchart LR
 | `FactChangeEvent` | `related_fact_id` | `ExperienceFact.id` | Event references another fact, usually revision-related. |
 | `FactChangeEvent` | `source_message_ids` | `SourceClarificationMessage.id` or `FactReviewMessage.id` | Workflow messages that explain why the event happened. |
 
+Fact Review action generation does not add another table. A generated proposal is
+validated by the service and then saved as a normal `FactReviewAction` row in
+`proposed` status. The generator reads the target fact, owning role, thread
+messages, existing thread actions, and applicable active scoped constraints.
+
 ## Source-To-Fact Reading
 
 The current model already has one canonical source-to-fact relationship:

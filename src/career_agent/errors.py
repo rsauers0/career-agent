@@ -93,6 +93,10 @@ class FactReviewActionNotFoundError(CareerAgentError):
     """Raised when a referenced fact review action does not exist."""
 
 
+class FactReviewActionsAlreadyExistError(CareerAgentError):
+    """Raised when proposed fact review actions already exist for a thread."""
+
+
 class ActiveFactReviewThreadExistsError(CareerAgentError):
     """Raised when an open fact review thread already exists for a fact."""
 

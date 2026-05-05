@@ -18,6 +18,7 @@ from career_agent.errors import (
     EvidenceReferenceRemovalError,
     FactNotFoundError,
     FactReviewActionNotFoundError,
+    FactReviewActionsAlreadyExistError,
     FactReviewThreadNotFoundError,
     FactRevisionNotAllowedError,
     FactRoleMismatchError,
@@ -1528,6 +1529,41 @@ def list_fact_review_actions(
     render_fact_review_action_list(actions)
 
 
+@fact_review_actions_app.command("generate")
+def generate_fact_review_actions(
+    thread_id: str = typer.Option(..., help="Existing fact review thread id."),
+) -> None:
+    """Generate structured action proposals for a fact review thread."""
+
+    try:
+        service = build_fact_review_service()
+        console.print(f"Action Generator: {service.action_generator_name}")
+        actions = service.generate_actions(thread_id)
+    except (
+        FactNotFoundError,
+        FactReviewActionsAlreadyExistError,
+        FactReviewThreadNotFoundError,
+        FactRoleMismatchError,
+        InvalidFactReviewThreadStatusTransitionError,
+        InvalidLLMOutputError,
+        RoleNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not generate fact review actions.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    if not actions:
+        console.print("[yellow]No fact review actions generated.[/yellow]")
+        return
+
+    console.print("[green]Generated fact review actions.[/green]")
+    console.print(f"Action IDs: {', '.join(action.id for action in actions)}")
+
+
 @fact_review_actions_app.command("add")
 def add_fact_review_action(
     thread_id: str = typer.Option(..., help="Existing fact review thread id."),
@@ -1869,9 +1905,15 @@ def build_fact_review_service() -> FactReviewService:
 
     settings = get_settings()
     review_repository = FactReviewRepository(settings.data_dir)
+    role_service = build_experience_role_service()
     fact_service = build_experience_fact_service()
     constraint_service = build_scoped_constraint_service()
-    return FactReviewService(review_repository, fact_service, constraint_service)
+    return FactReviewService(
+        review_repository,
+        role_service,
+        fact_service,
+        constraint_service,
+    )
 
 
 def build_experience_workflow_service() -> ExperienceWorkflowService:

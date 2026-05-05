@@ -130,6 +130,7 @@ Build collaborative review artifacts before richer draft fact revision workflows
 - append-only review messages linked to a review thread
 - message authors: assistant, user, or system
 - optional recommended action metadata
+- structured action generator boundary for review proposals
 - structured review actions linked to a review thread and target fact
 - thread lifecycle status: open, resolved, archived
 - action lifecycle status: proposed, applied, rejected, archived
@@ -142,6 +143,14 @@ types: activation, rejection, revision, evidence addition, and scoped constraint
 proposal. Fact mutation still goes through Experience Fact services and records
 Fact Change Events. Constraint proposal creates a proposed Scoped Constraint and
 does not activate it automatically.
+
+Generated review actions should be saved only as `proposed` actions. Generation
+should load the target fact, owning role, review messages, existing actions, and
+applicable active constraints before asking a generator for proposals. A thread
+with existing proposed actions should be resolved by applying, rejecting, or
+archiving those actions before another generation batch is created. The current
+deterministic generator is local workflow validation; richer semantic proposals
+belong behind the same generator boundary.
 
 Only one open Fact Review thread should exist per experience fact. Resolving or
 archiving a thread should be an explicit transition.
@@ -293,6 +302,7 @@ Source Analysis
 
 Fact Review
   -> model
+  -> action generator
   -> repository
   -> service
   -> CLI
@@ -321,10 +331,10 @@ LLM Boundary
   -> tests
 ```
 
-The immediate next foundation step is broader fact review orchestration: using
-review conversation to propose structured actions and scoped constraints, then
-routing those proposals through deterministic workflows. Split actions and LLM
-constraint extraction are still future work; current action application covers
-activation, rejection, revision, evidence addition, and creating proposed scoped
-constraints. Scoped constraints provide the shared storage target for durable
-rules and preferences.
+The immediate next foundation step is richer fact review orchestration behind
+the action generator boundary. Current generation can create proposed actions
+from explicit message recommendation metadata, and current action application
+covers activation, rejection, revision, evidence addition, and creating proposed
+scoped constraints. Split actions, LLM-backed action generation, and LLM
+constraint extraction are still future work. Scoped constraints provide the
+shared storage target for durable rules and preferences.

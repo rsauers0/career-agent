@@ -17,6 +17,7 @@ Current scope:
 - use JSON persistence first
 - keep TUI deferred while validating workflow behavior through the CLI
 - support opt-in LLM-backed source question and source finding generation through an OpenAI-compatible endpoint
+- support deterministic fact review action proposal generation for local workflow validation
 
 See [docs/v2-foundation-plan.md](docs/v2-foundation-plan.md) for the rebuild plan.
 See [docs/component-architecture.md](docs/component-architecture.md) for the current component architecture.
@@ -93,6 +94,7 @@ uv run career-agent fact-review threads start --fact-id <fact-id>
 Add and apply a structured fact review action:
 
 ```bash
+uv run career-agent fact-review actions generate --thread-id <thread-id>
 uv run career-agent fact-review actions add \
   --thread-id <thread-id> \
   --action-type revise_fact \

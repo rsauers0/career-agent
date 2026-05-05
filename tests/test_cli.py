@@ -2917,6 +2917,99 @@ def test_fact_review_actions_list_renders_actions(monkeypatch, tmp_path) -> None
     get_settings.cache_clear()
 
 
+def test_fact_review_actions_generate_writes_proposed_action(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Systems Analyst",
+            start_date="01/2020",
+            end_date="02/2024",
+        )
+    )
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Managed reporting workflows.",
+        )
+    )
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    repository.save_message(
+        FactReviewMessage(
+            id="review-message-1",
+            thread_id="thread-1",
+            author=FactReviewMessageAuthor.USER,
+            message_text="Looks good.",
+            recommended_action=FactReviewRecommendedAction.ACTIVATE_FACT,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "actions", "generate", "--thread-id", "thread-1"],
+    )
+
+    actions = repository.list_actions(thread_id="thread-1")
+
+    assert result.exit_code == 0
+    assert "Action Generator: deterministic" in result.output
+    assert "Generated fact review actions." in result.output
+    assert len(actions) == 1
+    assert actions[0].action_type == FactReviewActionType.ACTIVATE_FACT
+    assert actions[0].status == FactReviewActionStatus.PROPOSED
+    assert actions[0].source_message_ids == ["review-message-1"]
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_actions_generate_reports_existing_proposed_action(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    repository.save_action(
+        FactReviewAction(
+            id="action-1",
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ACTIVATE_FACT,
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "actions", "generate", "--thread-id", "thread-1"],
+    )
+
+    assert result.exit_code != 0
+    assert "Proposed fact review actions already exist" in result.output
+    assert "action-1" in result.output
+
+    get_settings.cache_clear()
+
+
 def test_fact_review_actions_apply_activates_fact(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))

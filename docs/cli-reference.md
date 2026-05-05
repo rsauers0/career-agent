@@ -22,6 +22,7 @@ uv run career-agent constraints applicable --help
 uv run career-agent fact-review --help
 uv run career-agent fact-review threads start --help
 uv run career-agent fact-review messages add --help
+uv run career-agent fact-review actions generate --help
 uv run career-agent fact-review actions add --help
 uv run career-agent fact-review actions apply --help
 uv run career-agent source-analysis --help
@@ -379,6 +380,18 @@ List review messages:
 ```bash
 uv run career-agent fact-review messages list --thread-id <thread-id>
 ```
+
+Generate structured review action proposals from an open review thread:
+
+```bash
+uv run career-agent fact-review actions generate --thread-id <thread-id>
+```
+
+Generated actions are saved as `proposed` actions only. Generation is blocked
+when proposed actions already exist for the thread, so the user can apply,
+reject, or archive the current action batch before requesting another one. The
+current deterministic generator only uses explicit message recommendation
+metadata for local workflow validation.
 
 Add a structured review action:
 

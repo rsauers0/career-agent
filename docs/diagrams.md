@@ -211,9 +211,12 @@ change events capture semantic fact mutations and lifecycle transitions, and
 snapshots remain file-level recovery artifacts.
 
 Fact Review messages are workflow evidence. Message recommendations do not
-mutate facts by themselves. Structured review actions can be applied, but they
-still call deterministic services for revision, rejection, activation, evidence
-updates, and proposed scoped constraint creation.
+mutate facts by themselves. The action generator can turn review context into
+proposed structured actions after loading the target fact, role, messages,
+existing actions, and applicable active constraints. Structured review actions
+can be applied, but they still call deterministic services for revision,
+rejection, activation, evidence updates, and proposed scoped constraint
+creation.
 
 ## LLM Boundary
 
@@ -223,7 +226,7 @@ instead of embedding provider calls directly in workflow services.
 
 ```mermaid
 flowchart LR
-    WorkflowGenerator["LLM Workflow Generators<br/>SourceQuestion + SourceFinding"]
+    WorkflowGenerator["LLM Workflow Generators<br/>SourceQuestion + SourceFinding<br/>FactReviewAction later"]
     Factory["Generator Factory<br/>base URL set = LLM<br/>base URL unset = deterministic"]
     Deterministic["Deterministic Generators<br/>local validation"]
     LLMClient["LLMClient protocol"]
@@ -231,7 +234,7 @@ flowchart LR
     OpenAIClient["OpenAICompatibleLLMClient<br/>opt-in via configuration"]
     Request["LLMRequest"]
     Response["LLMResponse"]
-    Contract["GeneratedSourceQuestion[] / GeneratedSourceFinding[]<br/>validated JSON contracts"]
+    Contract["GeneratedSourceQuestion[] / GeneratedSourceFinding[] / GeneratedFactReviewAction[]<br/>validated JSON contracts"]
 
     Factory --> Deterministic
     Factory --> WorkflowGenerator

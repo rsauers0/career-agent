@@ -4,14 +4,21 @@ from career_agent.errors import (
     ActiveFactReviewThreadExistsError,
     FactNotFoundError,
     FactReviewActionNotFoundError,
+    FactReviewActionsAlreadyExistError,
     FactReviewThreadNotFoundError,
     InvalidFactReviewActionStatusTransitionError,
     InvalidFactReviewThreadStatusTransitionError,
+    InvalidLLMOutputError,
+    RoleNotFoundError,
 )
 from career_agent.experience_facts.models import (
     ExperienceFact,
     ExperienceFactStatus,
     FactChangeActor,
+)
+from career_agent.experience_roles.models import ExperienceRole
+from career_agent.fact_review.action_generator import (
+    GeneratedFactReviewAction,
 )
 from career_agent.fact_review.models import (
     FactReviewAction,
@@ -28,6 +35,7 @@ from career_agent.scoped_constraints.models import (
     ConstraintScopeType,
     ConstraintType,
     ScopedConstraint,
+    ScopedConstraintStatus,
 )
 
 
@@ -178,9 +186,21 @@ class FakeExperienceFactService:
         return fact
 
 
+class FakeExperienceRoleService:
+    def __init__(self) -> None:
+        self.roles: dict[str, ExperienceRole] = {}
+
+    def get_role(self, role_id: str) -> ExperienceRole | None:
+        return self.roles.get(role_id)
+
+    def save(self, role: ExperienceRole) -> None:
+        self.roles[role.id] = role
+
+
 class FakeScopedConstraintService:
     def __init__(self) -> None:
         self.constraints: dict[str, ScopedConstraint] = {}
+        self.applicable_constraints: list[ScopedConstraint] = []
 
     def add_constraint(
         self,
@@ -200,6 +220,46 @@ class FakeScopedConstraintService:
         self.constraints[constraint.id] = constraint
         return constraint
 
+    def list_applicable_constraints(
+        self,
+        role_id: str | None = None,
+        fact_id: str | None = None,
+    ) -> list[ScopedConstraint]:
+        return [
+            constraint
+            for constraint in self.applicable_constraints
+            if constraint.status == ScopedConstraintStatus.ACTIVE
+        ]
+
+
+class FakeFactReviewActionGenerator:
+    generator_name = "fake"
+
+    def __init__(self, generated_actions: list[GeneratedFactReviewAction]) -> None:
+        self.generated_actions = generated_actions
+        self.calls: list[
+            tuple[
+                ExperienceRole,
+                ExperienceFact,
+                FactReviewThread,
+                list[FactReviewMessage],
+                list[FactReviewAction],
+                list[ScopedConstraint],
+            ]
+        ] = []
+
+    def generate_actions(
+        self,
+        role: ExperienceRole,
+        fact: ExperienceFact,
+        thread: FactReviewThread,
+        messages: list[FactReviewMessage],
+        existing_actions: list[FactReviewAction],
+        constraints: list[ScopedConstraint],
+    ) -> list[GeneratedFactReviewAction]:
+        self.calls.append((role, fact, thread, messages, existing_actions, constraints))
+        return self.generated_actions
+
 
 def build_fact(fact_id: str = "fact-1", role_id: str = "role-1") -> ExperienceFact:
     return ExperienceFact(
@@ -209,16 +269,27 @@ def build_fact(fact_id: str = "fact-1", role_id: str = "role-1") -> ExperienceFa
     )
 
 
+def build_role(role_id: str = "role-1") -> ExperienceRole:
+    return ExperienceRole(
+        id=role_id,
+        employer_name="Acme Analytics",
+        job_title="Systems Analyst",
+        start_date="01/2020",
+        end_date="02/2024",
+    )
+
+
 def build_service() -> tuple[
     FactReviewService,
     FakeFactReviewRepository,
     FakeExperienceFactService,
 ]:
     review_repository = FakeFactReviewRepository()
+    role_service = FakeExperienceRoleService()
     fact_service = FakeExperienceFactService()
     constraint_service = FakeScopedConstraintService()
     return (
-        FactReviewService(review_repository, fact_service, constraint_service),
+        FactReviewService(review_repository, role_service, fact_service, constraint_service),
         review_repository,
         fact_service,
     )
@@ -231,13 +302,45 @@ def build_service_with_constraint_service() -> tuple[
     FakeScopedConstraintService,
 ]:
     review_repository = FakeFactReviewRepository()
+    role_service = FakeExperienceRoleService()
     fact_service = FakeExperienceFactService()
     constraint_service = FakeScopedConstraintService()
     return (
-        FactReviewService(review_repository, fact_service, constraint_service),
+        FactReviewService(review_repository, role_service, fact_service, constraint_service),
         review_repository,
         fact_service,
         constraint_service,
+    )
+
+
+def build_service_with_generation(
+    generated_actions: list[GeneratedFactReviewAction],
+) -> tuple[
+    FactReviewService,
+    FakeFactReviewRepository,
+    FakeExperienceRoleService,
+    FakeExperienceFactService,
+    FakeScopedConstraintService,
+    FakeFactReviewActionGenerator,
+]:
+    review_repository = FakeFactReviewRepository()
+    role_service = FakeExperienceRoleService()
+    fact_service = FakeExperienceFactService()
+    constraint_service = FakeScopedConstraintService()
+    action_generator = FakeFactReviewActionGenerator(generated_actions)
+    return (
+        FactReviewService(
+            review_repository,
+            role_service,
+            fact_service,
+            constraint_service,
+            action_generator,
+        ),
+        review_repository,
+        role_service,
+        fact_service,
+        constraint_service,
+        action_generator,
     )
 
 
@@ -382,6 +485,123 @@ def test_fact_review_service_rejects_action_for_missing_thread() -> None:
             thread_id="thread-1",
             action_type=FactReviewActionType.ACTIVATE_FACT,
         )
+
+
+def test_fact_review_service_generates_actions_from_thread_context() -> None:
+    (
+        service,
+        review_repository,
+        role_service,
+        fact_service,
+        constraint_service,
+        action_generator,
+    ) = build_service_with_generation(
+        [
+            GeneratedFactReviewAction(
+                action_type=FactReviewActionType.REVISE_FACT,
+                rationale="User supplied clearer wording.",
+                source_message_ids=["review-message-1"],
+                revised_text="Managed reporting workflows for leadership review.",
+            )
+        ]
+    )
+    role = build_role()
+    fact = build_fact()
+    role_service.save(role)
+    fact_service.save(fact)
+    constraint = ScopedConstraint(
+        id="constraint-1",
+        scope_type=ConstraintScopeType.FACT,
+        scope_id="fact-1",
+        constraint_type=ConstraintType.HARD_RULE,
+        rule_text="Do not imply enterprise-wide scope.",
+        status=ScopedConstraintStatus.ACTIVE,
+    )
+    constraint_service.applicable_constraints = [constraint]
+    thread = service.start_thread("fact-1")
+    message = FactReviewMessage(
+        id="review-message-1",
+        thread_id=thread.id,
+        author=FactReviewMessageAuthor.USER,
+        message_text="Please make the scope clearer.",
+    )
+    review_repository.save_message(message)
+
+    actions = service.generate_actions(thread.id)
+
+    assert len(actions) == 1
+    assert actions[0].action_type == FactReviewActionType.REVISE_FACT
+    assert actions[0].status == FactReviewActionStatus.PROPOSED
+    assert actions[0].fact_id == "fact-1"
+    assert actions[0].role_id == "role-1"
+    assert actions[0].source_message_ids == ["review-message-1"]
+    assert actions[0].revised_text == "Managed reporting workflows for leadership review."
+    assert review_repository.get_action(actions[0].id) == actions[0]
+    assert len(action_generator.calls) == 1
+    call = action_generator.calls[0]
+    assert call[0] == role
+    assert call[1] == fact
+    assert call[2] == thread
+    assert call[3] == [message]
+    assert call[4] == []
+    assert call[5] == [constraint]
+
+
+def test_fact_review_service_generate_actions_allows_empty_generator_output() -> None:
+    service, _review_repository, role_service, fact_service, _constraint_service, _generator = (
+        build_service_with_generation([])
+    )
+    role_service.save(build_role())
+    fact_service.save(build_fact())
+    thread = service.start_thread("fact-1")
+
+    assert service.generate_actions(thread.id) == []
+
+
+def test_fact_review_service_generate_actions_rejects_existing_proposed_actions() -> None:
+    service, _review_repository, role_service, fact_service, _constraint_service, _generator = (
+        build_service_with_generation([])
+    )
+    role_service.save(build_role())
+    fact_service.save(build_fact())
+    thread = service.start_thread("fact-1")
+    action = service.add_action(
+        thread_id=thread.id,
+        action_type=FactReviewActionType.ACTIVATE_FACT,
+    )
+
+    with pytest.raises(FactReviewActionsAlreadyExistError, match=action.id):
+        service.generate_actions(thread.id)
+
+
+def test_fact_review_service_generate_actions_rejects_missing_role() -> None:
+    service, _review_repository, _role_service, fact_service, _constraint_service, _generator = (
+        build_service_with_generation([])
+    )
+    fact_service.save(build_fact())
+    thread = service.start_thread("fact-1")
+
+    with pytest.raises(RoleNotFoundError, match="role-1"):
+        service.generate_actions(thread.id)
+
+
+def test_fact_review_service_generate_actions_rejects_unknown_review_message_id() -> None:
+    service, _review_repository, role_service, fact_service, _constraint_service, _generator = (
+        build_service_with_generation(
+            [
+                GeneratedFactReviewAction(
+                    action_type=FactReviewActionType.ACTIVATE_FACT,
+                    source_message_ids=["missing-message"],
+                )
+            ]
+        )
+    )
+    role_service.save(build_role())
+    fact_service.save(build_fact())
+    thread = service.start_thread("fact-1")
+
+    with pytest.raises(InvalidLLMOutputError, match="missing-message"):
+        service.generate_actions(thread.id)
 
 
 def test_fact_review_service_applies_activate_action() -> None:
