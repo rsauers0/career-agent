@@ -68,7 +68,7 @@ lists for systems/skills/functions, revision links, lifecycle status, and
 timestamps.
 
 Fact change events record semantic history for experience facts, including the
-event type, actor, summary, source message ids, status transition, related fact
+event type, actor, summary, workflow message ids, status transition, related fact
 id, and timestamp.
 
 Fact Review artifacts are stored as table-like JSON files:
@@ -78,15 +78,19 @@ Fact Review artifacts are stored as table-like JSON files:
   fact_review/
     fact_review_threads.json
     fact_review_messages.json
+    fact_review_actions.json
   snapshots/
     fact_review/
       <timestamp>-fact_review_threads.json
       <timestamp>-fact_review_messages.json
+      <timestamp>-fact_review_actions.json
 ```
 
 Fact review threads and messages preserve collaborative review history for draft
-and revised facts. Recommended actions are metadata only; they do not mutate
-canonical facts by themselves.
+and revised facts. Review actions are structured proposals from that history.
+Applying a review action calls deterministic Experience Fact services and records
+the returned `applied_fact_id`; canonical mutations remain in experience facts
+and fact change events.
 
 Source Analysis artifacts are stored as table-like JSON files:
 

@@ -17,9 +17,11 @@ from career_agent.errors import (
     ClarificationQuestionNotFoundError,
     EvidenceReferenceRemovalError,
     FactNotFoundError,
+    FactReviewActionNotFoundError,
     FactReviewThreadNotFoundError,
     FactRevisionNotAllowedError,
     FactRoleMismatchError,
+    InvalidFactReviewActionStatusTransitionError,
     InvalidFactReviewThreadStatusTransitionError,
     InvalidFactStatusTransitionError,
     InvalidLLMOutputError,
@@ -58,6 +60,8 @@ from career_agent.experience_workflow.service import (
     ExperienceWorkflowService,
 )
 from career_agent.fact_review.models import (
+    FactReviewAction,
+    FactReviewActionType,
     FactReviewMessage,
     FactReviewMessageAuthor,
     FactReviewRecommendedAction,
@@ -102,6 +106,7 @@ analysis_findings_app = typer.Typer(help="Manage structured source findings.")
 fact_review_app = typer.Typer(help="Manage fact review workflow artifacts.")
 fact_review_threads_app = typer.Typer(help="Manage fact review threads.")
 fact_review_messages_app = typer.Typer(help="Manage fact review messages.")
+fact_review_actions_app = typer.Typer(help="Manage structured fact review actions.")
 experience_workflow_app = typer.Typer(help="Run experience workflow harness commands.")
 console = Console()
 
@@ -149,6 +154,11 @@ def fact_review_threads_cli() -> None:
 @fact_review_messages_app.callback()
 def fact_review_messages_cli() -> None:
     """Commands for working with fact review messages."""
+
+
+@fact_review_actions_app.callback()
+def fact_review_actions_cli() -> None:
+    """Commands for working with structured fact review actions."""
 
 
 @analysis_runs_app.callback()
@@ -1331,6 +1341,155 @@ def add_fact_review_message(
     console.print(f"Message ID: {message.id}")
 
 
+@fact_review_actions_app.command("list")
+def list_fact_review_actions(
+    thread_id: str | None = typer.Option(None, help="Optional fact review thread id."),
+    fact_id: str | None = typer.Option(None, help="Optional fact id."),
+    role_id: str | None = typer.Option(None, help="Optional role id."),
+) -> None:
+    """List structured fact review actions."""
+
+    service = build_fact_review_service()
+    actions = service.list_actions(thread_id=thread_id, fact_id=fact_id, role_id=role_id)
+    if not actions:
+        console.print("[yellow]No fact review actions saved yet.[/yellow]")
+        return
+
+    render_fact_review_action_list(actions)
+
+
+@fact_review_actions_app.command("add")
+def add_fact_review_action(
+    thread_id: str = typer.Option(..., help="Existing fact review thread id."),
+    action_type: FactReviewActionType = typer.Option(
+        ...,
+        help="Action type: activate_fact, reject_fact, revise_fact, or add_evidence.",
+    ),
+    rationale: str | None = typer.Option(None, help="Rationale for the proposed action."),
+    source_message_ids: list[str] = typer.Option(
+        [],
+        "--source-message-id",
+        help="Fact review message id that caused this action. Can be provided more than once.",
+    ),
+    revised_text: str | None = typer.Option(
+        None,
+        help="Required replacement fact text for revise_fact actions.",
+    ),
+    source_ids: list[str] = typer.Option(
+        [],
+        "--source-id",
+        help="Role source id to add or preserve. Can be provided more than once.",
+    ),
+    question_ids: list[str] = typer.Option(
+        [],
+        "--question-id",
+        help="Clarification question id to add as evidence. Can be provided more than once.",
+    ),
+    message_ids: list[str] = typer.Option(
+        [],
+        "--message-id",
+        help="Clarification message id to add as evidence. Can be provided more than once.",
+    ),
+) -> None:
+    """Add a structured action proposal to a fact review thread."""
+
+    service = build_fact_review_service()
+    try:
+        action = service.add_action(
+            thread_id=thread_id,
+            action_type=action_type,
+            rationale=rationale,
+            source_message_ids=source_message_ids,
+            revised_text=revised_text,
+            source_ids=source_ids,
+            question_ids=question_ids,
+            message_ids=message_ids,
+        )
+    except FactReviewThreadNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save fact review action.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved fact review action.[/green]")
+    console.print(f"Action ID: {action.id}")
+
+
+@fact_review_actions_app.command("apply")
+def apply_fact_review_action(
+    action_id: str = typer.Argument(..., help="Fact review action identifier."),
+    actor: FactChangeActor = typer.Option(
+        FactChangeActor.SYSTEM,
+        help="Workflow actor recorded for the change event.",
+    ),
+) -> None:
+    """Apply one proposed fact review action through deterministic fact services."""
+
+    service = build_fact_review_service()
+    try:
+        action = service.apply_action(action_id, actor=actor)
+    except (
+        EvidenceReferenceRemovalError,
+        FactReviewActionNotFoundError,
+        FactNotFoundError,
+        FactRevisionNotAllowedError,
+        InvalidFactReviewActionStatusTransitionError,
+        InvalidFactStatusTransitionError,
+        RoleNotFoundError,
+        SourceNotFoundError,
+        SourceRoleMismatchError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Applied fact review action.[/green]")
+    console.print(f"Action ID: {action.id}")
+    console.print(f"Applied Fact ID: {action.applied_fact_id}")
+
+
+@fact_review_actions_app.command("reject")
+def reject_fact_review_action(
+    action_id: str = typer.Argument(..., help="Fact review action identifier."),
+) -> None:
+    """Reject one proposed fact review action."""
+
+    service = build_fact_review_service()
+    try:
+        action = service.reject_action(action_id)
+    except (
+        FactReviewActionNotFoundError,
+        InvalidFactReviewActionStatusTransitionError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Rejected fact review action.[/green]")
+    console.print(f"Action ID: {action.id}")
+
+
+@fact_review_actions_app.command("archive")
+def archive_fact_review_action(
+    action_id: str = typer.Argument(..., help="Fact review action identifier."),
+) -> None:
+    """Archive one fact review action."""
+
+    service = build_fact_review_service()
+    try:
+        action = service.archive_action(action_id)
+    except (
+        FactReviewActionNotFoundError,
+        InvalidFactReviewActionStatusTransitionError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Archived fact review action.[/green]")
+    console.print(f"Action ID: {action.id}")
+
+
 @experience_workflow_app.command("analyze-sources")
 def analyze_experience_sources(
     role_id: str = typer.Option(..., help="Existing experience role id."),
@@ -1499,8 +1658,8 @@ def build_fact_review_service() -> FactReviewService:
 
     settings = get_settings()
     review_repository = FactReviewRepository(settings.data_dir)
-    fact_repository = ExperienceFactRepository(settings.data_dir)
-    return FactReviewService(review_repository, fact_repository)
+    fact_service = build_experience_fact_service()
+    return FactReviewService(review_repository, fact_service)
 
 
 def build_experience_workflow_service() -> ExperienceWorkflowService:
@@ -1849,6 +2008,36 @@ def render_fact_review_message_list(messages: list[FactReviewMessage]) -> None:
         )
 
 
+def render_fact_review_action_list(actions: list[FactReviewAction]) -> None:
+    """Render fact review actions as separated readable CLI blocks."""
+
+    console.print("[bold]Fact Review Actions[/bold]")
+    for index, action in enumerate(actions, start=1):
+        action_details = Table.grid(expand=True, padding=(0, 2))
+        action_details.add_column(no_wrap=True, style="bold")
+        action_details.add_column(ratio=1)
+        action_details.add_row("Type", action.action_type.value)
+        action_details.add_row("Status", action.status.value)
+        action_details.add_row("ID", action.id)
+        action_details.add_row("Thread ID", action.thread_id)
+        action_details.add_row("Fact ID", action.fact_id)
+        action_details.add_row("Role ID", action.role_id)
+        action_details.add_row("Applied Fact ID", action.applied_fact_id or "-")
+        action_details.add_row("Rationale", action.rationale or "-")
+        action_details.add_row("Review Message IDs", ", ".join(action.source_message_ids) or "-")
+        action_details.add_row("Source IDs", ", ".join(action.source_ids) or "-")
+        action_details.add_row("Question IDs", ", ".join(action.question_ids) or "-")
+        action_details.add_row("Message IDs", ", ".join(action.message_ids) or "-")
+        action_details.add_row("Revised Text", action.revised_text or "-")
+        console.print(
+            Panel(
+                action_details,
+                title=f"Action {index}",
+                expand=True,
+            )
+        )
+
+
 def render_applied_source_finding_results(results: list[AppliedSourceFindingResult]) -> None:
     """Render source finding application results."""
 
@@ -1891,6 +2080,7 @@ source_analysis_app.add_typer(analysis_findings_app, name="findings")
 app.add_typer(source_analysis_app, name="source-analysis")
 fact_review_app.add_typer(fact_review_threads_app, name="threads")
 fact_review_app.add_typer(fact_review_messages_app, name="messages")
+fact_review_app.add_typer(fact_review_actions_app, name="actions")
 
 
 def main() -> None:

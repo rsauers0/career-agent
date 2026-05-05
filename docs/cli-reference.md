@@ -19,6 +19,8 @@ uv run career-agent facts revise --help
 uv run career-agent fact-review --help
 uv run career-agent fact-review threads start --help
 uv run career-agent fact-review messages add --help
+uv run career-agent fact-review actions add --help
+uv run career-agent fact-review actions apply --help
 uv run career-agent source-analysis --help
 uv run career-agent source-analysis runs start --help
 uv run career-agent source-analysis questions add --help
@@ -321,6 +323,36 @@ List review messages:
 uv run career-agent fact-review messages list --thread-id <thread-id>
 ```
 
+Add a structured review action:
+
+```bash
+uv run career-agent fact-review actions add \
+  --thread-id <thread-id> \
+  --action-type revise_fact \
+  --rationale "User clarified the wording." \
+  --source-message-id <review-message-id> \
+  --revised-text "Revised grounded fact text."
+```
+
+The first action types are `activate_fact`, `reject_fact`, `revise_fact`, and
+`add_evidence`. `revise_fact` requires `--revised-text`. `add_evidence` requires
+at least one `--source-id`, `--question-id`, or `--message-id`.
+
+List and apply review actions:
+
+```bash
+uv run career-agent fact-review actions list --thread-id <thread-id>
+uv run career-agent fact-review actions apply <action-id>
+uv run career-agent fact-review actions apply <action-id> --actor llm
+```
+
+Reject or archive review actions:
+
+```bash
+uv run career-agent fact-review actions reject <action-id>
+uv run career-agent fact-review actions archive <action-id>
+```
+
 Resolve or archive a review thread:
 
 ```bash
@@ -328,9 +360,11 @@ uv run career-agent fact-review threads resolve <thread-id>
 uv run career-agent fact-review threads archive <thread-id>
 ```
 
-Fact review messages are append-only workflow artifacts. Recommended actions are
-metadata only in the first implementation; they do not revise, reject, activate,
-or split facts by themselves.
+Fact review messages are append-only workflow artifacts. Recommended actions on
+messages are metadata. Structured review actions are separate records that can be
+applied through deterministic Experience Fact services. Applying an action
+records the resulting `applied_fact_id` and any canonical mutation is captured in
+Fact Change Events.
 
 ## Source Analysis
 

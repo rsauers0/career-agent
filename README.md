@@ -81,6 +81,16 @@ Start a fact review thread:
 uv run career-agent fact-review threads start --fact-id <fact-id>
 ```
 
+Add and apply a structured fact review action:
+
+```bash
+uv run career-agent fact-review actions add \
+  --thread-id <thread-id> \
+  --action-type revise_fact \
+  --revised-text "Revised grounded fact text."
+uv run career-agent fact-review actions apply <action-id>
+```
+
 Run source analysis for unanalyzed role sources:
 
 ```bash
@@ -152,7 +162,7 @@ The rebuild sequence is:
 3. Role Source model, JSON repository, service, CLI, and tests.
 4. Experience Fact model, JSON repository, service, CLI, and tests.
 5. Source Analysis model, JSON repository, service, CLI, and tests.
-6. Fact Review model, JSON repository, service, CLI, and tests.
+6. Fact Review threads, messages, actions, JSON repository, service, CLI, and tests.
 7. Experience Workflow service, CLI/dev command, and tests.
 8. TUI presentation once the workflow is stable.
 9. Optional FastAPI interface later, using the same application services.

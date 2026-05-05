@@ -130,13 +130,16 @@ Build collaborative review artifacts before richer draft fact revision workflows
 - append-only review messages linked to a review thread
 - message authors: assistant, user, or system
 - optional recommended action metadata
+- structured review actions linked to a review thread and target fact
 - thread lifecycle status: open, resolved, archived
+- action lifecycle status: proposed, applied, rejected, archived
 
 Fact Review is workflow evidence, not canonical career data. Review messages can
 recommend revising, adding evidence, splitting, rejecting, activating, or
-proposing constraints, but those recommendations should not mutate facts by
-themselves. Fact mutation still goes through deterministic Experience Fact
-services.
+proposing constraints, but those recommendations do not mutate facts by
+themselves. Structured review actions can apply the first deterministic action
+types: activation, rejection, revision, and evidence addition. Fact mutation
+still goes through Experience Fact services and records Fact Change Events.
 
 Only one open Fact Review thread should exist per experience fact. Resolving or
 archiving a thread should be an explicit transition.
@@ -188,7 +191,7 @@ User corrections may create scoped constraints. A single correction can produce 
 
 Constraint extraction should separate preferences from hard rules. The LLM may propose severity, but deterministic workflow and user approval decide what becomes active.
 
-Historical traceability should not be stored directly on the canonical fact. Messages preserve conversational rationale, snapshots preserve file-level backups, and fact change event records preserve semantic changes with an `actor`, event type, summary, source message ids, status transition, related fact id, and timestamp. Actor values are `user`, `llm`, and `system`; UI workflows should set actor from context rather than exposing it as an end-user control.
+Historical traceability should not be stored directly on the canonical fact. Messages preserve conversational rationale, snapshots preserve file-level backups, and fact change event records preserve semantic changes with an `actor`, event type, summary, workflow message ids, status transition, related fact id, and timestamp. Actor values are `user`, `llm`, and `system`; UI workflows should set actor from context rather than exposing it as an end-user control.
 
 Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, draft fact generation, drift checking, merge checking, clarification planning, and deterministic service transitions.
 
@@ -290,4 +293,8 @@ LLM Boundary
   -> tests
 ```
 
-The immediate next foundation step is applying fact review recommendations through deterministic workflows. That should likely start with assistant/user review messages recommending revision, evidence addition, split, rejection, activation, or constraint extraction while keeping actual fact mutation behind explicit service transitions.
+The immediate next foundation step is broader fact review orchestration: using
+review conversation to propose structured actions and constraints, then routing
+those proposals through deterministic workflows. Split actions and constraint
+extraction are still future work; current action application covers activation,
+rejection, revision, and evidence addition.

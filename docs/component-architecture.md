@@ -256,17 +256,24 @@ Examples of owned data:
 - append-only review messages
 - message authors: assistant, user, or system
 - optional recommended action metadata
+- structured review actions proposed from a thread
 - thread lifecycle status: open, resolved, archived
+- action lifecycle status: proposed, applied, rejected, archived
 
 Fact Review is workflow evidence, not canonical career data. It preserves the
 user/assistant collaboration history around draft facts without allowing review
 messages to mutate canonical fact text. Recommended actions such as
 `revise_fact`, `add_evidence`, `split_fact`, `reject_fact`, `activate_fact`, and
-`propose_constraint` are metadata only in the first implementation.
+`propose_constraint` remain message metadata. Structured review actions can apply
+the first deterministic action types: `revise_fact`, `add_evidence`,
+`reject_fact`, and `activate_fact`. Applying an action calls Experience Fact
+services and records the returned `applied_fact_id`; Fact Change Events still
+record the canonical mutation.
 
 Only one open Fact Review thread may exist for a single fact at a time. Messages
 are append-only. Resolving or archiving a thread is an explicit status
-transition, and fact activation remains a separate Experience Facts command.
+transition, and fact activation remains owned by Experience Facts even when
+started from a review action.
 
 ### Experience Workflow
 
@@ -411,7 +418,7 @@ Writing standards for normalized facts:
 
 Merge behavior should be conservative. Similar wording, similar metrics, or shared tools are not enough to combine facts. A generated fact should merge evidence only when it is clearly the same work, same project or process, same metric context, and same outcome.
 
-Fact history should stay separate from the canonical fact record. Messages capture the conversational why; snapshots provide file-level backup; a lightweight `FactChangeEvent` table captures semantic changes such as created, revised, activated, needs-clarification, returned-to-draft, rejected, archived, superseded, and evidence-added. Change events use `actor` for the responsible party with values `user`, `llm`, or `system`, and link back to source message ids when a user or LLM exchange caused the change. CLI exposes actor as developer/workflow harness metadata; later TUI or web interfaces should derive actor from workflow context rather than exposing it as an end-user choice.
+Fact history should stay separate from the canonical fact record. Messages capture the conversational why; snapshots provide file-level backup; a lightweight `FactChangeEvent` table captures semantic changes such as created, revised, activated, needs-clarification, returned-to-draft, rejected, archived, superseded, and evidence-added. Change events use `actor` for the responsible party with values `user`, `llm`, or `system`, and link back to workflow message ids when a user or LLM exchange caused the change. CLI exposes actor as developer/workflow harness metadata; later TUI or web interfaces should derive actor from workflow context rather than exposing it as an end-user choice.
 
 ### Scoped Constraints
 

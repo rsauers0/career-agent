@@ -2,6 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 from career_agent.fact_review.models import (
+    FactReviewAction,
+    FactReviewActionStatus,
+    FactReviewActionType,
     FactReviewMessage,
     FactReviewMessageAuthor,
     FactReviewRecommendedAction,
@@ -89,5 +92,88 @@ def test_fact_review_message_rejects_naive_timestamp() -> None:
             thread_id="thread-1",
             author=FactReviewMessageAuthor.USER,
             message_text="Looks good.",
+            created_at="2026-01-01T00:00:00",
+        )
+
+
+def test_fact_review_action_json_round_trip() -> None:
+    action = FactReviewAction(
+        thread_id="thread-1",
+        fact_id="fact-1",
+        role_id="role-1",
+        action_type=FactReviewActionType.REVISE_FACT,
+        rationale="User clarified the wording.",
+        source_message_ids=["message-1"],
+        revised_text="Managed reporting workflows.",
+    )
+
+    restored = FactReviewAction.model_validate_json(action.model_dump_json())
+
+    assert restored == action
+    assert restored.id
+    assert restored.status == FactReviewActionStatus.PROPOSED
+
+
+def test_fact_review_action_normalizes_text_and_list_fields() -> None:
+    action = FactReviewAction(
+        thread_id="  thread-1  ",
+        fact_id="  fact-1  ",
+        role_id="  role-1  ",
+        action_type=FactReviewActionType.ADD_EVIDENCE,
+        rationale="  Added source context.  ",
+        source_message_ids=["  message-1  ", ""],
+        source_ids=["  source-1  ", ""],
+        question_ids=["  question-1  "],
+        message_ids=["  clarification-message-1  "],
+    )
+
+    assert action.thread_id == "thread-1"
+    assert action.fact_id == "fact-1"
+    assert action.role_id == "role-1"
+    assert action.rationale == "Added source context."
+    assert action.source_message_ids == ["message-1"]
+    assert action.source_ids == ["source-1"]
+    assert action.question_ids == ["question-1"]
+    assert action.message_ids == ["clarification-message-1"]
+
+
+def test_fact_review_action_requires_revised_text_for_revise_fact() -> None:
+    with pytest.raises(ValidationError, match="revised_text is required"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.REVISE_FACT,
+        )
+
+
+def test_fact_review_action_requires_evidence_for_add_evidence() -> None:
+    with pytest.raises(ValidationError, match="at least one evidence reference"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ADD_EVIDENCE,
+        )
+
+
+def test_fact_review_action_requires_applied_fact_id_when_applied() -> None:
+    with pytest.raises(ValidationError, match="applied_fact_id is required"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ACTIVATE_FACT,
+            status=FactReviewActionStatus.APPLIED,
+        )
+
+
+def test_fact_review_action_rejects_naive_timestamps() -> None:
+    with pytest.raises(ValidationError, match="timestamp values must be timezone-aware"):
+        FactReviewAction(
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ACTIVATE_FACT,
             created_at="2026-01-01T00:00:00",
         )

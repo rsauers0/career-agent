@@ -52,6 +52,7 @@ storage shape is:
   fact_review/
     fact_review_threads.json
     fact_review_messages.json
+    fact_review_actions.json
   source_analysis/
     analysis_runs.json
     clarification_questions.json
@@ -75,8 +76,8 @@ questions, message history, and source findings entered or generated during
 analysis, so it should be treated as career-sensitive local data.
 
 Fact Review data is also workflow evidence. It may include user corrections,
-assistant recommendations, and review notes about draft facts, so it should be
-treated as career-sensitive local data.
+assistant recommendations, structured review actions, and review notes about
+draft facts, so it should be treated as career-sensitive local data.
 
 ## Verification Commands
 

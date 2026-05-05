@@ -16,7 +16,7 @@ flowchart LR
     RoleSources["Role Sources<br/>Raw submitted evidence"]
     SourceAnalysis["Source Analysis<br/>Runs, questions,<br/>messages, findings"]
     ExperienceFacts["Experience Facts<br/>Canonical career facts"]
-    FactReview["Fact Review<br/>Threads and review messages"]
+    FactReview["Fact Review<br/>Threads, messages,<br/>and actions"]
 
     ExperienceRoles -->|"role_id"| RoleSources
     ExperienceRoles -->|"role_id"| SourceAnalysis
@@ -168,7 +168,7 @@ flowchart TD
     Orchestrator["LLM Orchestrator<br/>small structured steps"]
     Constraints["Scoped Constraints<br/>global, role, project, proposal"]
     DraftFacts["Draft Experience Facts<br/>grounded, generic, traceable"]
-    Review["Fact Review<br/>threads, messages,<br/>recommended actions"]
+    Review["Fact Review<br/>threads, messages,<br/>and actions"]
     Events["FactChangeEvent<br/>actor, event type,<br/>summary, message ids"]
     ActiveFacts["Active Experience Facts<br/>canonical evidence,<br/>reference lists"]
     Derived["Derived Evidence Indexes<br/>cross-role skills,<br/>systems, capabilities"]
@@ -180,8 +180,8 @@ flowchart TD
     Orchestrator -->|"create / revise"| DraftFacts
     DraftFacts --> Review
     Review -->|"corrections may create"| Constraints
-    Review -. "recommended action metadata" .-> Orchestrator
-    Review -->|"separate explicit transition"| ActiveFacts
+    Review -. "message recommendations" .-> Orchestrator
+    Review -->|"apply structured action"| ActiveFacts
     ActiveFacts -. "changes recorded in" .-> Events
     ActiveFacts --> Derived
     Derived --> Tailoring
@@ -207,9 +207,10 @@ History has separate responsibilities: messages capture conversational rationale
 change events capture semantic fact mutations and lifecycle transitions, and
 snapshots remain file-level recovery artifacts.
 
-Fact Review messages are workflow evidence. Recommended actions do not mutate
-facts by themselves; deterministic fact services still own revision, rejection,
-activation, and evidence updates.
+Fact Review messages are workflow evidence. Message recommendations do not
+mutate facts by themselves. Structured review actions can be applied, but they
+still call deterministic fact services for revision, rejection, activation, and
+evidence updates.
 
 ## LLM Boundary
 

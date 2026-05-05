@@ -40,10 +40,16 @@ flowchart LR
 
     Messages["FACT_REVIEW_MESSAGES<br/>id PK<br/>thread_id FK<br/>author<br/>message_text<br/>recommended_action<br/>created_at"]
 
+    Actions["FACT_REVIEW_ACTIONS<br/>id PK<br/>thread_id FK<br/>fact_id FK<br/>role_id FK<br/>action_type<br/>status<br/>rationale<br/>source_message_ids<br/>revised_text<br/>source_ids<br/>question_ids<br/>message_ids<br/>applied_fact_id FK<br/>created_at<br/>updated_at"]
+
     Roles -->|"role_id"| Facts
     Roles -->|"role_id"| Threads
+    Roles -->|"role_id"| Actions
     Facts -->|"fact_id"| Threads
+    Facts -->|"fact_id"| Actions
     Threads -->|"thread_id"| Messages
+    Threads -->|"thread_id"| Actions
+    Messages -. "source_message_ids" .-> Actions
 ```
 
 ## Source Analysis Data
@@ -155,7 +161,7 @@ flowchart LR
 | `event_type` | enum | | Created, revised, activated, rejected, etc. |
 | `actor` | enum | | `user`, `llm`, or `system`. |
 | `summary` | string/null | | Human-readable reason or note. |
-| `source_message_ids` | list[string] | `SourceClarificationMessage.id` | Messages that explain/support the change. |
+| `source_message_ids` | list[string] | `SourceClarificationMessage.id` or `FactReviewMessage.id` | Workflow messages that explain/support the change. |
 | `from_status` | enum/null | | Prior fact status, when applicable. |
 | `to_status` | enum/null | | New fact status, when applicable. |
 | `related_fact_id` | string/null | `ExperienceFact.id` | Related fact, often revision-related. |
@@ -184,6 +190,26 @@ flowchart LR
 | `message_text` | string | | Review message text. |
 | `recommended_action` | enum | | `revise_fact`, `add_evidence`, `split_fact`, `reject_fact`, `activate_fact`, `propose_constraint`, or `none`. |
 | `created_at` | datetime | | UTC timestamp. |
+
+### `fact_review_actions.json`
+
+| Column | Type | Relationship | Notes |
+| --- | --- | --- | --- |
+| `id` | string | Primary key. | Stable review action id. |
+| `thread_id` | string | `FactReviewThread.id` | Action belongs to one review thread. |
+| `fact_id` | string | `ExperienceFact.id` | Fact targeted by the action. |
+| `role_id` | string | `ExperienceRole.id` | Role scope for filtering. |
+| `action_type` | enum | | `activate_fact`, `reject_fact`, `revise_fact`, or `add_evidence`. |
+| `status` | enum | | `proposed`, `applied`, `rejected`, or `archived`. |
+| `rationale` | string/null | | Human-readable reason for the proposal. |
+| `source_message_ids` | list[string] | `FactReviewMessage.id` | Review messages that explain/support the action. |
+| `revised_text` | string/null | | Required for `revise_fact` actions. |
+| `source_ids` | list[string] | `RoleSourceEntry.id` | Sources to add or preserve when applying. |
+| `question_ids` | list[string] | `SourceClarificationQuestion.id` | Questions to add as evidence when applying. |
+| `message_ids` | list[string] | `SourceClarificationMessage.id` | Clarification messages to add as evidence when applying. |
+| `applied_fact_id` | string/null | `ExperienceFact.id` | Fact returned by deterministic action application. |
+| `created_at` | datetime | | UTC timestamp. |
+| `updated_at` | datetime | | UTC timestamp. |
 
 ## Source Analysis Tables
 
@@ -246,6 +272,11 @@ flowchart LR
 | `FactReviewThread` | `fact_id` | `ExperienceFact.id` | Review thread belongs to a fact. |
 | `FactReviewThread` | `role_id` | `ExperienceRole.id` | Review thread is scoped to a role. |
 | `FactReviewMessage` | `thread_id` | `FactReviewThread.id` | Message belongs to a review thread. |
+| `FactReviewAction` | `thread_id` | `FactReviewThread.id` | Action belongs to a review thread. |
+| `FactReviewAction` | `fact_id` | `ExperienceFact.id` | Action targets an experience fact. |
+| `FactReviewAction` | `role_id` | `ExperienceRole.id` | Action is scoped to a role. |
+| `FactReviewAction` | `source_message_ids` | `FactReviewMessage.id` | Review messages that explain/support the action. |
+| `FactReviewAction` | `applied_fact_id` | `ExperienceFact.id` | Fact returned by action application. |
 | `SourceAnalysisRun` | `role_id` | `ExperienceRole.id` | Analysis run is scoped to a role. |
 | `SourceAnalysisRun` | `source_ids` | `RoleSourceEntry.id` | Sources included in an analysis run. |
 | `SourceClarificationQuestion` | `analysis_run_id` | `SourceAnalysisRun.id` | Question belongs to an analysis run. |
@@ -264,7 +295,7 @@ flowchart LR
 | `FactChangeEvent` | `fact_id` | `ExperienceFact.id` | Event records a semantic change for a fact. |
 | `FactChangeEvent` | `role_id` | `ExperienceRole.id` | Event is scoped to a role. |
 | `FactChangeEvent` | `related_fact_id` | `ExperienceFact.id` | Event references another fact, usually revision-related. |
-| `FactChangeEvent` | `source_message_ids` | `SourceClarificationMessage.id` | Messages that explain why the event happened. |
+| `FactChangeEvent` | `source_message_ids` | `SourceClarificationMessage.id` or `FactReviewMessage.id` | Workflow messages that explain why the event happened. |
 
 ## Source-To-Fact Reading
 

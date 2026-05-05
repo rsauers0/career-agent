@@ -89,9 +89,17 @@ class FactReviewThreadNotFoundError(CareerAgentError):
     """Raised when a referenced fact review thread does not exist."""
 
 
+class FactReviewActionNotFoundError(CareerAgentError):
+    """Raised when a referenced fact review action does not exist."""
+
+
 class ActiveFactReviewThreadExistsError(CareerAgentError):
     """Raised when an open fact review thread already exists for a fact."""
 
 
 class InvalidFactReviewThreadStatusTransitionError(CareerAgentError):
     """Raised when a fact review thread status transition is not allowed."""
+
+
+class InvalidFactReviewActionStatusTransitionError(CareerAgentError):
+    """Raised when a fact review action status transition is not allowed."""

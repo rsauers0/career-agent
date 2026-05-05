@@ -180,7 +180,7 @@ class FactChangeEvent(BaseModel):
     )
     source_message_ids: list[str] = Field(
         default_factory=list,
-        description="Clarification message ids that caused or support this change.",
+        description="Workflow message ids that caused or support this change.",
     )
     from_status: ExperienceFactStatus | None = Field(
         default=None,

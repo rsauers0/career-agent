@@ -2,11 +2,18 @@ from typer.testing import CliRunner
 
 from career_agent.cli import app
 from career_agent.config import get_settings
-from career_agent.experience_facts.models import ExperienceFact, ExperienceFactStatus
+from career_agent.experience_facts.models import (
+    ExperienceFact,
+    ExperienceFactStatus,
+    FactChangeActor,
+)
 from career_agent.experience_facts.repository import ExperienceFactRepository
 from career_agent.experience_roles.models import ExperienceRole
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.fact_review.models import (
+    FactReviewAction,
+    FactReviewActionStatus,
+    FactReviewActionType,
     FactReviewMessage,
     FactReviewMessageAuthor,
     FactReviewRecommendedAction,
@@ -2555,5 +2562,181 @@ def test_fact_review_threads_resolve_and_archive(monkeypatch, tmp_path) -> None:
     assert archive_result.exit_code == 0
     assert "Archived fact review thread." in archive_result.output
     assert repository.get_thread("thread-1").status == FactReviewThreadStatus.ARCHIVED
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_actions_add_writes_action(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "fact-review",
+            "actions",
+            "add",
+            "--thread-id",
+            "thread-1",
+            "--action-type",
+            "revise_fact",
+            "--rationale",
+            "User clarified wording.",
+            "--source-message-id",
+            "review-message-1",
+            "--revised-text",
+            "Managed Power Platform reporting workflows.",
+            "--source-id",
+            "source-1",
+            "--question-id",
+            "question-1",
+            "--message-id",
+            "message-1",
+        ],
+    )
+
+    actions = repository.list_actions(thread_id="thread-1")
+
+    assert result.exit_code == 0
+    assert "Saved fact review action." in result.output
+    assert len(actions) == 1
+    assert actions[0].action_type == FactReviewActionType.REVISE_FACT
+    assert actions[0].status == FactReviewActionStatus.PROPOSED
+    assert actions[0].fact_id == "fact-1"
+    assert actions[0].role_id == "role-1"
+    assert actions[0].source_message_ids == ["review-message-1"]
+    assert actions[0].revised_text == "Managed Power Platform reporting workflows."
+    assert actions[0].source_ids == ["source-1"]
+    assert actions[0].question_ids == ["question-1"]
+    assert actions[0].message_ids == ["message-1"]
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_actions_list_renders_actions(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_action(
+        FactReviewAction(
+            id="action-1",
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ACTIVATE_FACT,
+            rationale="Fact is supported.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "actions", "list", "--thread-id", "thread-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Fact Review Actions" in result.output
+    assert "action-1" in result.output
+    assert "activate_fact" in result.output
+    assert "Fact is supported." in result.output
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_actions_apply_activates_fact(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Systems Analyst",
+            start_date="01/2020",
+            end_date="02/2024",
+        )
+    )
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Managed reporting workflows.",
+        )
+    )
+    repository = FactReviewRepository(tmp_path)
+    repository.save_thread(
+        FactReviewThread(
+            id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+        )
+    )
+    repository.save_action(
+        FactReviewAction(
+            id="action-1",
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ACTIVATE_FACT,
+            rationale="Fact is supported.",
+            source_message_ids=["review-message-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["fact-review", "actions", "apply", "action-1", "--actor", "llm"],
+    )
+
+    fact_repository = ExperienceFactRepository(tmp_path)
+    fact = fact_repository.get("fact-1")
+    action = repository.get_action("action-1")
+    events = fact_repository.list_change_events(fact_id="fact-1")
+
+    assert result.exit_code == 0
+    assert "Applied fact review action." in result.output
+    assert fact.status == ExperienceFactStatus.ACTIVE
+    assert action.status == FactReviewActionStatus.APPLIED
+    assert action.applied_fact_id == "fact-1"
+    assert events[-1].actor == FactChangeActor.LLM
+    assert events[-1].summary == "Fact is supported."
+    assert events[-1].source_message_ids == ["review-message-1"]
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_actions_reject_and_archive(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = FactReviewRepository(tmp_path)
+    repository.save_action(
+        FactReviewAction(
+            id="action-1",
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ACTIVATE_FACT,
+        )
+    )
+    runner = CliRunner()
+
+    reject_result = runner.invoke(app, ["fact-review", "actions", "reject", "action-1"])
+    archive_result = runner.invoke(app, ["fact-review", "actions", "archive", "action-1"])
+
+    assert reject_result.exit_code == 0
+    assert "Rejected fact review action." in reject_result.output
+    assert archive_result.exit_code == 0
+    assert "Archived fact review action." in archive_result.output
+    assert repository.get_action("action-1").status == FactReviewActionStatus.ARCHIVED
 
     get_settings.cache_clear()
