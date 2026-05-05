@@ -438,6 +438,12 @@ uv run career-agent fact-review actions apply <action-id>
 uv run career-agent fact-review actions apply <action-id> --actor llm
 ```
 
+Applying `activate_fact` actions routes through the workflow approval boundary
+before changing fact status. The current dummy approval service approves for
+local validation. If a future approval implementation rejects activation, the
+action moves to `rejected`, the approval rationale is printed, and the fact is
+unchanged.
+
 Reject or archive review actions:
 
 ```bash

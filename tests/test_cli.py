@@ -44,6 +44,23 @@ from career_agent.source_analysis.models import (
 from career_agent.source_analysis.repository import SourceAnalysisRepository
 from career_agent.user_preferences.models import UserPreferences, WorkArrangement
 from career_agent.user_preferences.repository import UserPreferencesRepository
+from career_agent.workflow_approval import (
+    WorkflowApprovalRequest,
+    WorkflowApprovalResult,
+    WorkflowApprovalStatus,
+)
+
+
+class RejectingWorkflowApprovalService:
+    def __init__(self) -> None:
+        self.requests: list[WorkflowApprovalRequest] = []
+
+    def request_approval(self, request: WorkflowApprovalRequest) -> WorkflowApprovalResult:
+        self.requests.append(request)
+        return WorkflowApprovalResult(
+            status=WorkflowApprovalStatus.REJECTED,
+            rationale="Activation requires another review.",
+        )
 
 
 def test_doctor_command_runs() -> None:
@@ -3068,6 +3085,63 @@ def test_fact_review_actions_apply_activates_fact(monkeypatch, tmp_path) -> None
     assert events[-1].actor == FactChangeActor.LLM
     assert events[-1].summary == "Fact is supported."
     assert events[-1].source_message_ids == ["review-message-1"]
+
+    get_settings.cache_clear()
+
+
+def test_fact_review_actions_apply_reports_rejected_activation_approval(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    approval_service = RejectingWorkflowApprovalService()
+    monkeypatch.setattr(
+        "career_agent.cli.build_workflow_approval_service",
+        lambda: approval_service,
+    )
+    ExperienceRoleRepository(tmp_path).save(
+        ExperienceRole(
+            id="role-1",
+            employer_name="Acme Analytics",
+            job_title="Systems Analyst",
+            start_date="01/2020",
+            end_date="02/2024",
+        )
+    )
+    ExperienceFactRepository(tmp_path).save(
+        ExperienceFact(
+            id="fact-1",
+            role_id="role-1",
+            text="Managed reporting workflows.",
+        )
+    )
+    repository = FactReviewRepository(tmp_path)
+    repository.save_action(
+        FactReviewAction(
+            id="action-1",
+            thread_id="thread-1",
+            fact_id="fact-1",
+            role_id="role-1",
+            action_type=FactReviewActionType.ACTIVATE_FACT,
+            rationale="Fact is supported.",
+            source_message_ids=["review-message-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["fact-review", "actions", "apply", "action-1"])
+
+    action = repository.get_action("action-1")
+    fact = ExperienceFactRepository(tmp_path).get("fact-1")
+
+    assert result.exit_code == 0
+    assert "Fact review action rejected by approval workflow." in result.output
+    assert "Activation requires another review." in result.output
+    assert action.status == FactReviewActionStatus.REJECTED
+    assert action.applied_fact_id is None
+    assert fact.status == ExperienceFactStatus.DRAFT
+    assert approval_service.requests[0].subject_id == "fact-1"
 
     get_settings.cache_clear()
 

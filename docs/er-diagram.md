@@ -345,6 +345,10 @@ messages, existing thread actions, and applicable active scoped constraints.
 When generation returns no actions, no rows are saved; the review thread remains
 open and the fact remains unchanged.
 
+Workflow approval currently does not add another table. Activation approval
+rejection is recorded by moving the `FactReviewAction` to `rejected` and storing
+the approval rationale on the action. The `ExperienceFact` remains unchanged.
+
 ## Source-To-Fact Reading
 
 The current model already has one canonical source-to-fact relationship:

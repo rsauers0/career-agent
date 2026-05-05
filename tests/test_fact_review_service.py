@@ -37,6 +37,11 @@ from career_agent.scoped_constraints.models import (
     ScopedConstraint,
     ScopedConstraintStatus,
 )
+from career_agent.workflow_approval import (
+    WorkflowApprovalRequest,
+    WorkflowApprovalResult,
+    WorkflowApprovalStatus,
+)
 
 
 class FakeFactReviewRepository:
@@ -261,6 +266,16 @@ class FakeFactReviewActionGenerator:
         return self.generated_actions
 
 
+class FakeWorkflowApprovalService:
+    def __init__(self, result: WorkflowApprovalResult) -> None:
+        self.result = result
+        self.requests: list[WorkflowApprovalRequest] = []
+
+    def request_approval(self, request: WorkflowApprovalRequest) -> WorkflowApprovalResult:
+        self.requests.append(request)
+        return self.result
+
+
 def build_fact(fact_id: str = "fact-1", role_id: str = "role-1") -> ExperienceFact:
     return ExperienceFact(
         id=fact_id,
@@ -341,6 +356,32 @@ def build_service_with_generation(
         fact_service,
         constraint_service,
         action_generator,
+    )
+
+
+def build_service_with_approval(
+    approval_service: FakeWorkflowApprovalService,
+) -> tuple[
+    FactReviewService,
+    FakeFactReviewRepository,
+    FakeExperienceFactService,
+    FakeWorkflowApprovalService,
+]:
+    review_repository = FakeFactReviewRepository()
+    role_service = FakeExperienceRoleService()
+    fact_service = FakeExperienceFactService()
+    constraint_service = FakeScopedConstraintService()
+    return (
+        FactReviewService(
+            review_repository,
+            role_service,
+            fact_service,
+            constraint_service,
+            approval_service=approval_service,
+        ),
+        review_repository,
+        fact_service,
+        approval_service,
     )
 
 
@@ -629,6 +670,71 @@ def test_fact_review_service_applies_activate_action() -> None:
             ["review-message-1"],
         )
     ]
+
+
+def test_fact_review_service_requests_approval_before_activation() -> None:
+    approval_service = FakeWorkflowApprovalService(
+        WorkflowApprovalResult(
+            status=WorkflowApprovalStatus.APPROVED,
+            rationale="Approved by test approval service.",
+        )
+    )
+    service, _review_repository, fact_service, approval_service = build_service_with_approval(
+        approval_service
+    )
+    fact_service.save(build_fact())
+    thread = service.start_thread("fact-1")
+    action = service.add_action(
+        thread_id=thread.id,
+        action_type=FactReviewActionType.ACTIVATE_FACT,
+        rationale="User confirmed this fact is ready.",
+        source_message_ids=["review-message-1"],
+    )
+
+    applied_action = service.apply_action(action.id, actor=FactChangeActor.LLM)
+
+    assert applied_action.status == FactReviewActionStatus.APPLIED
+    assert applied_action.applied_fact_id == "fact-1"
+    assert fact_service.get_fact("fact-1").status == ExperienceFactStatus.ACTIVE
+    assert len(approval_service.requests) == 1
+    request = approval_service.requests[0]
+    assert request.request_type.value == "fact_activation"
+    assert request.subject_id == "fact-1"
+    assert request.role_id == "role-1"
+    assert request.rationale == "User confirmed this fact is ready."
+    assert request.source_message_ids == ["review-message-1"]
+
+
+def test_fact_review_service_rejects_activate_action_when_approval_rejects() -> None:
+    approval_service = FakeWorkflowApprovalService(
+        WorkflowApprovalResult(
+            status=WorkflowApprovalStatus.REJECTED,
+            rationale="Activation requires another human review.",
+        )
+    )
+    service, review_repository, fact_service, _approval_service = build_service_with_approval(
+        approval_service
+    )
+    fact_service.save(build_fact())
+    thread = service.start_thread("fact-1")
+    action = service.add_action(
+        thread_id=thread.id,
+        action_type=FactReviewActionType.ACTIVATE_FACT,
+        rationale="User confirmed this fact is ready.",
+        source_message_ids=["review-message-1"],
+    )
+
+    rejected_action = service.apply_action(action.id, actor=FactChangeActor.LLM)
+
+    assert rejected_action.status == FactReviewActionStatus.REJECTED
+    assert rejected_action.applied_fact_id is None
+    assert rejected_action.rationale == (
+        "User confirmed this fact is ready.\n\n"
+        "Approval rejected: Activation requires another human review."
+    )
+    assert review_repository.get_action(action.id) == rejected_action
+    assert fact_service.get_fact("fact-1").status == ExperienceFactStatus.DRAFT
+    assert fact_service.calls == []
 
 
 def test_fact_review_service_applies_reject_action() -> None:

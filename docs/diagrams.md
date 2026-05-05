@@ -221,7 +221,10 @@ creation.
 No-action generation is valid. It leaves the review thread open and leaves the
 fact unchanged, which allows paused or exploratory review conversations to be
 resumed later. LLM-generated activation proposals should eventually pass through
-an approval/eval flow before application.
+an approval/eval flow before application. The current workflow approval boundary
+has a dummy implementation that approves for local validation. If a future
+approval flow rejects activation, the review action is rejected and the fact
+remains unchanged.
 
 ## LLM Boundary
 

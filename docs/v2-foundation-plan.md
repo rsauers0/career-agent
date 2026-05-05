@@ -168,8 +168,15 @@ no actions.
 One review turn may justify multiple proposed actions, such as `revise_fact`
 plus `propose_constraint`. `split_fact` remains recommendation metadata only
 until a deterministic split workflow exists. LLM-generated `activate_fact`
-proposals should later route through an approval/eval flow before application;
-until that flow exists, activation remains an explicit deterministic action.
+proposals should route through approval before changing fact status. The current
+service routes `activate_fact` application through a replaceable workflow
+approval boundary with one request type, `fact_activation`. The dummy approval
+implementation always approves for local workflow validation.
+
+If activation approval rejects, the proposed review action should move to
+`rejected`, the approval rationale should be recorded on the action, and the
+fact should remain unchanged. Approval rejection is workflow state, not an
+application crash and not the same as rejecting the fact itself.
 
 Only one open Fact Review thread should exist per experience fact. Resolving or
 archiving a thread should be an explicit transition.
@@ -327,6 +334,12 @@ Fact Review
   -> CLI
   -> tests
 
+Workflow Approval
+  -> request/result models
+  -> service protocol
+  -> dummy approval service
+  -> tests
+
 Scoped Constraints
   -> model
   -> repository
@@ -353,7 +366,7 @@ LLM Boundary
 The immediate next foundation step is richer fact review orchestration behind
 the action generator boundary. Current generation can create proposed actions
 from explicit message recommendation metadata, and current action application
-covers activation, rejection, revision, evidence addition, and creating proposed
-scoped constraints. Split actions, LLM-backed action generation, and LLM
-constraint extraction are still future work. Scoped constraints provide the
-shared storage target for durable rules and preferences.
+covers activation with dummy workflow approval, rejection, revision, evidence
+addition, and creating proposed scoped constraints. Split actions, LLM-backed
+action generation, and LLM constraint extraction are still future work. Scoped
+constraints provide the shared storage target for durable rules and preferences.

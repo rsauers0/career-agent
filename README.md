@@ -106,6 +106,8 @@ Fact review actions can also propose scoped constraints; applying that action
 creates a proposed constraint that still requires explicit activation.
 Generated review actions may also return no action, which leaves the review
 thread open and the fact unchanged so the conversation can be resumed later.
+Applying an `activate_fact` review action routes through the workflow approval
+boundary first; the current dummy approval service approves for local validation.
 
 Run source analysis for unanalyzed role sources:
 

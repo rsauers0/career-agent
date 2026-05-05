@@ -43,6 +43,26 @@ It parses command-line input, calls services, and renders output. It should not 
 
 Future interfaces such as a TUI or FastAPI API should call the same services rather than duplicating workflow logic.
 
+## Shared Workflow Boundaries
+
+### Workflow Approval
+
+Purpose: provides a replaceable approval/eval boundary for workflow decisions
+that should not be applied directly from an LLM proposal.
+
+Current files:
+
+```text
+src/career_agent/
+  workflow_approval.py
+```
+
+The current implementation has one approval request type, `fact_activation`,
+and a `DummyWorkflowApprovalService` that always approves for local workflow
+validation. This is intentionally small and replaceable. A future approval
+router can route requests by approval type and persist eval artifacts without
+changing the deterministic fact mutation services.
+
 ## Current Components
 
 ### User Preferences
@@ -330,8 +350,11 @@ unchanged.
 
 Generated `activate_fact` actions are still proposals. A future approval/eval
 flow should evaluate LLM-generated activation recommendations before they are
-applied. `split_fact` should remain message recommendation metadata until a
-deterministic split action exists.
+applied. The current service already routes `activate_fact` application through
+the workflow approval boundary. If approval rejects activation, the
+`FactReviewAction` moves to `rejected`, the approval rationale is recorded on the
+action, and the `ExperienceFact` remains unchanged. `split_fact` should remain
+message recommendation metadata until a deterministic split action exists.
 
 Only one open Fact Review thread may exist for a single fact at a time. Messages
 are append-only. Resolving or archiving a thread is an explicit status

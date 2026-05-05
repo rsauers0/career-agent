@@ -64,6 +64,7 @@ from career_agent.experience_workflow.service import (
 )
 from career_agent.fact_review.models import (
     FactReviewAction,
+    FactReviewActionStatus,
     FactReviewActionType,
     FactReviewMessage,
     FactReviewMessageAuthor,
@@ -100,6 +101,7 @@ from career_agent.user_preferences.models import (
 )
 from career_agent.user_preferences.repository import UserPreferencesRepository
 from career_agent.user_preferences.service import UserPreferencesService
+from career_agent.workflow_approval import DummyWorkflowApprovalService, WorkflowApprovalService
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -1675,6 +1677,13 @@ def apply_fact_review_action(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
 
+    if action.status == FactReviewActionStatus.REJECTED:
+        console.print("[yellow]Fact review action rejected by approval workflow.[/yellow]")
+        console.print(f"Action ID: {action.id}")
+        if action.rationale is not None:
+            console.print(f"Rationale: {action.rationale}")
+        return
+
     console.print("[green]Applied fact review action.[/green]")
     console.print(f"Action ID: {action.id}")
     if action.applied_fact_id is not None:
@@ -1884,6 +1893,12 @@ def build_scoped_constraint_service() -> ScopedConstraintService:
     )
 
 
+def build_workflow_approval_service() -> WorkflowApprovalService:
+    """Build the workflow approval service."""
+
+    return DummyWorkflowApprovalService()
+
+
 def build_source_analysis_service() -> SourceAnalysisService:
     """Build the source analysis service from configured settings."""
 
@@ -1913,6 +1928,7 @@ def build_fact_review_service() -> FactReviewService:
         role_service,
         fact_service,
         constraint_service,
+        approval_service=build_workflow_approval_service(),
     )
 
 

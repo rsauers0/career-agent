@@ -38,6 +38,13 @@ from career_agent.scoped_constraints.models import (
     ConstraintType,
     ScopedConstraint,
 )
+from career_agent.workflow_approval import (
+    DummyWorkflowApprovalService,
+    WorkflowApprovalRequest,
+    WorkflowApprovalRequestType,
+    WorkflowApprovalService,
+    WorkflowApprovalStatus,
+)
 
 ALLOWED_FACT_REVIEW_THREAD_STATUS_TRANSITIONS: dict[
     FactReviewThreadStatus,
@@ -167,12 +174,14 @@ class FactReviewService:
         fact_service: ExperienceFactMutationService,
         constraint_service: ScopedConstraintWorkflowService,
         action_generator: FactReviewActionGenerator | None = None,
+        approval_service: WorkflowApprovalService | None = None,
     ) -> None:
         self.review_repository = review_repository
         self.role_service = role_service
         self.fact_service = fact_service
         self.constraint_service = constraint_service
         self.action_generator = action_generator or DeterministicFactReviewActionGenerator()
+        self.approval_service = approval_service or DummyWorkflowApprovalService()
 
     @property
     def action_generator_name(self) -> str:
@@ -381,6 +390,28 @@ class FactReviewService:
             self.review_repository.save_action(applied_action)
             return applied_action
 
+        if action.action_type == FactReviewActionType.ACTIVATE_FACT:
+            approval_result = self.approval_service.request_approval(
+                WorkflowApprovalRequest(
+                    request_type=WorkflowApprovalRequestType.FACT_ACTIVATION,
+                    subject_id=action.fact_id,
+                    role_id=action.role_id,
+                    rationale=action.rationale,
+                    source_message_ids=action.source_message_ids,
+                )
+            )
+            if approval_result.status == WorkflowApprovalStatus.REJECTED:
+                rejected_action = self._build_action_update(
+                    action,
+                    status=FactReviewActionStatus.REJECTED,
+                    rationale=self._approval_rejection_rationale(
+                        action=action,
+                        approval_rationale=approval_result.rationale,
+                    ),
+                )
+                self.review_repository.save_action(rejected_action)
+                return rejected_action
+
         applied_fact = self._apply_fact_action(action=action, actor=actor)
         applied_action = self._build_action_update(
             action,
@@ -564,6 +595,7 @@ class FactReviewService:
         status: FactReviewActionStatus,
         applied_fact_id: str | None = None,
         applied_constraint_id: str | None = None,
+        rationale: str | None = None,
     ) -> FactReviewAction:
         """Build a validated copy of a fact review action with updated status."""
 
@@ -578,7 +610,21 @@ class FactReviewService:
             action_data["applied_fact_id"] = applied_fact_id
         if applied_constraint_id is not None:
             action_data["applied_constraint_id"] = applied_constraint_id
+        if rationale is not None:
+            action_data["rationale"] = rationale
         return FactReviewAction.model_validate(action_data)
+
+    def _approval_rejection_rationale(
+        self,
+        action: FactReviewAction,
+        approval_rationale: str | None,
+    ) -> str:
+        """Return rationale text that preserves the proposal and approval result."""
+
+        rejection_text = approval_rationale or "Approval workflow rejected activation."
+        if action.rationale is None:
+            return f"Approval rejected: {rejection_text}"
+        return f"{action.rationale}\n\nApproval rejected: {rejection_text}"
 
     def _raise_invalid_action_transition(
         self,
