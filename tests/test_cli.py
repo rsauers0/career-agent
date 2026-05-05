@@ -2937,6 +2937,7 @@ def test_fact_review_actions_list_renders_actions(monkeypatch, tmp_path) -> None
 def test_fact_review_actions_generate_writes_proposed_action(monkeypatch, tmp_path) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
     ExperienceRoleRepository(tmp_path).save(
         ExperienceRole(
             id="role-1",
@@ -2996,6 +2997,7 @@ def test_fact_review_actions_generate_reports_existing_proposed_action(
 ) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CAREER_AGENT_LLM_BASE_URL", "")
     repository = FactReviewRepository(tmp_path)
     repository.save_thread(
         FactReviewThread(

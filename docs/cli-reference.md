@@ -393,6 +393,10 @@ reject, or archive the current action batch before requesting another one. The
 current deterministic generator only uses explicit message recommendation
 metadata for local workflow validation.
 
+If `CAREER_AGENT_LLM_BASE_URL` is configured, this command uses the LLM-backed
+Fact Review action generator with `CAREER_AGENT_LLM_MODEL`. It does not use the
+extraction-specific LLM settings.
+
 Generation may return no actions. In that case the thread stays `open`, the fact
 is unchanged, and the same thread can be resumed later. Thread resolution remains
 an explicit command.

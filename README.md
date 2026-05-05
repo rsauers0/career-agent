@@ -16,8 +16,8 @@ Current scope:
 - maintain component boundaries for User Preferences, Experience Roles, Role Sources, Experience Facts, Scoped Constraints, Source Analysis, and Fact Review
 - use JSON persistence first
 - keep TUI deferred while validating workflow behavior through the CLI
-- support opt-in LLM-backed source question and source finding generation through an OpenAI-compatible endpoint
-- support deterministic fact review action proposal generation for local workflow validation
+- support opt-in LLM-backed source question, source finding, and fact review action generation through an OpenAI-compatible endpoint
+- keep deterministic generators available for local workflow validation when no LLM endpoint is configured
 
 See [docs/v2-foundation-plan.md](docs/v2-foundation-plan.md) for the rebuild plan.
 See [docs/component-architecture.md](docs/component-architecture.md) for the current component architecture.

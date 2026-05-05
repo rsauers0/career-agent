@@ -4,6 +4,7 @@ from career_agent.fact_review.action_generator import (
     DeterministicFactReviewActionGenerator,
     FactReviewActionGenerator,
     GeneratedFactReviewAction,
+    LLMFactReviewActionGenerator,
 )
 from career_agent.fact_review.models import (
     FactReviewAction,
@@ -32,4 +33,5 @@ __all__ = [
     "FactReviewThread",
     "FactReviewThreadStatus",
     "GeneratedFactReviewAction",
+    "LLMFactReviewActionGenerator",
 ]

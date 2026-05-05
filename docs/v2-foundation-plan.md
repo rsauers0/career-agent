@@ -363,10 +363,11 @@ LLM Boundary
   -> tests
 ```
 
-The immediate next foundation step is richer fact review orchestration behind
+The immediate next foundation step is richer fact review orchestration beyond
 the action generator boundary. Current generation can create proposed actions
-from explicit message recommendation metadata, and current action application
-covers activation with dummy workflow approval, rejection, revision, evidence
-addition, and creating proposed scoped constraints. Split actions, LLM-backed
-action generation, and LLM constraint extraction are still future work. Scoped
-constraints provide the shared storage target for durable rules and preferences.
+from explicit message recommendation metadata or LLM-backed review analysis,
+and current action application covers activation with dummy workflow approval,
+rejection, revision, evidence addition, and creating proposed scoped
+constraints. Split actions and richer LLM constraint extraction are still future
+work. Scoped constraints provide the shared storage target for durable rules and
+preferences.

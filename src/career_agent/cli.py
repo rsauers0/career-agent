@@ -55,6 +55,7 @@ from career_agent.experience_roles.models import (
 from career_agent.experience_roles.repository import ExperienceRoleRepository
 from career_agent.experience_roles.service import ExperienceRoleService
 from career_agent.experience_workflow.factory import (
+    build_fact_review_action_generator,
     build_source_finding_generator,
     build_source_question_generator,
 )
@@ -1548,6 +1549,8 @@ def generate_fact_review_actions(
         FactRoleMismatchError,
         InvalidFactReviewThreadStatusTransitionError,
         InvalidLLMOutputError,
+        LLMClientError,
+        LLMConfigurationError,
         RoleNotFoundError,
     ) as exc:
         console.print(f"[red]{exc}[/red]")
@@ -1923,11 +1926,13 @@ def build_fact_review_service() -> FactReviewService:
     role_service = build_experience_role_service()
     fact_service = build_experience_fact_service()
     constraint_service = build_scoped_constraint_service()
+    action_generator = build_fact_review_action_generator(settings)
     return FactReviewService(
         review_repository,
         role_service,
         fact_service,
         constraint_service,
+        action_generator=action_generator,
         approval_service=build_workflow_approval_service(),
     )
 

@@ -12,6 +12,11 @@ from career_agent.experience_workflow.question_generator import (
     LLMSourceQuestionGenerator,
     SourceQuestionGenerator,
 )
+from career_agent.fact_review.action_generator import (
+    DeterministicFactReviewActionGenerator,
+    FactReviewActionGenerator,
+    LLMFactReviewActionGenerator,
+)
 from career_agent.llm.openai_compatible_client import OpenAICompatibleLLMClient
 
 
@@ -61,3 +66,24 @@ def build_source_finding_generator(settings: Settings) -> SourceFindingGenerator
         default_model=model,
     )
     return LLMSourceFindingGenerator(llm_client=client, model=model)
+
+
+def build_fact_review_action_generator(settings: Settings) -> FactReviewActionGenerator:
+    """Build the configured fact review action generator."""
+
+    base_url = settings.llm_base_url
+    if base_url is None:
+        return DeterministicFactReviewActionGenerator()
+
+    model = settings.llm_model
+    if model is None:
+        msg = "CAREER_AGENT_LLM_MODEL is required for fact review action generation."
+        raise LLMConfigurationError(msg)
+
+    api_key = settings.llm_api_key
+    client = OpenAICompatibleLLMClient(
+        base_url=base_url,
+        api_key=api_key.get_secret_value() if api_key is not None else None,
+        default_model=model,
+    )
+    return LLMFactReviewActionGenerator(llm_client=client, model=model)

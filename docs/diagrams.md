@@ -234,7 +234,7 @@ instead of embedding provider calls directly in workflow services.
 
 ```mermaid
 flowchart LR
-    WorkflowGenerator["LLM Workflow Generators<br/>SourceQuestion + SourceFinding<br/>FactReviewAction later"]
+    WorkflowGenerator["LLM Workflow Generators<br/>SourceQuestion + SourceFinding<br/>FactReviewAction"]
     Factory["Generator Factory<br/>base URL set = LLM<br/>base URL unset = deterministic"]
     Deterministic["Deterministic Generators<br/>local validation"]
     LLMClient["LLMClient protocol"]

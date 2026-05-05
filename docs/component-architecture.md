@@ -341,12 +341,13 @@ only proposes actions from explicit message recommendation metadata.
 
 LLM-backed Fact Review action generation should use the default conversational
 LLM configuration (`CAREER_AGENT_LLM_MODEL`) instead of extraction-specific
-configuration. It operates on a small review context for one fact and should
-stay in fact-normalization mode, not resume-writing mode. A generator may return
-multiple actions when one review turn supports them, such as a `revise_fact`
-proposal plus a `propose_constraint` proposal. It may also return no actions; in
-that case no action rows are saved, the thread remains `open`, and the fact is
-unchanged.
+configuration. The LLM generator uses the same proposal boundary: strict JSON
+output is parsed into `GeneratedFactReviewAction` values, zero actions are valid,
+multiple actions are valid when supported, and every action must reference
+review message ids from the thread. It operates on a small review context for
+one fact and should stay in fact-normalization mode, not resume-writing mode.
+When no action is returned, no action rows are saved, the thread remains `open`,
+and the fact is unchanged.
 
 Generated `activate_fact` actions are still proposals. A future approval/eval
 flow should evaluate LLM-generated activation recommendations before they are
