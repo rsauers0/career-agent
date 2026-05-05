@@ -37,13 +37,20 @@ Each major component should be built in this order:
 6. TUI
    Present workflows only after the service and CLI behavior are clear.
 7. LLM workflow
-   Add AI behavior as structured proposals applied by deterministic services.
+   Add AI behavior as orchestrated, structured proposals applied by deterministic services.
 
 The LLM boundary is introduced before broader AI workflows. The first slice is a synchronous, provider-neutral `LLMClient` protocol with request/response models, a fake client for tests, and an opt-in OpenAI-compatible HTTP client.
 
 The OpenAI-compatible client remains opt-in through configuration. Tests should use mocked HTTP transport and should not make real network calls.
 
 Workflow wiring should default to deterministic local behavior when no LLM base URL is configured. Setting an LLM base URL opts supported workflows into the OpenAI-compatible client and requires a model.
+
+LLM workflow should not become a single opaque prompt that performs analysis,
+deduplication, fact generation, evals, and persistence at once. The project
+should use a separate orchestration layer that loads controlled state, calls
+narrow LLM steps, routes outputs to evals, retries with structured failure
+reports when appropriate, and then calls deterministic services for persistence
+or state transitions.
 
 ## Initial Component Order
 
@@ -206,9 +213,9 @@ The first scope types are `global`, `role`, and `fact`. Future scopes such as
 cover letter, resume, proposal, or project should be added only when persistent
 components exist for them.
 
-### 8. Experience AI Workflow Harness
+### 8. Experience Orchestration
 
-Build as CLI/dev workflow first:
+Build the real LLM workflow as CLI/dev orchestration first:
 
 - start or resume an experience role workflow
 - capture assistant/user transcript
@@ -224,6 +231,73 @@ Build as CLI/dev workflow first:
 - mark role reviewed only when validation passes
 
 The TUI should not drive this design. The CLI/dev harness should make every state transition visible, repeatable, and inspectable.
+
+The orchestration layer is domain workflow logic, not a replacement for the
+provider-neutral `llm/` client boundary and not a replacement for deterministic
+services. The layering rule is:
+
+```text
+LLM components analyze and propose.
+Eval components critique and validate.
+Orchestrators route, retry, and decide the next workflow step.
+Domain services persist and enforce deterministic rules.
+```
+
+The first orchestration component should continue the current component-folder
+pattern, for example:
+
+```text
+src/career_agent/experience_orchestration/
+  context.py
+  router.py
+  service.py
+  steps/
+  evals/
+```
+
+Do not refactor the project into broader package groups yet. The current
+component-per-state-object layout still makes ownership, persistence, service
+rules, CLI behavior, and tests easy to inspect. A higher-level package refactor
+can happen later after the Experience workflow is stable end to end.
+
+Each orchestrated LLM step should have a standard lifecycle:
+
+```text
+pending -> generated -> eval_failed -> regenerated -> accepted
+                                 -> needs_human_review
+```
+
+Every step should have a bounded retry budget. When evals fail, the orchestrator
+may send a structured failure report back to the LLM for another pass. If retry
+budget is exhausted, the orchestrator should persist a needs-review/failure
+artifact instead of mutating canonical data or looping indefinitely.
+
+Standard orchestration contracts should be defined before broad implementation:
+
+```text
+StepInput
+StepOutput
+EvalResult
+RetryRequest
+```
+
+The source-to-fact analysis process should be decomposed before improving the
+one-shot finding generator further:
+
+```text
+RoleSource
+  -> SourceSegment
+  -> SourceEvidenceItem
+  -> SourceFinding
+  -> ExperienceFact
+```
+
+`SourceSegment` and `SourceEvidenceItem` are planned analysis artifacts, not
+canonical career data. They should preserve exact evidence boundaries and
+structured extracted evidence before the workflow proposes findings or draft
+facts. `SourceFinding` remains the downstream comparison/proposal layer that
+decides whether evidence supports, revises, contradicts, duplicates, creates,
+or is unclear relative to existing facts.
 
 Question resolution should remain explicit. A future LLM workflow may recommend that a clarification thread is complete, but the workflow should call a deterministic transition that can later include eval approval.
 
@@ -255,7 +329,7 @@ Constraint extraction should separate preferences from hard rules. The LLM may p
 
 Historical traceability should not be stored directly on the canonical fact. Messages preserve conversational rationale, snapshots preserve file-level backups, and fact change event records preserve semantic changes with an `actor`, event type, summary, workflow message ids, status transition, related fact id, and timestamp. Actor values are `user`, `llm`, and `system`; UI workflows should set actor from context rather than exposing it as an end-user control.
 
-Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include response classification, constraint extraction, draft fact generation, drift checking, merge checking, clarification planning, and deterministic service transitions.
+Future LLM workflows should be orchestrated as a checklist of small structured tasks rather than one large prompt. Candidate steps include source routing, source segmentation, evidence extraction, response classification, constraint extraction, draft fact generation, drift checking, merge checking, clarification planning, and deterministic service transitions.
 
 ### 9. TUI
 
@@ -361,6 +435,13 @@ Experience Workflow
   -> CLI
   -> tests
 
+Experience Orchestration
+  -> planned context and routing layer
+  -> planned source segmentation
+  -> planned evidence extraction
+  -> planned eval/retry loop
+  -> planned deterministic service transitions
+
 LLM Boundary
   -> request/response models
   -> client protocol
@@ -369,11 +450,8 @@ LLM Boundary
   -> tests
 ```
 
-The immediate next foundation step is richer fact review orchestration beyond
-the action generator boundary. Current generation can create proposed actions
-from explicit message recommendation metadata or LLM-backed review analysis,
-and current action application covers activation with dummy workflow approval,
-rejection, revision, evidence addition, and creating proposed scoped
-constraints. Split actions and richer LLM constraint extraction are still future
-work. Scoped constraints provide the shared storage target for durable rules and
-preferences.
+The immediate next foundation step is Experience Orchestration. The current
+foundation can already move from roles and sources through source analysis,
+findings, draft facts, fact review, scoped constraints, and deterministic fact
+transitions. The next layer should decompose the real LLM analysis workflow into
+small routed steps with eval/retry behavior before adding more one-shot prompts.

@@ -4,9 +4,9 @@ Career Agent uses local JSON files, but the records are intentionally shaped lik
 database tables. This page shows the current persisted data model using smaller
 relationship diagrams instead of one dense ERD.
 
-The diagrams describe the current implementation, not the full future workflow.
-Several relationships are stored as list fields in JSON records rather than as
-separate join tables.
+The diagrams describe the current implementation unless a section is explicitly
+marked as planned. Several relationships are stored as list fields in JSON
+records rather than as separate join tables.
 
 ## Core Career Data
 
@@ -341,6 +341,70 @@ Archiving an active run does not mark sources analyzed.
 | `FactChangeEvent` | `role_id` | `ExperienceRole.id` | Event is scoped to a role. |
 | `FactChangeEvent` | `related_fact_id` | `ExperienceFact.id` | Event references another fact, usually revision-related. |
 | `FactChangeEvent` | `source_message_ids` | `SourceClarificationMessage.id` or `FactReviewMessage.id` | Workflow messages that explain why the event happened. |
+
+## Planned Orchestration Artifacts
+
+The next Experience Orchestration layer should decompose source-to-fact analysis
+before findings are proposed. These records are planned analysis artifacts, not
+current persisted tables and not canonical career data.
+
+```mermaid
+flowchart LR
+    Runs["SOURCE_ANALYSIS_RUNS<br/>id PK"]
+    Sources["ROLE_SOURCES<br/>id PK"]
+    Segments["SOURCE_SEGMENTS<br/>id PK<br/>analysis_run_id FK<br/>source_id FK<br/>sequence<br/>segment_kind<br/>segment_text<br/>status<br/>created_at<br/>updated_at"]
+    Evidence["SOURCE_EVIDENCE_ITEMS<br/>id PK<br/>analysis_run_id FK<br/>source_id FK<br/>segment_id FK<br/>evidence_text<br/>duties<br/>systems<br/>skills<br/>functions<br/>metrics<br/>outcomes<br/>scope_qualifiers<br/>uncertainty_notes<br/>status<br/>created_at<br/>updated_at"]
+    Findings["SOURCE_FINDINGS<br/>id PK<br/>analysis_run_id FK<br/>source_id FK<br/>fact_id FK/null"]
+    Facts["EXPERIENCE_FACTS<br/>id PK"]
+
+    Runs -->|"analysis_run_id"| Segments
+    Sources -->|"source_id"| Segments
+    Segments -->|"segment_id"| Evidence
+    Runs -->|"analysis_run_id"| Evidence
+    Sources -->|"source_id"| Evidence
+    Evidence -. "downstream comparison/proposal" .-> Findings
+    Findings -. "applied_fact_id after deterministic apply" .-> Facts
+```
+
+### Planned `source_segments.json`
+
+| Column | Type | Relationship | Notes |
+| --- | --- | --- | --- |
+| `id` | string | Primary key. | Stable segment id. |
+| `analysis_run_id` | string | `SourceAnalysisRun.id` | Segment belongs to one analysis run. |
+| `source_id` | string | `RoleSourceEntry.id` | Segment comes from one source. |
+| `sequence` | integer | | Source-order position for deterministic review. |
+| `segment_kind` | enum | | Planned values: list item, narrative, heading, mixed, unclear. |
+| `segment_text` | string | | Exact source excerpt or bounded source text. |
+| `status` | enum | | Planned lifecycle values. |
+| `created_at` | datetime | | UTC timestamp. |
+| `updated_at` | datetime | | UTC timestamp. |
+
+### Planned `source_evidence_items.json`
+
+| Column | Type | Relationship | Notes |
+| --- | --- | --- | --- |
+| `id` | string | Primary key. | Stable evidence item id. |
+| `analysis_run_id` | string | `SourceAnalysisRun.id` | Evidence belongs to one analysis run. |
+| `source_id` | string | `RoleSourceEntry.id` | Evidence comes from one source. |
+| `segment_id` | string | `SourceSegment.id` | Evidence is extracted from one segment. |
+| `evidence_text` | string | | Grounded evidence statement. |
+| `duties` | list[string] | | Extracted duties/responsibilities. |
+| `systems` | list[string] | | Extracted systems/platforms. |
+| `skills` | list[string] | | Extracted skills/tools/methods. |
+| `functions` | list[string] | | Extracted work functions. |
+| `metrics` | list[string] | | Exact supported metrics. |
+| `outcomes` | list[string] | | Supported outcomes/results. |
+| `scope_qualifiers` | list[string] | | Evidence-supported scope limits or context. |
+| `uncertainty_notes` | list[string] | | Missing, ambiguous, or conflict notes. |
+| `status` | enum | | Planned lifecycle values. |
+| `created_at` | datetime | | UTC timestamp. |
+| `updated_at` | datetime | | UTC timestamp. |
+
+The planned orchestration flow should use evals before persisting or applying
+downstream proposals. Failed evals can be sent back to the LLM as structured
+retry requests; exhausted retries should produce a needs-review artifact instead
+of mutating canonical data.
 
 Fact Review action generation does not add another table. A generated proposal is
 validated by the service and then saved as a normal `FactReviewAction` row in

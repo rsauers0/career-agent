@@ -420,6 +420,85 @@ Experience Workflow applies only accepted findings. `new_fact` creates draft fac
 
 Factory wiring selects deterministic generators when no LLM base URL is configured. If an LLM base URL is configured, it selects the LLM-backed generators and requires an LLM model. Extraction workflow settings can override the default LLM settings.
 
+### Experience Orchestration
+
+Purpose: defines the real LLM workflow layer for Experience analysis without
+turning source-to-fact analysis into one opaque prompt.
+
+Planned files:
+
+```text
+src/career_agent/experience_orchestration/
+  context.py
+  router.py
+  service.py
+  steps/
+  evals/
+```
+
+Current CLI group:
+
+```text
+planned
+```
+
+Experience Orchestration is separate from both the provider-neutral `llm/`
+component and the deterministic domain services. It should load controlled
+state through existing services, call narrow LLM steps, route outputs through
+evals, retry with structured failure reports when appropriate, and call
+deterministic services for persistence and state transitions.
+
+Layering rule:
+
+```text
+LLM components analyze and propose.
+Eval components critique and validate.
+Orchestrators route, retry, and decide the next workflow step.
+Domain services persist and enforce deterministic rules.
+```
+
+Each LLM step should use a standard contract shape:
+
+```text
+StepInput
+StepOutput
+EvalResult
+RetryRequest
+```
+
+Each step should also have a bounded lifecycle:
+
+```text
+pending -> generated -> eval_failed -> regenerated -> accepted
+                                 -> needs_human_review
+```
+
+When evals fail, the orchestrator may send the LLM a structured failure report
+that names failed checks, evidence excerpts, and required revision rules. If the
+retry budget is exhausted, the orchestrator should persist a needs-review or
+failure artifact instead of mutating canonical data.
+
+The first Experience Orchestration focus is source-to-fact decomposition:
+
+```text
+RoleSource
+  -> SourceSegment
+  -> SourceEvidenceItem
+  -> SourceFinding
+  -> ExperienceFact
+```
+
+`SourceSegment` and `SourceEvidenceItem` are planned analysis artifacts. They
+let smaller/local models work on narrow tasks before the workflow compares
+evidence to existing facts or proposes canonical draft facts. `SourceFinding`
+remains the downstream comparison/proposal artifact, and `ExperienceFact`
+remains the canonical normalized career data.
+
+The project should continue the current component-per-state-object folder
+structure while this workflow is still evolving. Broader package groups such as
+career, analysis, or document generation can be considered later after the
+Experience workflow is stable end to end.
+
 ### LLM Boundary
 
 Purpose: defines a provider-neutral completion boundary for AI-assisted workflows.
@@ -485,6 +564,11 @@ CLI / TUI / FastAPI / LLM workflow
 
 LLM behavior should produce structured proposals. Services should validate and apply those proposals deterministically.
 
+The LLM boundary is intentionally lower level than Experience Orchestration.
+`llm/` owns request/response models and provider transport. Domain
+orchestrators own routing, eval/retry behavior, and the decision to call
+deterministic services.
+
 ### Grounded Experience Evidence
 
 The next experience workflow layer should normalize analyzed source material into grounded experience facts before any resume-specific writing occurs.
@@ -493,7 +577,10 @@ Expected flow:
 
 ```text
 raw role source material
-  -> source analysis questions, messages, and findings
+  -> source analysis questions and messages
+  -> source segments
+  -> source evidence items
+  -> source findings
   -> draft experience facts
   -> fact review threads and messages
   -> active experience facts
@@ -540,6 +627,11 @@ Future LLM behavior should be orchestrated as small structured steps, not one la
 
 Candidate orchestration steps:
 
+- route source/data shape into an allowed step plan
+- segment source material into evidence boundaries
+- extract grounded evidence items from each segment
+- compare evidence items to existing facts
+- propose source findings from evaluated evidence
 - classify a user response as answer, correction, preference, constraint, rejection, or question
 - extract scoped constraints from user corrections and preferences
 - propose or revise normalized experience facts

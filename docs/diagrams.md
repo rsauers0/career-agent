@@ -177,9 +177,12 @@ experience facts before any persuasive resume or cover-letter writing happens.
 ```mermaid
 flowchart TD
     RawSources["Role Sources<br/>raw evidence"]
-    Analysis["Source Analysis<br/>questions, messages,<br/>and source findings"]
-    Orchestrator["LLM Orchestrator<br/>small structured steps"]
-    Constraints["Scoped Constraints<br/>global, role, project, proposal"]
+    Analysis["Source Analysis<br/>questions and messages"]
+    Segments["Source Segments<br/>exact evidence boundaries"]
+    Evidence["Source Evidence Items<br/>duties, metrics,<br/>systems, outcomes,<br/>scope qualifiers"]
+    Findings["Source Findings<br/>support, revise,<br/>contradict, duplicate,<br/>new, unclear"]
+    Orchestrator["Experience Orchestration<br/>route, eval, retry"]
+    Constraints["Scoped Constraints<br/>global, role, fact<br/>future scopes later"]
     DraftFacts["Draft Experience Facts<br/>grounded, generic, traceable"]
     Review["Fact Review<br/>threads, messages,<br/>and actions"]
     Events["FactChangeEvent<br/>actor, event type,<br/>summary, message ids"]
@@ -190,7 +193,10 @@ flowchart TD
     RawSources --> Analysis
     Analysis --> Orchestrator
     Constraints --> Orchestrator
-    Orchestrator -->|"create / revise"| DraftFacts
+    Orchestrator --> Segments
+    Segments --> Evidence
+    Evidence --> Findings
+    Findings -->|"accepted and applied"| DraftFacts
     DraftFacts --> Review
     Review -->|"corrections may create"| Constraints
     Review -. "message recommendations" .-> Orchestrator
@@ -212,9 +218,10 @@ tools do not prove that two facts describe the same work. Unclear merges should
 remain separate until the user or evidence confirms they belong together.
 
 Future LLM behavior should be orchestrated as narrow checklist steps, such as
-response classification, constraint extraction, draft fact generation, drift
-checking, merge checking, and clarification planning. Application services
-still own persistence and explicit state transitions.
+source routing, segmentation, evidence extraction, fact comparison, finding
+proposal, response classification, constraint extraction, draft fact generation,
+drift checking, merge checking, and clarification planning. Application
+services still own persistence and explicit state transitions.
 
 History has separate responsibilities: messages capture conversational rationale,
 change events capture semantic fact mutations and lifecycle transitions, and
@@ -236,7 +243,11 @@ has a dummy implementation that approves for local validation. If a future
 approval flow rejects activation, the review action is rejected and the fact
 remains unchanged.
 
-## LLM Boundary
+## LLM Boundary And Orchestration
+
+The LLM boundary owns provider-neutral completion calls. Experience
+Orchestration owns routing, eval/retry behavior, and deterministic service
+transitions.
 
 The current LLM boundary has a provider-neutral client protocol plus an opt-in
 OpenAI-compatible transport. Model-backed generators depend on this boundary
@@ -264,6 +275,45 @@ flowchart LR
     OpenAIClient --> Response
     Response --> Contract
 ```
+
+The planned orchestration layer decomposes source-to-fact analysis into narrow
+steps that can work with local or smaller models.
+
+```mermaid
+flowchart TD
+    Context["AnalysisRunContext<br/>role, sources,<br/>questions, messages,<br/>facts, constraints"]
+    Router["Orchestrator Router<br/>classify source/data shape<br/>choose allowed steps"]
+    Segmenter["LLM Step<br/>source segmentation"]
+    Extractor["LLM Step<br/>evidence extraction"]
+    Comparator["LLM Step<br/>fact comparison"]
+    Proposer["LLM Step<br/>finding proposal"]
+    Eval["Eval Steps<br/>schema, references,<br/>metrics, scope,<br/>merge safety, drift"]
+    Retry["Structured RetryRequest<br/>failed checks + excerpts<br/>revision rules"]
+    HumanReview["Needs Human Review<br/>persist failure artifact"]
+    Services["Deterministic Services<br/>SourceAnalysisService<br/>ExperienceFactService"]
+    Artifacts["Analysis Artifacts<br/>SourceSegment<br/>SourceEvidenceItem<br/>SourceFinding"]
+    Facts["ExperienceFact<br/>canonical data"]
+
+    Context --> Router
+    Router --> Segmenter
+    Segmenter --> Eval
+    Eval -->|"pass"| Extractor
+    Eval -->|"fail, retry budget remains"| Retry
+    Retry --> Segmenter
+    Eval -->|"fail, retry exhausted"| HumanReview
+    Extractor --> Eval
+    Eval -->|"pass"| Comparator
+    Comparator --> Eval
+    Eval -->|"pass"| Proposer
+    Proposer --> Eval
+    Eval -->|"accepted proposal"| Services
+    Services --> Artifacts
+    Services -->|"only deterministic apply"| Facts
+```
+
+The orchestration rule is: LLM components analyze and propose, eval components
+critique and validate, orchestrators route and retry, and domain services
+persist and enforce deterministic rules.
 
 ## Current Storage Shape
 
