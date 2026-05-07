@@ -425,11 +425,18 @@ Factory wiring selects deterministic generators when no LLM base URL is configur
 Purpose: defines the real LLM workflow layer for Experience analysis without
 turning source-to-fact analysis into one opaque prompt.
 
+Current files:
+
+```text
+src/career_agent/experience_orchestration/
+  models.py
+  context.py
+```
+
 Planned files:
 
 ```text
 src/career_agent/experience_orchestration/
-  context.py
   router.py
   service.py
   steps/
@@ -465,6 +472,11 @@ StepOutput
 EvalResult
 RetryRequest
 ```
+
+`AnalysisRunContext` carries portable workflow ids for the current source
+analysis run, role, sources, facts, active constraints, questions, and messages.
+It does not duplicate full domain records; orchestrators and services should
+load full objects through existing component services when needed.
 
 Each step should also have a bounded lifecycle:
 

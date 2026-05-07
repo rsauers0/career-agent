@@ -436,11 +436,12 @@ Experience Workflow
   -> tests
 
 Experience Orchestration
-  -> planned context and routing layer
+  -> context and contract models
   -> planned source segmentation
   -> planned evidence extraction
   -> planned eval/retry loop
   -> planned deterministic service transitions
+  -> tests
 
 LLM Boundary
   -> request/response models
