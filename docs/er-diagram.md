@@ -83,6 +83,8 @@ flowchart LR
 
     Messages["SOURCE_CLARIFICATION_MESSAGES<br/>id PK<br/>question_id FK<br/>author<br/>message_text<br/>created_at"]
 
+    Segments["SOURCE_SEGMENTS<br/>id PK<br/>analysis_run_id FK<br/>source_id FK<br/>sequence<br/>segment_kind<br/>segment_text<br/>status<br/>created_at<br/>updated_at"]
+
     Findings["SOURCE_FINDINGS<br/>id PK<br/>analysis_run_id FK<br/>role_id FK<br/>source_id FK<br/>fact_id FK<br/>finding_type<br/>proposed_fact_text<br/>rationale<br/>applied_fact_id FK<br/>status<br/>created_at<br/>updated_at"]
 
     Facts["EXPERIENCE_FACTS<br/>id PK"]
@@ -91,8 +93,10 @@ flowchart LR
     Roles -->|"role_id"| Runs
     Sources -. "source_ids on run<br/>included in analysis" .-> Runs
     Runs -->|"analysis_run_id"| Questions
+    Runs -->|"analysis_run_id"| Segments
     Runs -->|"analysis_run_id"| Findings
     Sources -. "relevant_source_ids on question<br/>motivated question" .-> Questions
+    Sources -->|"source_id"| Segments
     Sources -->|"source_id"| Findings
     Facts -. "fact_id when comparing<br/>existing facts" .-> Findings
     Findings -. "applied_fact_id after application" .-> Facts
@@ -106,10 +110,13 @@ flowchart LR
     Sources["ROLE_SOURCES<br/>raw source evidence"]
     Questions["SOURCE_CLARIFICATION_QUESTIONS<br/>clarification prompts"]
     Messages["SOURCE_CLARIFICATION_MESSAGES<br/>user / assistant / system turns"]
+    Segments["SOURCE_SEGMENTS<br/>bounded source excerpts"]
     Findings["SOURCE_FINDINGS<br/>structured analysis notes"]
     Facts["EXPERIENCE_FACTS<br/>canonical fact text<br/>source_ids<br/>question_ids<br/>message_ids"]
     Events["FACT_CHANGE_EVENTS<br/>semantic history<br/>source_message_ids"]
 
+    Sources -->|"segmented into source-order<br/>bounded excerpts"| Segments
+    Segments -->|"later evidence extraction<br/>and comparison"| Findings
     Sources -->|"analyzed into<br/>supports / revises / contradicts / new_fact"| Findings
     Findings -. "applied_fact_id after<br/>deterministic action" .-> Facts
     Sources -->|"source_ids<br/>supports accepted fact text"| Facts
@@ -288,6 +295,20 @@ Archiving an active run does not mark sources analyzed.
 | `message_text` | string | | Message text. |
 | `created_at` | datetime | | UTC timestamp. |
 
+### `source_segments.json`
+
+| Column | Type | Relationship | Notes |
+| --- | --- | --- | --- |
+| `id` | string | Primary key. | Stable segment id. |
+| `analysis_run_id` | string | `SourceAnalysisRun.id` | Segment belongs to one analysis run. |
+| `source_id` | string | `RoleSourceEntry.id` | Segment comes from one source. |
+| `sequence` | integer | | Source-order position; unique per analysis run and source id. |
+| `segment_kind` | enum | | `heading`, `list_item`, `paragraph`, `mixed`, or `unclear`. |
+| `segment_text` | string | | Exact source excerpt or bounded source text. |
+| `status` | enum | | `proposed`, `accepted`, `rejected`, or `archived`. |
+| `created_at` | datetime | | UTC timestamp. |
+| `updated_at` | datetime | | UTC timestamp. |
+
 ### `source_findings.json`
 
 | Column | Type | Relationship | Notes |
@@ -327,6 +348,8 @@ Archiving an active run does not mark sources analyzed.
 | `SourceClarificationQuestion` | `analysis_run_id` | `SourceAnalysisRun.id` | Question belongs to an analysis run. |
 | `SourceClarificationQuestion` | `relevant_source_ids` | `RoleSourceEntry.id` | Sources that motivated the question. |
 | `SourceClarificationMessage` | `question_id` | `SourceClarificationQuestion.id` | Message belongs to a question thread. |
+| `SourceSegment` | `analysis_run_id` | `SourceAnalysisRun.id` | Segment belongs to an analysis run. |
+| `SourceSegment` | `source_id` | `RoleSourceEntry.id` | Segment is bounded text from one source. |
 | `SourceFinding` | `analysis_run_id` | `SourceAnalysisRun.id` | Finding belongs to an analysis run. |
 | `SourceFinding` | `role_id` | `ExperienceRole.id` | Finding is scoped to a role. |
 | `SourceFinding` | `source_id` | `RoleSourceEntry.id` | Finding analyzes one source. |
@@ -345,8 +368,8 @@ Archiving an active run does not mark sources analyzed.
 ## Planned Orchestration Artifacts
 
 The next Experience Orchestration layer should decompose source-to-fact analysis
-before findings are proposed. These records are planned analysis artifacts, not
-current persisted tables and not canonical career data.
+before findings are proposed. `SourceSegment` is now a current Source Analysis
+table; `SourceEvidenceItem` is planned and not canonical career data.
 
 ```mermaid
 flowchart LR
@@ -365,20 +388,6 @@ flowchart LR
     Evidence -. "downstream comparison/proposal" .-> Findings
     Findings -. "applied_fact_id after deterministic apply" .-> Facts
 ```
-
-### Planned `source_segments.json`
-
-| Column | Type | Relationship | Notes |
-| --- | --- | --- | --- |
-| `id` | string | Primary key. | Stable segment id. |
-| `analysis_run_id` | string | `SourceAnalysisRun.id` | Segment belongs to one analysis run. |
-| `source_id` | string | `RoleSourceEntry.id` | Segment comes from one source. |
-| `sequence` | integer | | Source-order position for deterministic review. |
-| `segment_kind` | enum | | Planned values: list item, narrative, heading, mixed, unclear. |
-| `segment_text` | string | | Exact source excerpt or bounded source text. |
-| `status` | enum | | Planned lifecycle values. |
-| `created_at` | datetime | | UTC timestamp. |
-| `updated_at` | datetime | | UTC timestamp. |
 
 ### Planned `source_evidence_items.json`
 

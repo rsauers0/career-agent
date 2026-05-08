@@ -81,6 +81,18 @@ class InvalidSourceFindingStatusTransitionError(CareerAgentError):
     """Raised when a source finding status transition is not allowed."""
 
 
+class SourceSegmentNotFoundError(CareerAgentError):
+    """Raised when a referenced source segment does not exist."""
+
+
+class SourceSegmentSequenceExistsError(CareerAgentError):
+    """Raised when a segment sequence already exists for a run/source pair."""
+
+
+class InvalidSourceSegmentStatusTransitionError(CareerAgentError):
+    """Raised when a source segment status transition is not allowed."""
+
+
 class OpenClarificationQuestionsError(CareerAgentError):
     """Raised when a workflow requires closed clarification questions."""
 

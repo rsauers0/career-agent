@@ -9,12 +9,15 @@ from career_agent.errors import (
     FactRoleMismatchError,
     InvalidSourceAnalysisRunStatusTransitionError,
     InvalidSourceFindingStatusTransitionError,
+    InvalidSourceSegmentStatusTransitionError,
     OpenClarificationQuestionsError,
     RoleNotFoundError,
     SourceFindingNotFoundError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
+    SourceSegmentNotFoundError,
+    SourceSegmentSequenceExistsError,
     UnappliedAcceptedSourceFindingsError,
 )
 from career_agent.experience_facts.models import ExperienceFact
@@ -30,6 +33,9 @@ from career_agent.source_analysis.models import (
     SourceFinding,
     SourceFindingStatus,
     SourceFindingType,
+    SourceSegment,
+    SourceSegmentKind,
+    SourceSegmentStatus,
 )
 from career_agent.source_analysis.service import SourceAnalysisService
 
@@ -39,6 +45,7 @@ class FakeSourceAnalysisRepository:
         self.runs: dict[str, SourceAnalysisRun] = {}
         self.questions: dict[str, SourceClarificationQuestion] = {}
         self.messages: dict[str, SourceClarificationMessage] = {}
+        self.segments: dict[str, SourceSegment] = {}
         self.findings: dict[str, SourceFinding] = {}
 
     def list_runs(self, role_id: str | None = None) -> list[SourceAnalysisRun]:
@@ -74,6 +81,26 @@ class FakeSourceAnalysisRepository:
 
     def save_message(self, message: SourceClarificationMessage) -> None:
         self.messages[message.id] = message
+
+    def list_segments(
+        self,
+        analysis_run_id: str | None = None,
+        source_id: str | None = None,
+    ) -> list[SourceSegment]:
+        segments = list(self.segments.values())
+        if analysis_run_id is not None:
+            segments = [
+                segment for segment in segments if segment.analysis_run_id == analysis_run_id
+            ]
+        if source_id is not None:
+            segments = [segment for segment in segments if segment.source_id == source_id]
+        return segments
+
+    def get_segment(self, segment_id: str) -> SourceSegment | None:
+        return self.segments.get(segment_id)
+
+    def save_segment(self, segment: SourceSegment) -> None:
+        self.segments[segment.id] = segment
 
     def list_findings(
         self,
@@ -583,6 +610,196 @@ def test_source_analysis_service_rejects_status_change_for_missing_question() ->
 
     with pytest.raises(ClarificationQuestionNotFoundError, match="question-1"):
         service.skip_question("question-1")
+
+
+def test_source_analysis_service_adds_segment_to_run_source() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source())
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+
+    segment = service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Led a reporting automation project.",
+    )
+
+    assert segment.analysis_run_id == run.id
+    assert segment.source_id == "source-1"
+    assert segment.sequence == 1
+    assert segment.segment_kind == SourceSegmentKind.LIST_ITEM
+    assert segment.status == SourceSegmentStatus.PROPOSED
+    assert service.get_segment(segment.id) == segment
+    assert service.list_segments(analysis_run_id=run.id) == [segment]
+
+
+def test_source_analysis_service_filters_segments_by_run_and_source() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    run = service.start_run(role_id="role-1", source_ids=["source-1", "source-2"])
+    first_segment = service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Led a reporting automation project.",
+    )
+    second_segment = service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-2",
+        sequence=1,
+        segment_kind=SourceSegmentKind.PARAGRAPH,
+        segment_text="Built a service trend dashboard.",
+    )
+
+    assert service.list_segments(analysis_run_id=run.id) == [first_segment, second_segment]
+    assert service.list_segments(analysis_run_id=run.id, source_id="source-1") == [first_segment]
+
+
+def test_source_analysis_service_rejects_segment_for_missing_run() -> None:
+    service, _analysis_repository, _role_repository, _source_repository, _fact_repository = (
+        build_service()
+    )
+
+    with pytest.raises(AnalysisRunNotFoundError, match="run-1"):
+        service.add_segment(
+            analysis_run_id="run-1",
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Led a reporting automation project.",
+        )
+
+
+def test_source_analysis_service_rejects_segment_source_outside_run() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+
+    with pytest.raises(SourceNotInAnalysisRunError, match="source-2"):
+        service.add_segment(
+            analysis_run_id=run.id,
+            source_id="source-2",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Built a service trend dashboard.",
+        )
+
+
+def test_source_analysis_service_rejects_duplicate_segment_sequence() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source())
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+    service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Led a reporting automation project.",
+    )
+
+    with pytest.raises(SourceSegmentSequenceExistsError, match="sequence already exists"):
+        service.add_segment(
+            analysis_run_id=run.id,
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Built a service trend dashboard.",
+        )
+
+
+def test_source_analysis_service_allows_same_segment_sequence_for_different_source() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source(source_id="source-1"))
+    source_repository.save(build_source(source_id="source-2"))
+    run = service.start_run(role_id="role-1", source_ids=["source-1", "source-2"])
+
+    first_segment = service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Led a reporting automation project.",
+    )
+    second_segment = service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-2",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Built a service trend dashboard.",
+    )
+
+    assert first_segment.sequence == second_segment.sequence == 1
+
+
+def test_source_analysis_service_updates_segment_status_explicitly() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source())
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+    segment = service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Led a reporting automation project.",
+    )
+
+    accepted_segment = service.accept_segment(segment.id)
+    archived_segment = service.archive_segment(accepted_segment.id)
+
+    assert accepted_segment.status == SourceSegmentStatus.ACCEPTED
+    assert accepted_segment.updated_at >= segment.updated_at
+    assert archived_segment.status == SourceSegmentStatus.ARCHIVED
+
+
+def test_source_analysis_service_rejects_invalid_segment_status_transition() -> None:
+    service, _analysis_repository, role_repository, source_repository, _fact_repository = (
+        build_service()
+    )
+    role_repository.save(build_role())
+    source_repository.save(build_source())
+    run = service.start_run(role_id="role-1", source_ids=["source-1"])
+    segment = service.add_segment(
+        analysis_run_id=run.id,
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Led a reporting automation project.",
+    )
+    accepted_segment = service.accept_segment(segment.id)
+
+    with pytest.raises(InvalidSourceSegmentStatusTransitionError, match="Cannot transition"):
+        service.reject_segment(accepted_segment.id)
+
+
+def test_source_analysis_service_rejects_status_change_for_missing_segment() -> None:
+    service, _analysis_repository, _role_repository, _source_repository, _fact_repository = (
+        build_service()
+    )
+
+    with pytest.raises(SourceSegmentNotFoundError, match="segment-1"):
+        service.accept_segment("segment-1")
 
 
 def test_source_analysis_service_adds_new_fact_finding_for_run_source() -> None:

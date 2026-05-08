@@ -11,6 +11,9 @@ from career_agent.source_analysis.models import (
     SourceFinding,
     SourceFindingStatus,
     SourceFindingType,
+    SourceSegment,
+    SourceSegmentKind,
+    SourceSegmentStatus,
 )
 
 
@@ -171,6 +174,92 @@ def test_source_clarification_message_rejects_naive_timestamp() -> None:
             question_id="question-1",
             author=ClarificationMessageAuthor.USER,
             message_text="It reduced weekly manual reconciliation.",
+            created_at="2026-01-01T00:00:00",
+        )
+
+
+def test_source_segment_json_round_trip() -> None:
+    segment = SourceSegment(
+        analysis_run_id="run-1",
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.LIST_ITEM,
+        segment_text="- Led a reporting automation project.",
+        status=SourceSegmentStatus.ACCEPTED,
+    )
+
+    restored = SourceSegment.model_validate_json(segment.model_dump_json())
+
+    assert restored == segment
+    assert restored.id
+
+
+def test_source_segment_defaults_to_proposed() -> None:
+    segment = SourceSegment(
+        analysis_run_id="run-1",
+        source_id="source-1",
+        sequence=1,
+        segment_kind=SourceSegmentKind.PARAGRAPH,
+        segment_text="Led a reporting automation project.",
+    )
+
+    assert segment.status == SourceSegmentStatus.PROPOSED
+    assert segment.created_at.tzinfo is not None
+    assert segment.updated_at.tzinfo is not None
+
+
+def test_source_segment_normalizes_ids_but_preserves_exact_text() -> None:
+    segment = SourceSegment(
+        analysis_run_id="  run-1  ",
+        source_id="  source-1  ",
+        sequence=1,
+        segment_kind="list_item",
+        segment_text="  - Led a reporting automation project.\n",
+    )
+
+    assert segment.analysis_run_id == "run-1"
+    assert segment.source_id == "source-1"
+    assert segment.segment_kind == SourceSegmentKind.LIST_ITEM
+    assert segment.segment_text == "  - Led a reporting automation project.\n"
+
+
+def test_source_segment_requires_core_fields() -> None:
+    with pytest.raises(ValidationError):
+        SourceSegment(
+            analysis_run_id="",
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Led a reporting automation project.",
+        )
+
+    with pytest.raises(ValidationError):
+        SourceSegment(
+            analysis_run_id="run-1",
+            source_id="source-1",
+            sequence=0,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Led a reporting automation project.",
+        )
+
+    with pytest.raises(ValidationError, match="segment_text"):
+        SourceSegment(
+            analysis_run_id="run-1",
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="   ",
+        )
+
+
+def test_source_segment_rejects_naive_timestamps() -> None:
+    with pytest.raises(ValidationError, match="timezone-aware"):
+        SourceSegment(
+            analysis_run_id="run-1",
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Led a reporting automation project.",
             created_at="2026-01-01T00:00:00",
         )
 

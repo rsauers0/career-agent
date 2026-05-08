@@ -40,6 +40,9 @@ from career_agent.source_analysis.models import (
     SourceFinding,
     SourceFindingStatus,
     SourceFindingType,
+    SourceSegment,
+    SourceSegmentKind,
+    SourceSegmentStatus,
 )
 from career_agent.source_analysis.repository import SourceAnalysisRepository
 from career_agent.user_preferences.models import UserPreferences, WorkArrangement
@@ -2106,6 +2109,281 @@ def test_source_analysis_messages_list_renders_saved_messages(monkeypatch, tmp_p
     assert "user" in result.output
     assert "It reduced weekly reporting time" in result.output
     assert "final answer detail" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_segments_add_writes_segment(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "segments",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-1",
+            "--sequence",
+            "1",
+            "--segment-kind",
+            "list_item",
+            "--text",
+            "- Led a reporting automation project.",
+        ],
+    )
+
+    segments = repository.list_segments(analysis_run_id="run-1")
+
+    assert result.exit_code == 0
+    assert "Saved source segment." in result.output
+    assert "Segment ID:" in result.output
+    assert len(segments) == 1
+    assert segments[0].source_id == "source-1"
+    assert segments[0].sequence == 1
+    assert segments[0].segment_kind == SourceSegmentKind.LIST_ITEM
+    assert segments[0].segment_text == "- Led a reporting automation project."
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_segments_add_writes_segment_from_file(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    segment_file = tmp_path / "segment.txt"
+    segment_file.write_text(
+        "  - Led a reporting automation project.\n",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "segments",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-1",
+            "--sequence",
+            "1",
+            "--segment-kind",
+            "list_item",
+            "--from-file",
+            str(segment_file),
+        ],
+    )
+
+    segments = repository.list_segments(analysis_run_id="run-1")
+
+    assert result.exit_code == 0
+    assert len(segments) == 1
+    assert segments[0].segment_text == "  - Led a reporting automation project.\n"
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_segments_add_requires_exactly_one_text_input(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    segment_file = tmp_path / "segment.txt"
+    segment_file.write_text("- Led a reporting automation project.", encoding="utf-8")
+    runner = CliRunner()
+
+    missing_input_result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "segments",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-1",
+            "--sequence",
+            "1",
+            "--segment-kind",
+            "list_item",
+        ],
+    )
+    duplicate_input_result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "segments",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-1",
+            "--sequence",
+            "1",
+            "--segment-kind",
+            "list_item",
+            "--text",
+            "- Led a reporting automation project.",
+            "--from-file",
+            str(segment_file),
+        ],
+    )
+
+    assert missing_input_result.exit_code != 0
+    assert "Provide exactly one of --text or --from-file." in missing_input_result.output
+    assert duplicate_input_result.exit_code != 0
+    assert "Provide exactly one of --text or --from-file." in duplicate_input_result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_segments_add_reports_duplicate_sequence(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    RoleSourceRepository(tmp_path).save(
+        RoleSourceEntry(
+            id="source-1",
+            role_id="role-1",
+            source_text="- Led a reporting automation project.",
+        )
+    )
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_run(
+        SourceAnalysisRun(
+            id="run-1",
+            role_id="role-1",
+            source_ids=["source-1"],
+        )
+    )
+    repository.save_segment(
+        SourceSegment(
+            id="segment-1",
+            analysis_run_id="run-1",
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Led a reporting automation project.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "source-analysis",
+            "segments",
+            "add",
+            "--run-id",
+            "run-1",
+            "--source-id",
+            "source-1",
+            "--sequence",
+            "1",
+            "--segment-kind",
+            "list_item",
+            "--text",
+            "- Built a service trend dashboard.",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Source segment sequence already exists" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_segments_list_renders_saved_segments(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    SourceAnalysisRepository(tmp_path).save_segment(
+        SourceSegment(
+            id="segment-1",
+            analysis_run_id="run-1",
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Led a reporting automation project.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["source-analysis", "segments", "list", "--run-id", "run-1"],
+        env={"COLUMNS": "160"},
+    )
+
+    assert result.exit_code == 0
+    assert "Source Segments" in result.output
+    assert "Segment 1" in result.output
+    assert "segment-1" in result.output
+    assert "source-1" in result.output
+    assert "list_item" in result.output
+    assert "Led a reporting automation project" in result.output
+
+    get_settings.cache_clear()
+
+
+def test_source_analysis_segments_accept_updates_status(monkeypatch, tmp_path) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("CAREER_AGENT_DATA_DIR", str(tmp_path))
+    repository = SourceAnalysisRepository(tmp_path)
+    repository.save_segment(
+        SourceSegment(
+            id="segment-1",
+            analysis_run_id="run-1",
+            source_id="source-1",
+            sequence=1,
+            segment_kind=SourceSegmentKind.LIST_ITEM,
+            segment_text="- Led a reporting automation project.",
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["source-analysis", "segments", "accept", "segment-1"])
+
+    segments = repository.list_segments()
+
+    assert result.exit_code == 0
+    assert "Accepted source segment." in result.output
+    assert segments[0].status == SourceSegmentStatus.ACCEPTED
 
     get_settings.cache_clear()
 

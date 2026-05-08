@@ -54,6 +54,25 @@ class SourceFindingStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class SourceSegmentKind(StrEnum):
+    """Kind of bounded source segment identified during analysis."""
+
+    HEADING = "heading"
+    LIST_ITEM = "list_item"
+    PARAGRAPH = "paragraph"
+    MIXED = "mixed"
+    UNCLEAR = "unclear"
+
+
+class SourceSegmentStatus(StrEnum):
+    """Lifecycle status for a source segment artifact."""
+
+    PROPOSED = "proposed"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+
+
 class SourceAnalysisRun(BaseModel):
     """One analysis attempt over source material for an experience role."""
 
@@ -214,6 +233,75 @@ class SourceClarificationMessage(BaseModel):
 
         if value.tzinfo is None:
             msg = "created_at must be timezone-aware."
+            raise ValueError(msg)
+        return value
+
+
+class SourceSegment(BaseModel):
+    """Bounded source excerpt identified for narrow downstream analysis."""
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Stable identifier for this source segment.",
+    )
+    analysis_run_id: str = Field(
+        min_length=1,
+        description="Identifier of the source analysis run this segment belongs to.",
+    )
+    source_id: str = Field(
+        min_length=1,
+        description="Source entry identifier this segment comes from.",
+    )
+    sequence: int = Field(
+        ge=1,
+        description="Source-order position for deterministic review.",
+    )
+    segment_kind: SourceSegmentKind = Field(
+        description="Structural kind of the source segment.",
+    )
+    segment_text: str = Field(
+        min_length=1,
+        description="Exact source excerpt or bounded source text.",
+    )
+    status: SourceSegmentStatus = Field(
+        default=SourceSegmentStatus.PROPOSED,
+        description="Lifecycle status for this source segment.",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="Timezone-aware UTC creation timestamp.",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="Timezone-aware UTC update timestamp.",
+    )
+
+    @field_validator("analysis_run_id", "source_id", mode="before")
+    @classmethod
+    def normalize_required_ids(cls, value: Any) -> Any:
+        """Trim identifier fields before normal Pydantic validation."""
+
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("segment_text")
+    @classmethod
+    def validate_segment_text(cls, value: str) -> str:
+        """Require nonblank segment text while preserving exact content."""
+
+        if not value.strip():
+            msg = "segment_text must contain non-whitespace content."
+            raise ValueError(msg)
+        return value
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def validate_timezone_aware(cls, value: datetime) -> datetime:
+        """Ensure timestamps are timezone-aware."""
+
+        if value.tzinfo is None:
+            msg = "timestamp values must be timezone-aware."
             raise ValueError(msg)
         return value
 

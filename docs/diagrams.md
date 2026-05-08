@@ -14,7 +14,7 @@ flowchart LR
     UserPreferences["User Preferences<br/>Search and matching preferences"]
     ExperienceRoles["Experience Roles<br/>Structured role facts"]
     RoleSources["Role Sources<br/>Raw submitted evidence"]
-    SourceAnalysis["Source Analysis<br/>Runs, questions,<br/>messages, findings"]
+    SourceAnalysis["Source Analysis<br/>Runs, questions,<br/>messages, segments,<br/>findings"]
     ExperienceFacts["Experience Facts<br/>Canonical career facts"]
     ScopedConstraints["Scoped Constraints<br/>Global, role,<br/>and fact guardrails"]
     FactReview["Fact Review<br/>Threads, messages,<br/>and actions"]
@@ -89,6 +89,7 @@ flowchart TD
     Run["SourceAnalysisRun<br/>role_id, source_ids, status"]
     Question["SourceClarificationQuestion<br/>analysis_run_id, status"]
     Messages["SourceClarificationMessages<br/>one row per assistant/user/system turn"]
+    Segments["SourceSegment<br/>bounded excerpts, source order"]
     Findings["SourceFinding<br/>structured source analysis notes"]
     Apply["apply-findings<br/>accepted findings only"]
     FactService["ExperienceFactService<br/>deterministic fact writes"]
@@ -107,6 +108,8 @@ flowchart TD
     Run -. "only one active run per role_id" .-> Role
     Workflow -->|"save questions through SourceAnalysisService"| Question
     Question -->|"append one message at a time"| Messages
+    Run -->|"add bounded source excerpts"| Segments
+    Sources -->|"exact segment_text"| Segments
     Run -->|"generate-findings"| FindingGate
     Question -->|"resolved or skipped"| FindingGate
     FindingGate -->|"role + sources + questions + messages + facts"| FindingGenerator
@@ -119,6 +122,7 @@ flowchart TD
     Findings -->|"settled enough to close"| Complete
     Question -->|"resolved or skipped"| Complete
     Complete -->|"marks included source_ids"| AnalyzedSources
+    Segments -. "future evidence extraction" .-> Findings
     Sources -. "supports / revises / contradicts / new_fact" .-> Findings
     Messages -. "evidence for closure" .-> Resolve
     Resolve -->|"updates status"| Question

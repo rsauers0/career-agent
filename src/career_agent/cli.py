@@ -29,6 +29,7 @@ from career_agent.errors import (
     InvalidScopedConstraintStatusTransitionError,
     InvalidSourceAnalysisRunStatusTransitionError,
     InvalidSourceFindingStatusTransitionError,
+    InvalidSourceSegmentStatusTransitionError,
     LLMClientError,
     LLMConfigurationError,
     NoUnanalyzedSourcesError,
@@ -40,6 +41,8 @@ from career_agent.errors import (
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
+    SourceSegmentNotFoundError,
+    SourceSegmentSequenceExistsError,
     UnappliedAcceptedSourceFindingsError,
 )
 from career_agent.experience_facts.models import (
@@ -94,6 +97,8 @@ from career_agent.source_analysis.models import (
     SourceClarificationQuestion,
     SourceFinding,
     SourceFindingType,
+    SourceSegment,
+    SourceSegmentKind,
 )
 from career_agent.source_analysis.repository import SourceAnalysisRepository
 from career_agent.source_analysis.service import SourceAnalysisService
@@ -119,6 +124,7 @@ source_analysis_app = typer.Typer(help="Manage source analysis workflow artifact
 analysis_runs_app = typer.Typer(help="Manage source analysis runs.")
 analysis_questions_app = typer.Typer(help="Manage source clarification questions.")
 analysis_messages_app = typer.Typer(help="Manage source clarification messages.")
+analysis_segments_app = typer.Typer(help="Manage source segments.")
 analysis_findings_app = typer.Typer(help="Manage structured source findings.")
 fact_review_app = typer.Typer(help="Manage fact review workflow artifacts.")
 fact_review_threads_app = typer.Typer(help="Manage fact review threads.")
@@ -196,6 +202,11 @@ def analysis_questions_cli() -> None:
 @analysis_messages_app.callback()
 def analysis_messages_cli() -> None:
     """Commands for working with source clarification messages."""
+
+
+@analysis_segments_app.callback()
+def analysis_segments_cli() -> None:
+    """Commands for working with source segments."""
 
 
 @analysis_findings_app.callback()
@@ -1283,6 +1294,136 @@ def add_source_analysis_message(
     console.print(f"Message ID: {message.id}")
 
 
+@analysis_segments_app.command("list")
+def list_source_analysis_segments(
+    run_id: str | None = typer.Option(None, help="Optional source analysis run id."),
+    source_id: str | None = typer.Option(None, help="Optional source id."),
+) -> None:
+    """List source segments."""
+
+    service = build_source_analysis_service()
+    segments = service.list_segments(analysis_run_id=run_id, source_id=source_id)
+    if not segments:
+        console.print("[yellow]No source segments saved yet.[/yellow]")
+        return
+
+    render_source_segment_list(segments)
+
+
+@analysis_segments_app.command("add")
+def add_source_analysis_segment(
+    run_id: str = typer.Option(..., help="Existing source analysis run id."),
+    source_id: str = typer.Option(..., help="Source id this segment comes from."),
+    sequence: int = typer.Option(..., min=1, help="Source-order sequence number."),
+    segment_kind: SourceSegmentKind = typer.Option(..., help="Segment kind."),
+    text: str | None = typer.Option(None, help="Exact segment text."),
+    from_file: Path | None = typer.Option(
+        None,
+        "--from-file",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to a UTF-8 text file containing exact segment text.",
+    ),
+) -> None:
+    """Add a source segment to an existing source analysis run."""
+
+    if (text is None) == (from_file is None):
+        console.print("[red]Provide exactly one of --text or --from-file.[/red]")
+        raise typer.Exit(1)
+
+    if from_file is not None:
+        text = from_file.read_text(encoding="utf-8")
+
+    service = build_source_analysis_service()
+    try:
+        segment = service.add_segment(
+            analysis_run_id=run_id,
+            source_id=source_id,
+            sequence=sequence,
+            segment_kind=segment_kind,
+            segment_text=text or "",
+        )
+    except (
+        AnalysisRunNotFoundError,
+        SourceNotFoundError,
+        SourceNotInAnalysisRunError,
+        SourceRoleMismatchError,
+        SourceSegmentSequenceExistsError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    except ValidationError as exc:
+        console.print("[red]Could not save source segment.[/red]")
+        for error in exc.errors():
+            console.print(f"[red]- {error['msg']}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Saved source segment.[/green]")
+    console.print(f"Segment ID: {segment.id}")
+
+
+@analysis_segments_app.command("accept")
+def accept_source_analysis_segment(
+    segment_id: str = typer.Argument(..., help="Source segment identifier."),
+) -> None:
+    """Accept a source segment."""
+
+    service = build_source_analysis_service()
+    try:
+        segment = service.accept_segment(segment_id)
+    except (
+        InvalidSourceSegmentStatusTransitionError,
+        SourceSegmentNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Accepted source segment.[/green]")
+    console.print(f"Segment ID: {segment.id}")
+
+
+@analysis_segments_app.command("reject")
+def reject_source_analysis_segment(
+    segment_id: str = typer.Argument(..., help="Source segment identifier."),
+) -> None:
+    """Reject a source segment."""
+
+    service = build_source_analysis_service()
+    try:
+        segment = service.reject_segment(segment_id)
+    except (
+        InvalidSourceSegmentStatusTransitionError,
+        SourceSegmentNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Rejected source segment.[/green]")
+    console.print(f"Segment ID: {segment.id}")
+
+
+@analysis_segments_app.command("archive")
+def archive_source_analysis_segment(
+    segment_id: str = typer.Argument(..., help="Source segment identifier."),
+) -> None:
+    """Archive a source segment."""
+
+    service = build_source_analysis_service()
+    try:
+        segment = service.archive_segment(segment_id)
+    except (
+        InvalidSourceSegmentStatusTransitionError,
+        SourceSegmentNotFoundError,
+    ) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("[green]Archived source segment.[/green]")
+    console.print(f"Segment ID: {segment.id}")
+
+
 @analysis_findings_app.command("list")
 def list_source_analysis_findings(
     run_id: str | None = typer.Option(None, help="Optional source analysis run id."),
@@ -2287,6 +2428,30 @@ def render_source_clarification_message_list(
         )
 
 
+def render_source_segment_list(segments: list[SourceSegment]) -> None:
+    """Render source segments as separated readable CLI blocks."""
+
+    console.print("[bold]Source Segments[/bold]")
+    for index, segment in enumerate(segments, start=1):
+        segment_details = Table.grid(expand=True, padding=(0, 2))
+        segment_details.add_column(no_wrap=True, style="bold")
+        segment_details.add_column(ratio=1)
+        segment_details.add_row("Text", segment.segment_text)
+        segment_details.add_row("ID", segment.id)
+        segment_details.add_row("Run ID", segment.analysis_run_id)
+        segment_details.add_row("Source ID", segment.source_id)
+        segment_details.add_row("Sequence", str(segment.sequence))
+        segment_details.add_row("Kind", segment.segment_kind.value)
+        segment_details.add_row("Status", segment.status.value)
+        console.print(
+            Panel(
+                segment_details,
+                title=f"Segment {index}",
+                expand=True,
+            )
+        )
+
+
 def render_source_finding_list(findings: list[SourceFinding]) -> None:
     """Render source findings as separated readable CLI blocks."""
 
@@ -2436,6 +2601,7 @@ app.add_typer(experience_workflow_app, name="experience-workflow")
 source_analysis_app.add_typer(analysis_runs_app, name="runs")
 source_analysis_app.add_typer(analysis_questions_app, name="questions")
 source_analysis_app.add_typer(analysis_messages_app, name="messages")
+source_analysis_app.add_typer(analysis_segments_app, name="segments")
 source_analysis_app.add_typer(analysis_findings_app, name="findings")
 app.add_typer(source_analysis_app, name="source-analysis")
 fact_review_app.add_typer(fact_review_threads_app, name="threads")

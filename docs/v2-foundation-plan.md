@@ -122,7 +122,8 @@ Build analysis artifacts before the full AI workflow harness:
 - clarification questions linked to an analysis run
 - optional relevant source ids for question traceability
 - message threads linked to clarification questions
-- analysis and question lifecycle statuses
+- source segments linked to an analysis run and source id
+- analysis, question, segment, and finding lifecycle statuses
 
 Source Analysis is workflow evidence, not canonical career data. It gives the future LLM harness a deterministic place to store questions, user responses, and traceability without mixing that material into roles, sources, or facts.
 
@@ -292,12 +293,12 @@ RoleSource
   -> ExperienceFact
 ```
 
-`SourceSegment` and `SourceEvidenceItem` are planned analysis artifacts, not
-canonical career data. They should preserve exact evidence boundaries and
-structured extracted evidence before the workflow proposes findings or draft
-facts. `SourceFinding` remains the downstream comparison/proposal layer that
-decides whether evidence supports, revises, contradicts, duplicates, creates,
-or is unclear relative to existing facts.
+`SourceSegment` is now a persisted Source Analysis artifact, not canonical
+career data. `SourceEvidenceItem` remains planned. Segments should preserve exact
+evidence boundaries before the workflow extracts structured evidence and
+proposes findings or draft facts. `SourceFinding` remains the downstream
+comparison/proposal layer that decides whether evidence supports, revises,
+contradicts, duplicates, creates, or is unclear relative to existing facts.
 
 Question resolution should remain explicit. A future LLM workflow may recommend that a clarification thread is complete, but the workflow should call a deterministic transition that can later include eval approval.
 
@@ -437,7 +438,7 @@ Experience Workflow
 
 Experience Orchestration
   -> context and contract models
-  -> planned source segmentation
+  -> persisted source segments
   -> planned evidence extraction
   -> planned eval/retry loop
   -> planned deterministic service transitions

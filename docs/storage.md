@@ -115,14 +115,19 @@ Source Analysis artifacts are stored as table-like JSON files:
     analysis_runs.json
     clarification_questions.json
     clarification_messages.json
+    source_segments.json
     source_findings.json
   snapshots/
     source_analysis/
       <timestamp>-analysis_runs.json
       <timestamp>-clarification_questions.json
       <timestamp>-clarification_messages.json
+      <timestamp>-source_segments.json
       <timestamp>-source_findings.json
 ```
+
+Source segments are bounded excerpts from role source material. They preserve
+exact text and source order for narrower downstream analysis.
 
 Source findings are structured analysis notes about what a source appears to
 mean. They can record support, revision, contradiction, duplication, possible new

@@ -29,6 +29,8 @@ uv run career-agent source-analysis --help
 uv run career-agent source-analysis runs start --help
 uv run career-agent source-analysis questions add --help
 uv run career-agent source-analysis messages add --help
+uv run career-agent source-analysis segments --help
+uv run career-agent source-analysis segments add --help
 uv run career-agent source-analysis findings --help
 uv run career-agent source-analysis findings add --help
 uv run career-agent experience-workflow --help
@@ -572,6 +574,41 @@ uv run career-agent source-analysis messages list --question-id <question-id>
 Clarification messages are appended one message at a time. Adding a message does
 not resolve a question automatically; use `questions resolve` or
 `questions skip` for explicit status transitions.
+
+Add a bounded source segment:
+
+```bash
+uv run career-agent source-analysis segments add \
+  --run-id <run-id> \
+  --source-id <source-id> \
+  --sequence 1 \
+  --segment-kind list_item \
+  --text "- Led a reporting automation project."
+```
+
+Add a source segment from a UTF-8 text file:
+
+```bash
+uv run career-agent source-analysis segments add \
+  --run-id <run-id> \
+  --source-id <source-id> \
+  --sequence 1 \
+  --segment-kind paragraph \
+  --from-file segment.txt
+```
+
+List and transition source segments:
+
+```bash
+uv run career-agent source-analysis segments list --run-id <run-id>
+uv run career-agent source-analysis segments accept <segment-id>
+uv run career-agent source-analysis segments reject <segment-id>
+uv run career-agent source-analysis segments archive <segment-id>
+```
+
+Segments preserve exact source text and use source-order sequence numbers. A
+sequence value must be unique for the same analysis run and source id. Segments
+are analysis artifacts; they do not create or revise experience facts directly.
 
 Add a structured source finding:
 

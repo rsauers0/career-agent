@@ -10,6 +10,7 @@ from career_agent.source_analysis.models import (
     SourceClarificationMessage,
     SourceClarificationQuestion,
     SourceFinding,
+    SourceSegment,
 )
 from career_agent.storage import SNAPSHOTS_DIRNAME, timestamp_for_snapshot
 
@@ -18,11 +19,13 @@ ANALYSIS_RUNS_FILENAME = "analysis_runs.json"
 CLARIFICATION_QUESTIONS_FILENAME = "clarification_questions.json"
 CLARIFICATION_MESSAGES_FILENAME = "clarification_messages.json"
 SOURCE_FINDINGS_FILENAME = "source_findings.json"
+SOURCE_SEGMENTS_FILENAME = "source_segments.json"
 
 _RUN_LIST_ADAPTER = TypeAdapter(list[SourceAnalysisRun])
 _QUESTION_LIST_ADAPTER = TypeAdapter(list[SourceClarificationQuestion])
 _MESSAGE_LIST_ADAPTER = TypeAdapter(list[SourceClarificationMessage])
 _FINDING_LIST_ADAPTER = TypeAdapter(list[SourceFinding])
+_SEGMENT_LIST_ADAPTER = TypeAdapter(list[SourceSegment])
 
 
 class SourceAnalysisRepository:
@@ -60,6 +63,12 @@ class SourceAnalysisRepository:
         """Return the JSON file path for source findings."""
 
         return self.analysis_dir / SOURCE_FINDINGS_FILENAME
+
+    @property
+    def segments_path(self) -> Path:
+        """Return the JSON file path for source segments."""
+
+        return self.analysis_dir / SOURCE_SEGMENTS_FILENAME
 
     @property
     def snapshots_dir(self) -> Path:
@@ -142,6 +151,41 @@ class SourceAnalysisRepository:
         messages.append(message)
         self._save_messages(messages)
 
+    def list_segments(
+        self,
+        analysis_run_id: str | None = None,
+        source_id: str | None = None,
+    ) -> list[SourceSegment]:
+        """Load source segments, optionally filtered by run and source ids."""
+
+        segments = self._load_segments()
+        if analysis_run_id is not None:
+            segments = [
+                segment for segment in segments if segment.analysis_run_id == analysis_run_id
+            ]
+        if source_id is not None:
+            segments = [segment for segment in segments if segment.source_id == source_id]
+        return segments
+
+    def get_segment(self, segment_id: str) -> SourceSegment | None:
+        """Load one source segment by identifier if it exists."""
+
+        for segment in self._load_segments():
+            if segment.id == segment_id:
+                return segment
+        return None
+
+    def save_segment(self, segment: SourceSegment) -> None:
+        """Create or update one source segment."""
+
+        segments = [
+            existing_segment
+            for existing_segment in self._load_segments()
+            if existing_segment.id != segment.id
+        ]
+        segments.append(segment)
+        self._save_segments(segments)
+
     def list_findings(
         self,
         analysis_run_id: str | None = None,
@@ -215,6 +259,14 @@ class SourceAnalysisRepository:
 
         return _FINDING_LIST_ADAPTER.validate_json(self.findings_path.read_text(encoding="utf-8"))
 
+    def _load_segments(self) -> list[SourceSegment]:
+        """Load all source segments from disk in stored order."""
+
+        if not self.segments_path.exists():
+            return []
+
+        return _SEGMENT_LIST_ADAPTER.validate_json(self.segments_path.read_text(encoding="utf-8"))
+
     def _save_runs(self, runs: list[SourceAnalysisRun]) -> None:
         """Persist the complete source analysis run list to disk."""
 
@@ -258,6 +310,16 @@ class SourceAnalysisRepository:
         self._snapshot_existing_file(self.findings_path, SOURCE_FINDINGS_FILENAME)
         self.findings_path.write_text(
             _FINDING_LIST_ADAPTER.dump_json(findings, indent=2).decode("utf-8"),
+            encoding="utf-8",
+        )
+
+    def _save_segments(self, segments: list[SourceSegment]) -> None:
+        """Persist the complete source segment list to disk."""
+
+        self.analysis_dir.mkdir(parents=True, exist_ok=True)
+        self._snapshot_existing_file(self.segments_path, SOURCE_SEGMENTS_FILENAME)
+        self.segments_path.write_text(
+            _SEGMENT_LIST_ADAPTER.dump_json(segments, indent=2).decode("utf-8"),
             encoding="utf-8",
         )
 

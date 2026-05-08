@@ -10,6 +10,9 @@ from career_agent.source_analysis.models import (
     SourceFinding,
     SourceFindingStatus,
     SourceFindingType,
+    SourceSegment,
+    SourceSegmentKind,
+    SourceSegmentStatus,
 )
 from career_agent.source_analysis.repository import (
     ANALYSIS_RUNS_FILENAME,
@@ -17,6 +20,7 @@ from career_agent.source_analysis.repository import (
     CLARIFICATION_QUESTIONS_FILENAME,
     SOURCE_ANALYSIS_DIRNAME,
     SOURCE_FINDINGS_FILENAME,
+    SOURCE_SEGMENTS_FILENAME,
     SourceAnalysisRepository,
 )
 from career_agent.storage import SNAPSHOTS_DIRNAME
@@ -25,6 +29,7 @@ RUN_LIST_ADAPTER = TypeAdapter(list[SourceAnalysisRun])
 QUESTION_LIST_ADAPTER = TypeAdapter(list[SourceClarificationQuestion])
 MESSAGE_LIST_ADAPTER = TypeAdapter(list[SourceClarificationMessage])
 FINDING_LIST_ADAPTER = TypeAdapter(list[SourceFinding])
+SEGMENT_LIST_ADAPTER = TypeAdapter(list[SourceSegment])
 
 
 def build_run(
@@ -101,6 +106,26 @@ def build_finding(
     )
 
 
+def build_segment(
+    *,
+    segment_id: str,
+    analysis_run_id: str = "run-1",
+    source_id: str = "source-1",
+    sequence: int = 1,
+    segment_kind: SourceSegmentKind = SourceSegmentKind.LIST_ITEM,
+    status: SourceSegmentStatus = SourceSegmentStatus.PROPOSED,
+) -> SourceSegment:
+    return SourceSegment(
+        id=segment_id,
+        analysis_run_id=analysis_run_id,
+        source_id=source_id,
+        sequence=sequence,
+        segment_kind=segment_kind,
+        segment_text="- Led a reporting automation project.",
+        status=status,
+    )
+
+
 def test_source_analysis_repository_builds_storage_paths(tmp_path) -> None:
     repository = SourceAnalysisRepository(tmp_path)
 
@@ -115,6 +140,9 @@ def test_source_analysis_repository_builds_storage_paths(tmp_path) -> None:
     assert repository.findings_path == (
         tmp_path / SOURCE_ANALYSIS_DIRNAME / SOURCE_FINDINGS_FILENAME
     )
+    assert repository.segments_path == (
+        tmp_path / SOURCE_ANALYSIS_DIRNAME / SOURCE_SEGMENTS_FILENAME
+    )
     assert repository.snapshots_dir == (tmp_path / SNAPSHOTS_DIRNAME / SOURCE_ANALYSIS_DIRNAME)
 
 
@@ -124,6 +152,7 @@ def test_source_analysis_repository_lists_return_empty_when_missing(tmp_path) ->
     assert repository.list_runs() == []
     assert repository.list_questions("run-1") == []
     assert repository.list_messages("question-1") == []
+    assert repository.list_segments() == []
     assert repository.list_findings() == []
 
 
@@ -241,6 +270,50 @@ def test_source_analysis_repository_updates_existing_message_by_id(tmp_path) -> 
     assert repository.list_messages("question-1") == [updated_message]
 
 
+def test_source_analysis_repository_saves_and_loads_segments(tmp_path) -> None:
+    repository = SourceAnalysisRepository(tmp_path)
+    segment = build_segment(segment_id="segment-1")
+
+    repository.save_segment(segment)
+
+    assert repository.segments_path.exists()
+    assert repository.list_segments() == [segment]
+    assert repository.get_segment("segment-1") == segment
+
+
+def test_source_analysis_repository_filters_segments_by_relationship_ids(tmp_path) -> None:
+    repository = SourceAnalysisRepository(tmp_path)
+    first_segment = build_segment(segment_id="segment-1")
+    second_segment = build_segment(
+        segment_id="segment-2",
+        analysis_run_id="run-2",
+        source_id="source-2",
+    )
+    repository.save_segment(first_segment)
+    repository.save_segment(second_segment)
+
+    assert repository.list_segments(analysis_run_id="run-1") == [first_segment]
+    assert repository.list_segments(source_id="source-2") == [second_segment]
+    assert repository.list_segments(analysis_run_id="run-1", source_id="source-1") == [
+        first_segment
+    ]
+    assert repository.list_segments(analysis_run_id="missing-run") == []
+
+
+def test_source_analysis_repository_updates_existing_segment_by_id(tmp_path) -> None:
+    repository = SourceAnalysisRepository(tmp_path)
+    original_segment = build_segment(segment_id="segment-1")
+    updated_segment = build_segment(
+        segment_id="segment-1",
+        status=SourceSegmentStatus.ACCEPTED,
+    )
+    repository.save_segment(original_segment)
+
+    repository.save_segment(updated_segment)
+
+    assert repository.list_segments() == [updated_segment]
+
+
 def test_source_analysis_repository_saves_and_loads_findings(tmp_path) -> None:
     repository = SourceAnalysisRepository(tmp_path)
     finding = build_finding(finding_id="finding-1")
@@ -292,6 +365,7 @@ def test_source_analysis_repository_get_methods_return_none_when_missing(tmp_pat
     assert repository.get_run("missing-run") is None
     assert repository.get_question("missing-question") is None
     assert repository.get_message("missing-message") is None
+    assert repository.get_segment("missing-segment") is None
     assert repository.get_finding("missing-finding") is None
 
 
@@ -348,6 +422,25 @@ def test_source_analysis_repository_snapshots_existing_messages_file_before_over
     )
     assert snapshotted_messages == [first_message]
     assert repository.list_messages("question-1") == [first_message, second_message]
+
+
+def test_source_analysis_repository_snapshots_existing_segments_file_before_overwrite(
+    tmp_path,
+) -> None:
+    repository = SourceAnalysisRepository(tmp_path)
+    first_segment = build_segment(segment_id="segment-1")
+    second_segment = build_segment(segment_id="segment-2", sequence=2)
+    repository.save_segment(first_segment)
+
+    repository.save_segment(second_segment)
+
+    snapshots = list(repository.snapshots_dir.glob(f"*-{SOURCE_SEGMENTS_FILENAME}"))
+    assert len(snapshots) == 1
+    snapshotted_segments = SEGMENT_LIST_ADAPTER.validate_json(
+        snapshots[0].read_text(encoding="utf-8")
+    )
+    assert snapshotted_segments == [first_segment]
+    assert repository.list_segments() == [first_segment, second_segment]
 
 
 def test_source_analysis_repository_snapshots_existing_findings_file_before_overwrite(

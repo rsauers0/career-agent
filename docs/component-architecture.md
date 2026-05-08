@@ -239,13 +239,20 @@ Examples of owned data:
 - source ids included in each analysis run
 - clarification questions generated during analysis
 - clarification message threads attached to a question
+- source segments that preserve bounded excerpts in source order
 - structured source findings produced by analysis
-- question and analysis lifecycle statuses
-- table-like JSON files for runs, questions, messages, and findings
+- analysis, question, segment, and finding lifecycle statuses
+- table-like JSON files for runs, questions, messages, segments, and findings
 
 Source Analysis is not canonical career data. It is workflow evidence that supports future LLM-guided clarification, evals, source findings, and draft experience fact generation. Canonical data changes should still be applied through deterministic services.
 
 Clarification messages are append-only conversation turns. They do not resolve questions by themselves; question closure requires an explicit `resolve` or `skip` transition.
+
+Source segments are bounded source excerpts for narrow downstream analysis.
+They preserve exact submitted text, belong to one analysis run and one source,
+and use a source-order `sequence` that is unique for the same run/source pair.
+Segments can be accepted, rejected, or archived, but they do not directly mutate
+canonical facts.
 
 Source findings are structured analysis notes. They can indicate that a source appears to support, revise, contradict, duplicate, create, be unclear, or be unrelated to a fact. Accepting a finding records review approval but does not directly mutate canonical facts. The Experience Workflow applies accepted findings through deterministic Experience Fact services and records `applied_fact_id` when a finding creates or updates a fact.
 
@@ -500,11 +507,12 @@ RoleSource
   -> ExperienceFact
 ```
 
-`SourceSegment` and `SourceEvidenceItem` are planned analysis artifacts. They
-let smaller/local models work on narrow tasks before the workflow compares
-evidence to existing facts or proposes canonical draft facts. `SourceFinding`
-remains the downstream comparison/proposal artifact, and `ExperienceFact`
-remains the canonical normalized career data.
+`SourceSegment` is now the first persisted decomposition artifact inside Source
+Analysis. `SourceEvidenceItem` is still planned. Together, they let
+smaller/local models work on narrow tasks before the workflow compares evidence
+to existing facts or proposes canonical draft facts. `SourceFinding` remains the
+downstream comparison/proposal artifact, and `ExperienceFact` remains the
+canonical normalized career data.
 
 The project should continue the current component-per-state-object folder
 structure while this workflow is still evolving. Broader package groups such as

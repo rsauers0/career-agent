@@ -10,12 +10,15 @@ from career_agent.errors import (
     FactRoleMismatchError,
     InvalidSourceAnalysisRunStatusTransitionError,
     InvalidSourceFindingStatusTransitionError,
+    InvalidSourceSegmentStatusTransitionError,
     OpenClarificationQuestionsError,
     RoleNotFoundError,
     SourceFindingNotFoundError,
     SourceNotFoundError,
     SourceNotInAnalysisRunError,
     SourceRoleMismatchError,
+    SourceSegmentNotFoundError,
+    SourceSegmentSequenceExistsError,
     UnappliedAcceptedSourceFindingsError,
 )
 from career_agent.experience_facts.repository import ExperienceFactRepository
@@ -32,6 +35,9 @@ from career_agent.source_analysis.models import (
     SourceFinding,
     SourceFindingStatus,
     SourceFindingType,
+    SourceSegment,
+    SourceSegmentKind,
+    SourceSegmentStatus,
 )
 from career_agent.source_analysis.repository import SourceAnalysisRepository
 
@@ -63,6 +69,20 @@ ALLOWED_RUN_STATUS_TRANSITIONS: dict[
     },
     SourceAnalysisStatus.COMPLETED: {SourceAnalysisStatus.ARCHIVED},
     SourceAnalysisStatus.ARCHIVED: set(),
+}
+
+ALLOWED_SEGMENT_STATUS_TRANSITIONS: dict[
+    SourceSegmentStatus,
+    set[SourceSegmentStatus],
+] = {
+    SourceSegmentStatus.PROPOSED: {
+        SourceSegmentStatus.ACCEPTED,
+        SourceSegmentStatus.REJECTED,
+        SourceSegmentStatus.ARCHIVED,
+    },
+    SourceSegmentStatus.ACCEPTED: {SourceSegmentStatus.ARCHIVED},
+    SourceSegmentStatus.REJECTED: {SourceSegmentStatus.ARCHIVED},
+    SourceSegmentStatus.ARCHIVED: set(),
 }
 
 
@@ -100,6 +120,23 @@ class SourceAnalysisService:
         """Return clarification messages for one question."""
 
         return self.analysis_repository.list_messages(question_id)
+
+    def list_segments(
+        self,
+        analysis_run_id: str | None = None,
+        source_id: str | None = None,
+    ) -> list[SourceSegment]:
+        """Return source segments, optionally filtered by run and source ids."""
+
+        return self.analysis_repository.list_segments(
+            analysis_run_id=analysis_run_id,
+            source_id=source_id,
+        )
+
+    def get_segment(self, segment_id: str) -> SourceSegment | None:
+        """Return one source segment if it exists."""
+
+        return self.analysis_repository.get_segment(segment_id)
 
     def list_findings(
         self,
@@ -205,6 +242,33 @@ class SourceAnalysisService:
         self.analysis_repository.save_message(message)
         return message
 
+    def add_segment(
+        self,
+        analysis_run_id: str,
+        source_id: str,
+        sequence: int,
+        segment_kind: SourceSegmentKind,
+        segment_text: str,
+    ) -> SourceSegment:
+        """Create a source segment for an existing source analysis run."""
+
+        run = self._get_required_run(analysis_run_id)
+        self._validate_run_source(run=run, source_id=source_id)
+        self._ensure_unique_segment_sequence(
+            analysis_run_id=analysis_run_id,
+            source_id=source_id,
+            sequence=sequence,
+        )
+        segment = SourceSegment(
+            analysis_run_id=analysis_run_id,
+            source_id=source_id,
+            sequence=sequence,
+            segment_kind=segment_kind,
+            segment_text=segment_text,
+        )
+        self.analysis_repository.save_segment(segment)
+        return segment
+
     def add_finding(
         self,
         analysis_run_id: str,
@@ -217,7 +281,7 @@ class SourceAnalysisService:
         """Create a structured finding for an existing source analysis run."""
 
         run = self._get_required_run(analysis_run_id)
-        self._validate_finding_source(run=run, source_id=source_id)
+        self._validate_run_source(run=run, source_id=source_id)
         if fact_id is not None:
             self._validate_finding_fact(role_id=run.role_id, fact_id=fact_id)
         finding = SourceFinding(
@@ -231,6 +295,30 @@ class SourceAnalysisService:
         )
         self.analysis_repository.save_finding(finding)
         return finding
+
+    def accept_segment(self, segment_id: str) -> SourceSegment:
+        """Accept a proposed source segment."""
+
+        return self._set_segment_status(
+            segment_id=segment_id,
+            status=SourceSegmentStatus.ACCEPTED,
+        )
+
+    def reject_segment(self, segment_id: str) -> SourceSegment:
+        """Reject a proposed source segment."""
+
+        return self._set_segment_status(
+            segment_id=segment_id,
+            status=SourceSegmentStatus.REJECTED,
+        )
+
+    def archive_segment(self, segment_id: str) -> SourceSegment:
+        """Archive a source segment."""
+
+        return self._set_segment_status(
+            segment_id=segment_id,
+            status=SourceSegmentStatus.ARCHIVED,
+        )
 
     def accept_finding(self, finding_id: str) -> SourceFinding:
         """Accept a proposed source finding without mutating canonical facts."""
@@ -408,8 +496,17 @@ class SourceAnalysisService:
             raise SourceFindingNotFoundError(msg)
         return finding
 
-    def _validate_finding_source(self, run: SourceAnalysisRun, source_id: str) -> None:
-        """Validate that a finding source exists and is included in the run."""
+    def _get_required_segment(self, segment_id: str) -> SourceSegment:
+        """Return one source segment or raise an application-level error."""
+
+        segment = self.analysis_repository.get_segment(segment_id)
+        if segment is None:
+            msg = f"Source segment does not exist: {segment_id}"
+            raise SourceSegmentNotFoundError(msg)
+        return segment
+
+    def _validate_run_source(self, run: SourceAnalysisRun, source_id: str) -> None:
+        """Validate that a source exists and is included in the run."""
 
         self._validate_relevant_sources(run=run, relevant_source_ids=[source_id])
         source = self.source_repository.get(source_id)
@@ -419,6 +516,28 @@ class SourceAnalysisService:
         if source.role_id != run.role_id:
             msg = f"Role source {source_id} does not belong to role: {run.role_id}"
             raise SourceRoleMismatchError(msg)
+
+    def _ensure_unique_segment_sequence(
+        self,
+        analysis_run_id: str,
+        source_id: str,
+        sequence: int,
+        existing_segment_id: str | None = None,
+    ) -> None:
+        """Validate segment sequence uniqueness for one run/source pair."""
+
+        for segment in self.analysis_repository.list_segments(
+            analysis_run_id=analysis_run_id,
+            source_id=source_id,
+        ):
+            if segment.id == existing_segment_id:
+                continue
+            if segment.sequence == sequence:
+                msg = (
+                    "Source segment sequence already exists for analysis run "
+                    f"{analysis_run_id}, source {source_id}: {sequence}"
+                )
+                raise SourceSegmentSequenceExistsError(msg)
 
     def _validate_finding_fact(self, role_id: str, fact_id: str) -> None:
         """Validate that an optional referenced fact exists and belongs to the role."""
@@ -447,6 +566,31 @@ class SourceAnalysisService:
         )
         self.analysis_repository.save_question(updated_question)
         return updated_question
+
+    def _set_segment_status(
+        self,
+        segment_id: str,
+        status: SourceSegmentStatus,
+    ) -> SourceSegment:
+        """Persist an explicit source segment status transition."""
+
+        segment = self._get_required_segment(segment_id)
+        allowed_statuses = ALLOWED_SEGMENT_STATUS_TRANSITIONS[segment.status]
+        if status not in allowed_statuses:
+            msg = (
+                f"Cannot transition source segment {segment.id} "
+                f"from {segment.status.value} to {status.value}."
+            )
+            raise InvalidSourceSegmentStatusTransitionError(msg)
+
+        updated_segment = segment.model_copy(
+            update={
+                "status": status,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self.analysis_repository.save_segment(updated_segment)
+        return updated_segment
 
     def _set_finding_status(
         self,
